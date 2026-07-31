@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+dist/
+.env
+backend/safety.db
+backend/captures/*
+!backend/captures/.gitkeep
+backend/audio_data/*
+!backend/audio_data/.gitkeep
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+.pytest_cache/
+.pio/

@@ -1,0 +1,12 @@
+{
+  "site": {"site_id": "site-001", "map_id": "map-001", "width": 12, "height": 8},
+  "worker": {"worker_id": "worker-001", "helmet_id": "helmet-001"},
+  "devices": ["helmet-001-av", "helmet-001-uwb"],
+  "anchors": [
+    {"anchor_id": "anchor-001", "x": 0, "y": 0},
+    {"anchor_id": "anchor-002", "x": 12, "y": 0},
+    {"anchor_id": "anchor-003", "x": 12, "y": 8},
+    {"anchor_id": "anchor-004", "x": 0, "y": 8}
+  ],
+  "danger_zone": {"zone_id": "zone-hot-work", "x": 7, "y": 2, "width": 4, "height": 4}
+}
