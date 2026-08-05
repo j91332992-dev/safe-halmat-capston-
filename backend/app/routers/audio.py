@@ -4,12 +4,14 @@ from sqlalchemy.orm import Session
 from ..database import get_db, utcnow
 from ..models.entities import Device, VoiceCommand, WorkerState
 from ..schemas.api import MockCommandIn
-from ..services.assistant_service import build_response
-from ..services.audio_service import dummy_stt, save_audio
+from ..services.assistant_service import build_response_smart
+from ..services.audio_service import save_audio, stt
+from ..services.command_service import queue_command
 from ..services.event_service import create_event, event_to_dict
 from ..services.risk_service import recalculate_risk
 from ..services.serializers import worker_to_dict
 from ..services.speech_service import normalize, resolve_intent
+from ..services.tts_generator_service import generate_tts
 from ..websocket import manager
 
 router = APIRouter(prefix="/api/audio", tags=["audio"])
@@ -32,18 +34,52 @@ async def process_text(db: Session, worker_id: str, device_id: str, text: str) -
     if intent in ("emergency", "help"):
         worker.emergency = True
     recalculate_risk(db, worker)
-    message, speaker_command = build_response(intent, worker_to_dict(worker))
+    message, speaker_command = await build_response_smart(intent, worker_to_dict(worker))
+    audio_path = await generate_tts(message)
+    audio_url = f"/tts/{audio_path.name}" if audio_path else None
+
+    delivered = 0
+    device_command_id = None
+    if speaker_command:
+        record = queue_command(db, device_id, speaker_command, {"message": message})
+        device_command_id = record.command_id
+        delivered = await manager.send_device_command(
+            device_id,
+            {"command_id": record.command_id, "command_type": speaker_command, "payload": {"message": message}},
+        )
+        record.status = "delivered" if delivered else "queued"
+
     event = create_event(
         db,
         "VOICE_COMMAND",
         f"음성 명령: {text} → {intent}",
-        "emergency" if intent == "emergency" else "info",
+        "emergency" if intent in ("emergency", "help") else "info",
         worker_id,
         device_id,
-        {"text": text, "intent": intent, "confidence": confidence, "response": message, "speaker_command": speaker_command},
+        {
+            "text": text,
+            "intent": intent,
+            "confidence": confidence,
+            "response": message,
+            "speaker_command": speaker_command,
+            "audio_url": audio_url,
+            "device_command_id": device_command_id,
+            "delivered_connections": delivered,
+        },
     )
     db.flush()
-    return {"command_id": command.id, "text": text, "intent": intent, "confidence": confidence, "response": message, "speaker_command": speaker_command, "event": event_to_dict(event), "worker": worker_to_dict(worker)}
+    return {
+        "command_id": command.id,
+        "text": text,
+        "intent": intent,
+        "confidence": confidence,
+        "response": message,
+        "speaker_command": speaker_command,
+        "audio_url": audio_url,
+        "delivered_connections": delivered,
+        "event": event_to_dict(event),
+        "worker": worker_to_dict(worker),
+    }
 
 
 @router.post("/upload")
@@ -58,7 +94,7 @@ async def upload_audio(
         raise HTTPException(404, "먼저 장치를 등록하세요.")
     path = await save_audio(file, device_id)
     device.last_audio_at = utcnow()
-    result = await process_text(db, worker_id, device_id, dummy_stt(path))
+    result = await process_text(db, worker_id, device_id, await stt(path))
     db.commit()
     await manager.broadcast("voice_command", result)
     return result
@@ -90,4 +126,3 @@ def list_commands(limit: int = 50, db: Session = Depends(get_db)):
         }
         for row in rows
     ]
-

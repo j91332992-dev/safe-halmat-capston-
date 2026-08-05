@@ -12,12 +12,34 @@ static void onSocket(WStype_t type, uint8_t *payload, size_t length) {
     Serial.println("[WS][ERROR] 서버 명령 채널 연결 끊김");
   } else if (type == WStype_TEXT) {
     JsonDocument doc;
-    if (deserializeJson(doc, payload, length)) return;
+    if (deserializeJson(doc, payload, length)) {
+      Serial.println("[WS][ERROR] JSON 파싱 실패");
+      return;
+    }
     String command = doc["command_type"] | "";
-    Serial.printf("[WS] 명령 수신=%s\n", command.c_str());
-    if (command == "play_alert") speakerPlayAlert();
-    else if (command == "play_tone") speakerPlayTone();
+    Serial.printf("[WS] 명령 수신='%s', length=%zu\n", command.c_str(), length);
+    if (command == "play_alert") {
+      uint8_t repeats = doc["payload"]["repeats"] | 3;
+      speakerPlayAlert(repeats);
+    }
+    else if (command == "play_tone") {
+      uint16_t freq = doc["payload"]["frequency"] | 1200;
+      uint16_t duration = doc["payload"]["duration"] | 300;
+      speakerPlayTone(freq, duration);
+    }
     else if (command == "stop_alert") speakerStop();
+    else if (command == "record_audio") {
+      Serial.println("[WS] audioStartRecording() 호출");
+      audioStartRecording();
+    }
+    else if (command == "start_recording") {
+      Serial.println("[WS] audioStartRecording() 호출");
+      audioStartRecording();
+    }
+    else if (command == "stop_recording") {
+      audioStopRecording();
+      audioUpload();
+    }
     else if (command == "request_status") serverHeartbeat();
   }
 }

@@ -35,7 +35,20 @@ void buttonLoop() {
   if (clicks && millis() - releasedAt > MULTI_CLICK_WINDOW_MS) {
     String eventType = clicks >= 3 ? "triple_press" : clicks == 2 ? "double_press" : "single_press";
     Serial.printf("[BUTTON] 이벤트=%s\n", eventType.c_str());
-    if (!serverSendButtonEvent(eventType) && eventType == "triple_press") speakerPlayAlert(5);
+
+    // single_press: 녹음 시작/종료
+    if (eventType == "single_press") {
+      audioStartRecording();
+      Serial.printf("[BUTTON] 녹음 시작 (%d초 후 자동 업로드)\n", AUDIO_RECORD_SECONDS);
+    }
+    // triple_press: 비상 알림
+    else if (eventType == "triple_press") {
+      serverSendButtonEvent(eventType);
+      speakerPlayAlert(5);
+    }
+    else {
+      serverSendButtonEvent(eventType);
+    }
     clicks = 0;
   }
 }

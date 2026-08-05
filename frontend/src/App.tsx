@@ -1,17 +1,27 @@
 import {useEffect, useMemo, useState} from "react";
+import {CameraMonitor} from "./components/CameraMonitor";
 import {DiagnosticPanel} from "./components/DiagnosticPanel";
 import {EventLog} from "./components/EventLog";
+import {HistoryReplay} from "./components/HistoryReplay";
+import {LayoutEditor} from "./components/LayoutEditor";
 import {SiteMap} from "./components/SiteMap";
 import {StatusPill} from "./components/StatusPill";
 import {WorkerDetail} from "./components/WorkerDetail";
+import {VoiceAssistant} from "./components/VoiceAssistant";
+import {WorkerManagement} from "./components/WorkerManagement";
 import {useSafetyData} from "./hooks/useSafetyData";
 import {api} from "./services/api";
 
-type Page = "dashboard" | "map" | "devices" | "events" | "zones" | "diagnostics";
+type Page = "dashboard" | "map" | "camera" | "assistant" | "layout" | "history" | "workers" | "devices" | "events" | "zones" | "diagnostics";
 
 const navigation: {id: Page; label: string; mark: string}[] = [
   {id: "dashboard", label: "통합 대시보드", mark: "⌂"},
   {id: "map", label: "실시간 지도", mark: "◇"},
+  {id: "camera", label: "카메라 관제", mark: "▤"},
+  {id: "assistant", label: "음성·AI", mark: "◉"},
+  {id: "layout", label: "지도 설계", mark: "⌗"},
+  {id: "history", label: "위치 기록 재생", mark: "▶"},
+  {id: "workers", label: "작업자 관리", mark: "♙"},
   {id: "devices", label: "장치 관리", mark: "▣"},
   {id: "events", label: "이벤트 로그", mark: "≡"},
   {id: "zones", label: "위험구역 관리", mark: "△"},
@@ -29,7 +39,7 @@ const scenarios = [
 ];
 
 function App() {
-  const {data, connected, error, refresh} = useSafetyData();
+  const {data, locationHistory, connected, error, refresh} = useSafetyData();
   const [page, setPage] = useState<Page>("dashboard");
   const [selectedId, setSelectedId] = useState("worker-001");
   const [busy, setBusy] = useState(false);
@@ -93,7 +103,7 @@ function App() {
             </button>
           </div>
         </div>
-        <footer><span>v0.1.0</span><span>site-001</span></footer>
+        <footer><span>v1.0.0-integrated</span><span>site-001</span></footer>
       </aside>
 
       <main className="main-area">
@@ -124,8 +134,11 @@ function App() {
                 width={data.site.width}
                 height={data.site.height}
                 anchors={data.anchors}
+                obstacles={data.obstacles}
                 zones={data.zones}
                 workers={data.workers}
+                history={locationHistory[worker.worker_id] ?? []}
+                lastLocationAt={data.devices.find(device => device.worker_id === worker.worker_id && device.device_type === "position_device")?.last_uwb_at ?? null}
                 selectedId={worker.worker_id}
                 onSelect={item => setSelectedId(item.worker_id)}
               />
@@ -156,6 +169,17 @@ function App() {
           </>
         )}
 
+        {page === "camera" && <CameraMonitor workers={data.workers} devices={data.devices} />}
+        {page === "assistant" && <VoiceAssistant workers={data.workers} devices={data.devices} onRefresh={refresh} />}
+
+        {page === "layout" && (
+          <LayoutEditor site={data.site} anchors={data.anchors} obstacles={data.obstacles} zones={data.zones} workers={data.workers} onSaved={refresh} />
+        )}
+        {page === "history" && (
+          <HistoryReplay site={data.site} anchors={data.anchors} obstacles={data.obstacles} zones={data.zones} workers={data.workers} />
+        )}
+
+        {page === "workers" && <WorkerManagement workers={data.workers} zones={data.zones} onSaved={refresh} />}
         {page === "devices" && (
           <section className="page-panel">
             <header><div><span className="eyebrow">DEVICE REGISTRY</span><h2>등록 장치 {data.devices.length}대</h2></div></header>

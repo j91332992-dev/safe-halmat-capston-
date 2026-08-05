@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
-from ..models.entities import Anchor, Device, Event, WorkerState, Zone
+from ..models.entities import Anchor, Device, Event, Obstacle, SiteLayout, WorkerState, Zone
 from ..services.event_service import event_to_dict
 from ..services.serializers import device_to_dict, worker_to_dict
 
@@ -15,14 +15,22 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 @router.get("/snapshot")
 def snapshot(db: Session = Depends(get_db)):
     anchors = db.query(Anchor).order_by(Anchor.anchor_id).all()
+    layout = db.get(SiteLayout, settings.site_id)
     zones = db.query(Zone).all()
     events = db.query(Event).order_by(Event.created_at.desc()).limit(50).all()
     return {
         "mode": settings.operation_mode,
-        "site": {"site_id": "site-001", "map_id": "map-001", "name": "한미르 실증 현장", "width": 12, "height": 8},
+        "site": {
+            "site_id": settings.site_id,
+            "map_id": "map-001",
+            "name": layout.name if layout else settings.site_name,
+            "width": layout.width if layout else settings.site_width_m,
+            "height": layout.height if layout else settings.site_height_m,
+        },
         "workers": [worker_to_dict(row) for row in db.query(WorkerState).all()],
         "devices": [device_to_dict(row) for row in db.query(Device).all()],
         "anchors": [{"anchor_id": a.anchor_id, "name": a.name, "x": a.x, "y": a.y, "z": a.z, "online": a.online} for a in anchors],
+        "obstacles": [{"obstacle_id": o.obstacle_id, "name": o.name, "x": o.x, "y": o.y, "width": o.width, "height": o.height} for o in db.query(Obstacle).filter(Obstacle.site_id == settings.site_id).all()],
         "zones": [
             {
                 "zone_id": z.zone_id,
@@ -30,6 +38,7 @@ def snapshot(db: Session = Depends(get_db)):
                 "zone_type": z.zone_type,
                 "coordinates": json.loads(z.coordinates_json),
                 "required_ppe": json.loads(z.required_ppe_json),
+                "allowed_worker_ids": json.loads(z.allowed_worker_ids_json),
                 "risk_weight": z.risk_weight,
                 "warning_message": z.warning_message,
                 "active": z.active,

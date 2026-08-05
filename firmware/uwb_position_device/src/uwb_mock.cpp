@@ -7,10 +7,10 @@ class MockUwbTag : public IUwbTag {
   size_t measure(UwbMeasurement *out, size_t capacity) override {
     if (capacity < 4) return 0;
     float t = millis() / 1000.0f;
-    float x = 6.0f + sinf(t / 5.0f) * 4.0f;
-    float y = 4.0f + cosf(t / 6.0f) * 2.5f;
-    const float ax[4] = {0, 12, 12, 0};
-    const float ay[4] = {0, 0, 8, 8};
+    float x = 2.9f + sinf(t / 5.0f) * 2.1f;
+    float y = 4.1f + cosf(t / 6.0f) * 3.0f;
+    const float ax[4] = {0, 5.8f, 5.8f, 0};
+    const float ay[4] = {0, 0, 8.2f, 8.2f};
     for (int i = 0; i < 4; ++i) {
       out[i].anchorId = "anchor-00" + String(i + 1);
       out[i].distanceM = hypotf(x - ax[i], y - ay[i]);

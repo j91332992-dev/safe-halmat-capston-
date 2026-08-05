@@ -14,3 +14,8 @@ frontend/vite.config.js
 frontend/vite.config.d.ts
 .pytest_cache/
 .pio/
+firmware/uwb_multi_test/include/wifi_secrets.h
+
+backend/tts_output/*
+!backend/tts_output/.gitkeep
+firmware/helmet_av_device/include/device_secrets.h

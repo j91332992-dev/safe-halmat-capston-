@@ -43,6 +43,8 @@ def recalculate_risk(db: Session, worker: WorkerState) -> WorkerState:
             add(10, "조끼 미착용")
         if not ppe.get("glove", True):
             add(5, "장갑 미착용")
+        if not ppe.get("helmet", True):
+            add(15, "안전모 미착용")
         if hazards.get("smoke"):
             add(40, "연기 감지")
         if hazards.get("fire"):

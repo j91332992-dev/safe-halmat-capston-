@@ -27,6 +27,7 @@ app.add_middleware(
 for router in ALL_ROUTERS:
     app.include_router(router)
 app.mount("/captures", StaticFiles(directory=BASE_DIR / "captures"), name="captures")
+app.mount("/tts", StaticFiles(directory=BASE_DIR / "tts_output"), name="tts")
 
 
 @app.get("/")

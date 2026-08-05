@@ -1,16 +1,28 @@
 import {useCallback, useEffect, useRef, useState} from "react";
 import {api} from "../services/api";
-import type {Snapshot} from "../types";
+import type {LocationPoint, Snapshot, Worker} from "../types";
 
 export function useSafetyData() {
   const [data, setData] = useState<Snapshot | null>(null);
+  const [locationHistory, setLocationHistory] = useState<Record<string, LocationPoint[]>>({});
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<number | undefined>(undefined);
 
   const refresh = useCallback(async () => {
     try {
-      setData(await api.snapshot());
+      const snapshot = await api.snapshot();
+      setData(snapshot);
+      const histories = await Promise.all(
+        snapshot.workers.map(async worker => {
+          try {
+            return [worker.worker_id, await api.locationHistory(worker.worker_id)] as const;
+          } catch {
+            return [worker.worker_id, []] as const;
+          }
+        })
+      );
+      setLocationHistory(Object.fromEntries(histories));
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "서버 연결에 실패했습니다.");
@@ -28,7 +40,39 @@ export function useSafetyData() {
       setConnected(true);
       socket.send("dashboard-ready");
     };
-    socket.onmessage = () => void refresh();
+    socket.onmessage = event => {
+      try {
+        const message = JSON.parse(event.data) as {
+          type: string;
+          data?: {worker?: Worker; location?: {x: number; y: number; confidence: number}};
+        };
+        if (message.type === "location" && message.data?.worker && message.data.location) {
+          const worker = message.data.worker;
+          const location = message.data.location;
+          const receivedAt = new Date().toISOString();
+          setData(current => current ? {
+            ...current,
+            workers: current.workers.map(item => item.worker_id === worker.worker_id ? worker : item),
+            devices: current.devices.map(device => device.worker_id === worker.worker_id && device.device_type === "position_device"
+              ? {...device, online: true, last_uwb_at: receivedAt, last_seen: receivedAt}
+              : device)
+          } : current);
+          setLocationHistory(current => {
+            const points = [...(current[worker.worker_id] ?? []), {
+              x: location.x,
+              y: location.y,
+              confidence: location.confidence,
+              created_at: receivedAt
+            }].slice(-500);
+            return {...current, [worker.worker_id]: points};
+          });
+          return;
+        }
+      } catch {
+        // 형식을 알 수 없는 메시지는 전체 동기화로 복구합니다.
+      }
+      void refresh();
+    };
     socket.onclose = () => setConnected(false);
     socket.onerror = () => setConnected(false);
     return () => {
@@ -37,6 +81,5 @@ export function useSafetyData() {
     };
   }, [refresh]);
 
-  return {data, connected, error, refresh};
+  return {data, locationHistory, connected, error, refresh};
 }
-

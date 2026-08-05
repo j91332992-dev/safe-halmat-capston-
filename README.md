@@ -1,3 +1,10 @@
+# 한미르 통합최종본
+
+위치/UWB·지도 설계, 음성·AI 어시스턴트, ESP32-S3 카메라·YOLO를 하나의 시스템으로 통합한 최종 테스트 버전입니다.
+
+처음 실행할 때는 [통합_시작가이드.md](통합_시작가이드.md)를 먼저 따라 하세요. 구체적인 병합·수정·검증 결과는 [INTEGRATION_SUMMARY.md](INTEGRATION_SUMMARY.md)에 정리되어 있습니다.
+
+---
 # ESP32 스마트 안전모 실시간 안전관제 시스템
 
 ESP32-S3-CAM 기반 AV 장치와 ESP32 UWB DW3000 위치 장치가 데이터를 수집하고, Windows PC의 FastAPI 서버가 영상·음성·위치·위험도를 통합하며, React 관리자 웹이 이를 실시간으로 보여주는 1차 통합 프로그램입니다.
@@ -23,6 +30,15 @@ run_frontend.bat
 run_simulator.bat
 ```
 
+## 실제 UWB 위치지도 실행
+
+TAG와 Anchor 4개 펌웨어 입력 및 배치가 끝난 뒤, TAG 시리얼 모니터를 `Ctrl+C`로 종료하고 다음을 실행합니다. 이 실행 방식은 mock 시뮬레이터를 켜지 않습니다.
+
+```bat
+run_hardware_map.bat COM6
+```
+
+세 개의 창(백엔드, 프런트엔드, UWB 연결기)이 열리면 `http://localhost:5173`에서 실시간 위치를 확인합니다. TAG의 COM 번호가 바뀌면 `COM6` 대신 현재 번호를 사용합니다. 중앙점 1차 보정값은 `uwb_calibration.json`에 있으며, `uwb_live_bridge.py`가 최근 거리 중앙값과 보정값을 적용해 `/api/uwb/distances`로 전송합니다.
 ## 전체 구조
 
 ```text

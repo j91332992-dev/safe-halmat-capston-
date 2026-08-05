@@ -34,6 +34,7 @@ class WorkerState(Base):
     __tablename__ = "worker_states"
     worker_id: Mapped[str] = mapped_column(String(40), primary_key=True)
     worker_name: Mapped[str] = mapped_column(String(80), default="작업자")
+    notes: Mapped[str] = mapped_column(Text, default="")
     helmet_id: Mapped[str] = mapped_column(String(40))
     x: Mapped[float] = mapped_column(Float, default=0)
     y: Mapped[float] = mapped_column(Float, default=0)
@@ -66,11 +67,44 @@ class Zone(Base):
     zone_type: Mapped[str] = mapped_column(String(30), default="rectangle")
     coordinates_json: Mapped[str] = mapped_column(Text)
     required_ppe_json: Mapped[str] = mapped_column(Text, default="[]")
+    allowed_worker_ids_json: Mapped[str] = mapped_column(Text, default="[]")
     risk_weight: Mapped[int] = mapped_column(Integer, default=30)
     warning_message: Mapped[str] = mapped_column(Text, default="위험구역입니다.")
     max_stay_seconds: Mapped[int] = mapped_column(Integer, default=0)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
+
+class LayoutVersion(Base):
+    __tablename__ = "layout_versions"
+    version_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    site_id: Mapped[str] = mapped_column(String(40), default="site-001", index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    design_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+class LayoutDraft(Base):
+    __tablename__ = "layout_drafts"
+    site_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    draft_json: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+class SiteLayout(Base):
+    __tablename__ = "site_layouts"
+    site_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), default="한미르 테스트 작업장")
+    width: Mapped[float] = mapped_column(Float, default=5.8)
+    height: Mapped[float] = mapped_column(Float, default=8.2)
+
+
+class Obstacle(Base):
+    __tablename__ = "obstacles"
+    obstacle_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    site_id: Mapped[str] = mapped_column(String(40), default="site-001", index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    x: Mapped[float] = mapped_column(Float)
+    y: Mapped[float] = mapped_column(Float)
+    width: Mapped[float] = mapped_column(Float)
+    height: Mapped[float] = mapped_column(Float)
 
 class Location(Base):
     __tablename__ = "locations"

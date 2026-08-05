@@ -123,12 +123,16 @@ OV5640의 D0~D7, XCLK, PCLK, VSYNC, HREF, SIOD, SIOC, PWDN, RESET은 보드 회�
 
 ## 11. UWB 태그와 앵커 핀
 
+현재 확보한 보드는 사진 기준 `Makerfabs ESP32 UWB V1.1`, `UWB-X3 DW3000 Module`, `ESP32-WROOM-32E` 조합입니다. UWB 모듈과 ESP32가 한 기판에 연결되어 있으므로 별도 점퍼 배선부터 하지 않습니다.
+
+PC의 좌표계산·필터·서버·지도는 Python으로 통일합니다. DW3000의 정밀 거리측정 부분은 검증된 C/C++ 드라이버가 필요하므로 Arduino IDE는 쓰지 않고 PlatformIO 명령줄로 자동 빌드·업로드합니다. 검증된 MicroPython DW3000 ranging 드라이버가 확보되기 전에는 보드 펌웨어를 순수 Python으로 교체하지 않습니다.
+
 | DW3000 신호 | 추천 GPIO | config 이름 |
 |---|---:|---|
 | SCK | 18 | `UWB_SPI_SCK` |
 | MISO | 19 | `UWB_SPI_MISO` |
 | MOSI | 23 | `UWB_SPI_MOSI` |
-| CS | 5 | `UWB_SPI_CS` |
+| CS | 4 | `UWB_SPI_CS` |
 | IRQ | 34 | `UWB_IRQ` |
 | RST | 27 | `UWB_RST` |
 
@@ -138,11 +142,12 @@ OV5640의 D0~D7, XCLK, PCLK, VSYNC, HREF, SIOD, SIOC, PWDN, RESET은 보드 회�
 
 1. 각 앵커 펌웨어의 `ANCHOR_ID`를 `anchor-001`~`anchor-004`로 다르게 설정합니다.
 2. 각 보드에 규격에 맞는 5V USB 전원을 공급하고 전원 LED와 시리얼 ID를 확인합니다.
-3. 현장 왼쪽 아래를 (0,0), 긴 방향을 +x, 수직 방향을 +y로 정합니다.
+3. 현장 왼쪽 아래를 (0,0), 가로 5.80m 방향을 +x, 세로 8.20m 방향을 +y로 정합니다.
 4. 앵커를 넓은 사각형 모서리의 높은 고정 지점에 설치합니다. 일직선 배치를 피합니다.
 5. 줄자로 앵커 안테나 중심의 x,y,z를 미터 단위로 측정합니다.
-6. 기본 예시는 (0,0), (12,0), (12,8), (0,8), z=2.2m입니다.
+6. 테스트 공간 기본 좌표는 (0,0), (5.80,0), (5.80,8.20), (0,8.20)입니다.
 7. `/api/anchors` 또는 관리자 기능으로 실제 좌표를 등록합니다.
+8. 첫 거리 검증에서는 태그와 Anchor를 같은 높이에 놓습니다. 서로 다른 높이로 고정한 뒤에는 z 차이를 반영하도록 위치식을 보정합니다.
 
 ## 13. 실제 DW3000 전환
 
@@ -169,12 +174,20 @@ OV5640의 D0~D7, XCLK, PCLK, VSYNC, HREF, SIOD, SIOC, PWDN, RESET은 보드 회�
 
 ## 15. PlatformIO 업로드
 
-1. VS Code와 PlatformIO IDE를 설치합니다.
-2. 세 펌웨어 폴더를 각각 PlatformIO 프로젝트로 엽니다.
-3. 정확한 board ID, COM 포트, 데이터 USB 케이블을 확인합니다.
-4. `config.h`의 Wi-Fi, PC IPv4, 핀, 장치 ID를 수정합니다.
-5. Build→Upload→Monitor 115200 순서로 실행합니다.
-6. 자동 부트가 실패하면 보드 매뉴얼에 따라 BOOT/RESET을 사용합니다.
+Arduino IDE는 사용하지 않습니다. Python으로 PlatformIO CLI를 설치하고 PowerShell에서 실행합니다.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install platformio
+cd firmware\uwb_position_device
+..\..\.venv\Scripts\python.exe -m platformio run
+..\..\.venv\Scripts\python.exe -m platformio run --target upload --upload-port COM5
+..\..\.venv\Scripts\python.exe -m platformio device monitor --port COM5 --baud 115200
+```
+
+1. 장치 관리자에서 실제 COM 번호를 확인하고 예시의 `COM5`를 바꿉니다.
+2. 정확한 board ID와 데이터 전송이 가능한 USB-C 케이블을 확인합니다.
+3. `config.h`의 Wi-Fi, PC IPv4, 핀, 장치 ID를 수정합니다.
+4. 자동 부트가 실패하면 보드의 FLASH를 누른 채 RST를 누릅니다.
 
 정상 로그의 핵심은 `[WIFI] 연결 성공`, `[SERVER] 장치 등록 성공`, `[HEARTBEAT] 성공`, 각 부품 초기화·수신·전송 성공입니다.
 

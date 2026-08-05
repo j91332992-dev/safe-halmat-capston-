@@ -25,7 +25,7 @@ static void addCommon(JsonDocument &doc) {
 
 bool serverRegister() {
   JsonDocument doc; addCommon(doc);
-  doc["device_type"] = "assistant_device"; doc["firmware_version"] = "0.1.0";
+  doc["device_type"] = "assistant_device"; doc["firmware_version"] = "1.0.0-integrated";
   doc["ip"] = WiFi.localIP().toString(); doc["mac"] = WiFi.macAddress();
   bool ok = postJson("/api/devices/register", doc);
   Serial.printf("[SERVER] 장치 등록 %s\n", ok ? "성공" : "실패");
@@ -36,8 +36,8 @@ bool serverHeartbeat() {
   JsonDocument doc; addCommon(doc);
   doc["rssi"] = WiFi.RSSI(); doc["battery"] = batteryPercent();
   JsonObject status = doc["component_status"].to<JsonObject>();
-  status["camera"] = ENABLE_CAMERA_HARDWARE ? "ready" : "config_required";
-  status["mic"] = "ready"; status["speaker"] = "ready"; status["button"] = "ready";
+  status["camera"] = cameraIsReady() ? "ready" : "error";
+  status["mic"] = audioIsReady() ? "ready" : "error"; status["speaker"] = speakerIsReady() ? "ready" : "error"; status["button"] = "ready";
   bool ok = postJson("/api/devices/heartbeat", doc);
   Serial.printf("[HEARTBEAT] %s RSSI=%d battery=%.1f\n", ok ? "성공" : "실패", WiFi.RSSI(), batteryPercent());
   return ok;

@@ -51,6 +51,7 @@ class UwbDistancesIn(BaseModel):
     helmet_id: str
     device_id: str
     uwb_tag_id: str
+    distances_calibrated: bool = True
     measurements: list[DistanceMeasurement] = Field(min_length=3)
 
 
@@ -69,6 +70,7 @@ class ZoneIn(BaseModel):
     zone_type: Literal["rectangle", "circle", "polygon"] = "rectangle"
     coordinates: dict[str, Any]
     required_ppe: list[str] = Field(default_factory=list)
+    allowed_worker_ids: list[str] = Field(default_factory=list)
     risk_weight: int = Field(default=30, ge=0, le=100)
     warning_message: str = "위험구역입니다."
     max_stay_seconds: int = 0
@@ -80,6 +82,7 @@ class MockDetectionIn(BaseModel):
     device_id: str = "helmet-001-av"
     vest: bool = True
     glove: bool = True
+    helmet: bool = True
     fire: bool = False
     smoke: bool = False
 
@@ -103,3 +106,31 @@ class MockScenarioIn(BaseModel):
     scenario: Literal["normal", "danger_zone", "ppe_missing", "fire", "smoke", "emergency", "device_offline"]
     worker_id: str = "worker-001"
 
+
+
+class SiteLayoutIn(BaseModel):
+    name: str = Field(default="한미르 테스트 작업장", min_length=1, max_length=100)
+    width: float = Field(gt=0.5, le=1000)
+    height: float = Field(gt=0.5, le=1000)
+
+
+class ObstacleIn(BaseModel):
+    obstacle_id: str
+    name: str = Field(min_length=1, max_length=100)
+    x: float = Field(ge=0)
+    y: float = Field(ge=0)
+    width: float = Field(gt=0.05)
+    height: float = Field(gt=0.05)
+
+class LayoutDraftIn(BaseModel):
+    site: SiteLayoutIn
+    anchors: list[AnchorIn]
+    obstacles: list[ObstacleIn]
+    zones: list[ZoneIn]
+
+class LayoutVersionCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+class WorkerUpdateIn(BaseModel):
+    worker_name: str = Field(min_length=1, max_length=80)
+    notes: str = Field(default="", max_length=2000)

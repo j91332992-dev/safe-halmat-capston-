@@ -17,6 +17,7 @@ def serialize(row: Zone) -> dict:
         "zone_type": row.zone_type,
         "coordinates": json.loads(row.coordinates_json),
         "required_ppe": json.loads(row.required_ppe_json),
+        "allowed_worker_ids": json.loads(row.allowed_worker_ids_json),
         "risk_weight": row.risk_weight,
         "warning_message": row.warning_message,
         "max_stay_seconds": row.max_stay_seconds,
@@ -29,6 +30,7 @@ def assign(row: Zone, payload: ZoneIn) -> None:
     row.zone_type = payload.zone_type
     row.coordinates_json = json.dumps(payload.coordinates)
     row.required_ppe_json = json.dumps(payload.required_ppe)
+    row.allowed_worker_ids_json = json.dumps(payload.allowed_worker_ids)
     row.risk_weight = payload.risk_weight
     row.warning_message = payload.warning_message
     row.max_stay_seconds = payload.max_stay_seconds

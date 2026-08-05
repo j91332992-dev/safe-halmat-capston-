@@ -43,6 +43,7 @@ def worker_to_dict(worker) -> dict:
     return {
         "worker_id": worker.worker_id,
         "worker_name": worker.worker_name,
+        "notes": worker.notes,
         "helmet_id": worker.helmet_id,
         "x": worker.x,
         "y": worker.y,

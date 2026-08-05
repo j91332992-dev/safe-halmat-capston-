@@ -4,7 +4,13 @@ cd /d "%~dp0"
 echo [1/4] Checking Python...
 where py >nul 2>&1
 if errorlevel 1 goto use_python
+py -3.12 --version >nul 2>&1
+if not errorlevel 1 (
+  set "PYTHON_CMD=py -3.12"
+  goto python_ready
+)
 set "PYTHON_CMD=py -3"
+echo WARNING: Python 3.12 is recommended for real YOLO. Base mode will still install.
 goto python_ready
 :use_python
 where python >nul 2>&1
@@ -16,7 +22,7 @@ if errorlevel 1 goto no_python
 echo [2/4] Creating Python virtual environment...
 if not exist ".venv\Scripts\python.exe" %PYTHON_CMD% -m venv .venv
 if errorlevel 1 goto error
-echo [3/4] Installing backend packages...
+echo [3/4] Installing backend and voice packages...
 call ".venv\Scripts\python.exe" -m pip install --upgrade pip
 if errorlevel 1 goto error
 call ".venv\Scripts\python.exe" -m pip install -r "backend\requirements.txt"
@@ -28,13 +34,13 @@ pushd "frontend"
 call npm.cmd install
 if errorlevel 1 goto npm_error
 popd
-echo Installation completed. Run run_all.bat next.
+echo Installation completed. For real YOLO, run install_ai_windows.bat.
 exit /b 0
 :npm_error
 popd
 goto error
 :no_python
-echo ERROR: Python 3.11 or newer is required.
+echo ERROR: Python 3.11 or newer is required. Python 3.12 is recommended.
 exit /b 1
 :no_node
 echo ERROR: Node.js and npm are required.

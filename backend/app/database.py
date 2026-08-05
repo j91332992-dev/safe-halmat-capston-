@@ -2,10 +2,11 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from .config import settings
+from .site_profile import default_anchor_positions
 
 
 def utcnow() -> datetime:
@@ -45,10 +46,21 @@ def session_scope():
 
 
 def init_database() -> None:
-    from .models.entities import Anchor, Device, WorkerState, Zone
+    from .models.entities import Anchor, Device, SiteLayout, WorkerState, Zone
 
     Base.metadata.create_all(bind=engine)
+
+    if "allowed_worker_ids_json" not in {column["name"] for column in inspect(engine).get_columns("zones")}:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE zones ADD COLUMN allowed_worker_ids_json TEXT NOT NULL DEFAULT '[]'"))
+
+    if "notes" not in {column["name"] for column in inspect(engine).get_columns("worker_states")}:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE worker_states ADD COLUMN notes TEXT NOT NULL DEFAULT ''"))
+
     with session_scope() as db:
+        if not db.get(SiteLayout, settings.site_id):
+            db.add(SiteLayout(site_id=settings.site_id, name=settings.site_name, width=settings.site_width_m, height=settings.site_height_m))
         if not db.get(WorkerState, "worker-001"):
             db.add(
                 WorkerState(
@@ -85,12 +97,8 @@ def init_database() -> None:
                         ),
                     )
                 )
-        anchors = {
-            "anchor-001": (0.0, 0.0),
-            "anchor-002": (12.0, 0.0),
-            "anchor-003": (12.0, 8.0),
-            "anchor-004": (0.0, 8.0),
-        }
+        anchors = default_anchor_positions()
+
         for anchor_id, (x, y) in anchors.items():
             if not db.get(Anchor, anchor_id):
                 db.add(Anchor(anchor_id=anchor_id, name=anchor_id, x=x, y=y, z=2.2, online=True))
@@ -100,7 +108,7 @@ def init_database() -> None:
                     zone_id="zone-hot-work",
                     zone_name="화기 작업 위험구역",
                     zone_type="rectangle",
-                    coordinates_json=json.dumps({"x": 7.0, "y": 2.0, "width": 4.0, "height": 4.0}),
+                    coordinates_json=json.dumps({"x": 4.0, "y": 5.5, "width": 1.5, "height": 2.0}),
                     required_ppe_json=json.dumps(["vest", "glove"]),
                     risk_weight=30,
                     warning_message="화기 작업 위험구역에 진입했습니다.",

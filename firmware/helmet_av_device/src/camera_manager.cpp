@@ -1,7 +1,10 @@
+#include <Arduino.h>
 #include "config.h"
 #include "app_modules.h"
 #if ENABLE_CAMERA_HARDWARE
 #include "esp_camera.h"
+#include <HTTPClient.h>
+#include <WiFi.h>
 #endif
 
 static bool cameraReady = false;
@@ -15,8 +18,17 @@ bool cameraBegin() {
   c.pin_d7 = CAMERA_PIN_D7; c.pin_d6 = CAMERA_PIN_D6; c.pin_d5 = CAMERA_PIN_D5; c.pin_d4 = CAMERA_PIN_D4;
   c.pin_d3 = CAMERA_PIN_D3; c.pin_d2 = CAMERA_PIN_D2; c.pin_d1 = CAMERA_PIN_D1; c.pin_d0 = CAMERA_PIN_D0;
   c.pin_vsync = CAMERA_PIN_VSYNC; c.pin_href = CAMERA_PIN_HREF; c.pin_pclk = CAMERA_PIN_PCLK;
-  c.xclk_freq_hz = 20000000; c.ledc_timer = LEDC_TIMER_0; c.ledc_channel = LEDC_CHANNEL_0;
-  c.pixel_format = PIXFORMAT_JPEG; c.frame_size = FRAMESIZE_QVGA; c.jpeg_quality = 12; c.fb_count = 2;
+  c.xclk_freq_hz = 10000000; c.ledc_timer = LEDC_TIMER_0; c.ledc_channel = LEDC_CHANNEL_0;
+  c.pixel_format = PIXFORMAT_JPEG; c.frame_size = FRAMESIZE_VGA; c.jpeg_quality = 12;
+  if (psramFound()) {
+    c.fb_location = CAMERA_FB_IN_PSRAM;
+    c.fb_count = 2;
+    c.grab_mode = CAMERA_GRAB_LATEST;
+  } else {
+    c.fb_location = CAMERA_FB_IN_DRAM;
+    c.fb_count = 1;
+    c.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
+  }
   cameraReady = esp_camera_init(&c) == ESP_OK;
 #else
   cameraReady = false;
@@ -27,10 +39,64 @@ bool cameraBegin() {
 }
 
 bool cameraUploadIfDue() {
+#if ENABLE_CAMERA_HARDWARE
   if (!cameraReady || millis() - lastFrame < CAMERA_INTERVAL_MS) return false;
+  if (WiFi.status() != WL_CONNECTED) return false;
+
+  // Flush stale DMA frame buffer to ensure freshest camera shot
+  camera_fb_t *fb_stale = esp_camera_fb_get();
+  if (fb_stale) {
+    esp_camera_fb_return(fb_stale);
+  }
+
+  camera_fb_t *fb = esp_camera_fb_get();
+  if (!fb) {
+    Serial.println("[CAMERA] 캡처 실패");
+    return false;
+  }
+
   lastFrame = millis();
-  // 실제 JPEG POST 구현 지점: POST /api/camera/frame, multipart device_id/worker_id/file.
-  Serial.println("[CAMERA] 프레임 캡처 주기 도달");
-  return true;
+  HTTPClient http;
+  String url = String(SERVER_BASE_URL) + "/api/camera/frame";
+  http.begin(url);
+
+  String boundary = "----ESP32Boundary7MA4YWxkTrZu0gW";
+  http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+
+  String head = "--" + boundary + "\r\n" +
+                "Content-Disposition: form-data; name=\"device_id\"\r\n\r\n" + DEVICE_ID + "\r\n" +
+                "--" + boundary + "\r\n" +
+                "Content-Disposition: form-data; name=\"worker_id\"\r\n\r\n" + WORKER_ID + "\r\n" +
+                "--" + boundary + "\r\n" +
+                "Content-Disposition: form-data; name=\"helmet_id\"\r\n\r\n" + HELMET_ID + "\r\n" +
+                "--" + boundary + "\r\n" +
+                "Content-Disposition: form-data; name=\"file\"; filename=\"frame.jpg\"\r\n" +
+                "Content-Type: image/jpeg\r\n\r\n";
+
+  String tail = "\r\n--" + boundary + "--\r\n";
+
+  size_t totalLen = head.length() + fb->len + tail.length();
+  uint8_t *buf = (uint8_t *)(psramFound() ? ps_malloc(totalLen) : malloc(totalLen));
+  bool uploaded = false;
+  if (buf) {
+    memcpy(buf, head.c_str(), head.length());
+    memcpy(buf + head.length(), fb->buf, fb->len);
+    memcpy(buf + head.length() + fb->len, tail.c_str(), tail.length());
+
+    int code = http.POST(buf, totalLen);
+    uploaded = code >= 200 && code < 300;
+    Serial.printf("[CAMERA] 캡처 전송 -> HTTP %d (크기: %u bytes)\n", code, fb->len);
+    free(buf);
+  } else {
+    Serial.println("[CAMERA] 메모리 부족으로 업로드 취소");
+  }
+
+  esp_camera_fb_return(fb);
+  http.end();
+  return uploaded;
+#else
+  return false;
+#endif
 }
 
+bool cameraIsReady() { return cameraReady; }

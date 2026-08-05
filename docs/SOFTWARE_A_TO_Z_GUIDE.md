@@ -30,7 +30,7 @@ ESP32에서 YOLO, STT, 최종 x,y 또는 위험 점수를 계산하지 않습니
 - Node.js 20 이상과 npm
 - Git
 - Chrome 또는 Edge
-- 실제 펌웨어 작업 시 VS Code와 PlatformIO
+- 실제 펌웨어 작업 시 Python으로 설치한 PlatformIO CLI
 
 Python 3.14에서는 SciPy/OpenCV 등 선택 패키지가 제외된 기본 mock 구성이 설치됩니다. 기본 서버·웹·위치 계산은 이 패키지 없이 동작합니다.
 
@@ -51,6 +51,14 @@ cd "C:\Users\조성준\OneDrive - pukyong.ac.kr\바탕 화면\한미르\esp32-sm
 4. `frontend`에서 `npm install`
 
 설치가 중단되면 마지막 `ERROR` 위쪽의 패키지명과 전체 오류를 보관합니다.
+
+UWB 테스트 공간 초기 설정:
+
+```powershell
+.\.venv\Scripts\python.exe .\configure_uwb_test_site.py
+```
+
+이 명령은 지도 크기를 5.80m × 8.20m로 사용하고 기존 로컬 DB의 Anchor를 `(0,0)`, `(5.80,0)`, `(5.80,8.20)`, `(0,8.20)`으로 맞춥니다.
 
 ## 5. 실행과 종료
 
@@ -157,7 +165,7 @@ INMP441→PCM/WAV→`/api/audio/upload`→STT/dummy→정규화→명령 사전/
 
 ### UWB
 
-앵커 거리 3개 이상→품질 가중 Gauss-Newton 최소제곱→최근 중앙값→EMA→지도 범위 보정→confidence→구역 판정.
+앵커 거리 3개 이상→품질 가중 Gauss-Newton 최소제곱→최근 중앙값→EMA→5.80m × 8.20m 지도 범위 보정→confidence→구역 판정.
 
 위치가 튀면 앵커 ID/좌표/단위, 안테나, quality, 원시 거리와 raw/filtered 좌표를 비교합니다.
 
