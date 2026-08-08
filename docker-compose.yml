@@ -1,0 +1,12 @@
+services:
+  backend:
+    build: ./backend
+    ports: ["8000:8000"]
+    volumes:
+      - ./backend/captures:/app/captures
+      - ./backend/audio_data:/app/audio_data
+  frontend:
+    build: ./frontend
+    ports: ["5173:80"]
+    depends_on: [backend]
+
