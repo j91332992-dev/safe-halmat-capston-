@@ -246,19 +246,20 @@ function LayoutEditorComponent({site, anchors, obstacles, zones, workers, onSave
   const selectedObstacle = selection?.kind === "obstacle" ? localObstacles.find(item => item.obstacle_id === selection.id) : undefined;
   const selectedZone = selection?.kind === "zone" ? localZones.find(item => item.zone_id === selection.id) : undefined;
 
-  const addObstacle = () => {
+  const addObstacle = (objectType: Obstacle["object_type"] = "obstacle") => {
     checkpoint();
     const item: Obstacle = {
-      obstacle_id: "obstacle-" + Date.now(),
-      name: "새 장애물 " + (localObstacles.length + 1),
+      obstacle_id: objectType + "-" + Date.now(),
+      name: (objectType === "wall" ? "새 벽 " : objectType === "emergency_exit" ? "비상구 " : objectType === "door" ? "출입문 " : "새 장애물 ") + (localObstacles.length + 1),
       x: clean(Math.max(0, width / 2 - 0.5)),
       y: clean(Math.max(0, height / 2 - 0.5)),
-      width: Math.min(1, width),
-      height: Math.min(1, height)
+      width: Math.min(objectType === "wall" ? 2 : objectType === "emergency_exit" ? 0.8 : 1, width),
+      height: Math.min(objectType === "wall" ? 0.2 : objectType === "emergency_exit" ? 0.3 : 1, height),
+      object_type: objectType
     };
     replaceObstacles([...obstaclesRef.current, item]);
     setSelection({kind: "obstacle", id: item.obstacle_id});
-    setMessage("장애물을 설계안에 추가했습니다. 아직 현장에는 적용되지 않았습니다.");
+    setMessage(item.name + "을(를) 설계안에 추가했습니다. 저장 후 현장에 적용하세요.");
   };
 
   const addZone = () => {
@@ -267,6 +268,7 @@ function LayoutEditorComponent({site, anchors, obstacles, zones, workers, onSave
       zone_id: "zone-" + Date.now(),
       zone_name: "새 제한구역 " + (localZones.length + 1),
       zone_type: "rectangle",
+      zone_category: "danger",
       coordinates: {x: clean(Math.max(0, width / 2 - 0.75)), y: clean(Math.max(0, height / 2 - 0.75)), width: Math.min(1.5, width), height: Math.min(1.5, height)},
       required_ppe: [],
       allowed_worker_ids: [],
@@ -391,7 +393,7 @@ function LayoutEditorComponent({site, anchors, obstacles, zones, workers, onSave
   };
   const updateObstacle = (field: keyof Obstacle, value: string) => {
     if (!selectedObstacle) return;
-    replaceObstacles(obstaclesRef.current.map(item => item.obstacle_id === selectedObstacle.obstacle_id ? {...item, [field]: field === "name" ? value : Number(value)} : item));
+    replaceObstacles(obstaclesRef.current.map(item => item.obstacle_id === selectedObstacle.obstacle_id ? {...item, [field]: field === "name" || field === "object_type" ? value : Number(value)} : item));
   };
   const updateZone = (updater: (zone: Zone) => Zone) => {
     if (!selectedZone) return;
@@ -407,7 +409,9 @@ function LayoutEditorComponent({site, anchors, obstacles, zones, workers, onSave
           <button className="history-action" onClick={redo} disabled={busy || redoRef.current.length === 0}>↷ 다시실행</button>
           <button className="version-action" onClick={() => setShowVersions(value => !value)}>버전 관리</button>
           <button onClick={arrangeCorners} disabled={busy || localAnchors.length < 4}>앵커 꼭짓점 배치</button>
-          <button onClick={addObstacle} disabled={busy}>+ 장애물</button>
+          <button onClick={() => addObstacle("obstacle")} disabled={busy}>+ 장애물</button>
+          <button onClick={() => addObstacle("wall")} disabled={busy}>+ 벽</button>
+          <button className="exit-action" onClick={() => addObstacle("emergency_exit")} disabled={busy}>+ 비상구</button>
           <button className="danger-action" onClick={addZone} disabled={busy}>+ 제한구역</button>
           <button className="save-draft" onClick={() => void saveDraft()} disabled={busy || !dirty}>설계 저장</button>
           <button className="apply-draft" onClick={() => void applyDraft()} disabled={busy || dirty || !savedAt}>현장에 적용</button>
@@ -456,7 +460,7 @@ function LayoutEditorComponent({site, anchors, obstacles, zones, workers, onSave
 
             {localObstacles.map(item => {
               const selected = selection?.kind === "obstacle" && selection.id === item.obstacle_id;
-              return <g key={item.obstacle_id} className={"blueprint-obstacle " + (selected ? "selected" : "")}>
+              return <g key={item.obstacle_id} className={"blueprint-obstacle " + (item.object_type ?? "obstacle") + " " + (selected ? "selected" : "")}>
                 <rect x={sx(item.x)} y={sy(item.y + item.height)} width={(item.width / width) * MAP_W} height={(item.height / height) * MAP_H} onPointerDown={event => beginRect(event, "obstacle", item.obstacle_id, item)} />
                 <text className="center-label" x={sx(item.x + item.width / 2)} y={sy(item.y + item.height / 2) - 4} textAnchor="middle">{item.name}</text>
                 <text className="center-size" x={sx(item.x + item.width / 2)} y={sy(item.y + item.height / 2) + 14} textAnchor="middle">{item.width.toFixed(2)} × {item.height.toFixed(2)}m</text>
@@ -494,13 +498,15 @@ function LayoutEditorComponent({site, anchors, obstacles, zones, workers, onSave
             <label>설치 높이 Z (m)<input type="number" step=".01" value={selectedAnchor.z} onChange={event => updateAnchor("z", event.target.value)} /></label>
           </div>}
           {selectedObstacle && <div className="property-form">
-            <label>장애물 이름<input value={selectedObstacle.name} onChange={event => updateObstacle("name", event.target.value)} /></label>
+            <label>객체 이름<input value={selectedObstacle.name} onChange={event => updateObstacle("name", event.target.value)} /></label>
+            <label>객체 종류<select value={selectedObstacle.object_type ?? "obstacle"} onChange={event => updateObstacle("object_type", event.target.value)}><option value="obstacle">장애물</option><option value="wall">벽</option><option value="emergency_exit">비상탈출구</option><option value="door">출입문</option></select></label>
             <div className="property-pair"><label>X (m)<input type="number" step=".01" value={selectedObstacle.x} onChange={event => updateObstacle("x", event.target.value)} /></label><label>Y (m)<input type="number" step=".01" value={selectedObstacle.y} onChange={event => updateObstacle("y", event.target.value)} /></label></div>
             <div className="property-pair"><label>가로 (m)<input type="number" min=".1" step=".01" value={selectedObstacle.width} onChange={event => updateObstacle("width", event.target.value)} /></label><label>세로 (m)<input type="number" min=".1" step=".01" value={selectedObstacle.height} onChange={event => updateObstacle("height", event.target.value)} /></label></div>
-            <button className="delete-property" onClick={() => {checkpoint(); replaceObstacles(obstaclesRef.current.filter(item => item.obstacle_id !== selectedObstacle.obstacle_id)); setSelection(null);}}>장애물 삭제</button>
+            <button className="delete-property" onClick={() => {checkpoint(); replaceObstacles(obstaclesRef.current.filter(item => item.obstacle_id !== selectedObstacle.obstacle_id)); setSelection(null);}}>객체 삭제</button>
           </div>}
           {selectedZone && <div className="property-form">
             <label>제한구역 이름<input value={selectedZone.zone_name} onChange={event => updateZone(zone => ({...zone, zone_name: event.target.value}))} /></label>
+            <label>구역 분류<select value={selectedZone.zone_category ?? "danger"} onChange={event => updateZone(zone => ({...zone, zone_category: event.target.value as Zone["zone_category"]}))}><option value="danger">위험구역</option><option value="controlled">통제구역</option><option value="confined">밀폐공간</option><option value="safe">안전구역</option><option value="rest">휴게구역</option><option value="shadow">통신음영지역</option><option value="general">일반구역</option></select></label>
             <div className="property-pair"><label>X (m)<input type="number" step=".01" value={selectedZone.coordinates.x} onChange={event => updateZone(zone => ({...zone, coordinates: {...zone.coordinates, x: Number(event.target.value)}}))} /></label><label>Y (m)<input type="number" step=".01" value={selectedZone.coordinates.y} onChange={event => updateZone(zone => ({...zone, coordinates: {...zone.coordinates, y: Number(event.target.value)}}))} /></label></div>
             <div className="property-pair"><label>가로 (m)<input type="number" min=".1" step=".01" value={selectedZone.coordinates.width} onChange={event => updateZone(zone => ({...zone, coordinates: {...zone.coordinates, width: Number(event.target.value)}}))} /></label><label>세로 (m)<input type="number" min=".1" step=".01" value={selectedZone.coordinates.height} onChange={event => updateZone(zone => ({...zone, coordinates: {...zone.coordinates, height: Number(event.target.value)}}))} /></label></div>
             <label>진입 경고문<input value={selectedZone.warning_message} onChange={event => updateZone(zone => ({...zone, warning_message: event.target.value}))} /></label>
@@ -509,7 +515,7 @@ function LayoutEditorComponent({site, anchors, obstacles, zones, workers, onSave
             </div>
             <button className="delete-property" onClick={() => {checkpoint(); replaceZones(zonesRef.current.filter(item => item.zone_id !== selectedZone.zone_id)); setSelection(null);}}>제한구역 삭제</button>
           </div>}
-          <div className="object-summary"><span>앵커 <b>{localAnchors.length}</b></span><span>장애물 <b>{localObstacles.length}</b></span><span>제한구역 <b>{localZones.length}</b></span></div>
+          <div className="object-summary"><span>앵커 <b>{localAnchors.length}</b></span><span>구조물 <b>{localObstacles.filter(item => item.object_type !== "emergency_exit").length}</b></span><span>비상구 <b>{localObstacles.filter(item => item.object_type === "emergency_exit").length}</b></span><span>제한구역 <b>{localZones.length}</b></span></div>
         </aside>
       </div>
     </section>
@@ -521,3 +527,5 @@ const sameDesign = (left: Props, right: Props) =>
   === JSON.stringify([right.site, right.anchors, right.obstacles, right.zones, right.workers.map(worker => [worker.worker_id, worker.worker_name])]);
 
 export const LayoutEditor = memo(LayoutEditorComponent, sameDesign);
+
+

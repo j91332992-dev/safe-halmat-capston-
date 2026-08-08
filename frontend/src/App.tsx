@@ -2,6 +2,7 @@ import {useEffect, useMemo, useState} from "react";
 import {CameraMonitor} from "./components/CameraMonitor";
 import {DiagnosticPanel} from "./components/DiagnosticPanel";
 import {EventLog} from "./components/EventLog";
+import {FireEvacuationModal} from "./components/FireEvacuationModal";
 import {HistoryReplay} from "./components/HistoryReplay";
 import {LayoutEditor} from "./components/LayoutEditor";
 import {SiteMap} from "./components/SiteMap";
@@ -28,15 +29,6 @@ const navigation: {id: Page; label: string; mark: string}[] = [
   {id: "diagnostics", label: "하드웨어 진단", mark: "⊙"}
 ];
 
-const scenarios = [
-  ["normal", "정상 복귀"],
-  ["danger_zone", "위험구역 진입"],
-  ["ppe_missing", "보호구 미착용"],
-  ["fire", "화재 감지"],
-  ["smoke", "연기 감지"],
-  ["emergency", "비상 상황"],
-  ["device_offline", "장치 오프라인"]
-];
 
 function App() {
   const {data, locationHistory, connected, error, refresh} = useSafetyData();
@@ -44,6 +36,7 @@ function App() {
   const [selectedId, setSelectedId] = useState("worker-001");
   const [busy, setBusy] = useState(false);
   const worker = useMemo(() => data?.workers.find(item => item.worker_id === selectedId) ?? data?.workers[0], [data, selectedId]);
+  const evacuationIncident = data?.evacuation?.incident ?? null;
 
   useEffect(() => {
     if (data?.workers[0] && !selectedId) setSelectedId(data.workers[0].worker_id);
@@ -72,6 +65,9 @@ function App() {
 
   const critical = data.events.filter(event => ["danger", "emergency"].includes(event.severity) && event.status !== "resolved").length;
   const online = data.devices.filter(device => device.online).length;
+  const uwbTag = data.devices.find(device => device.device_type === "position_device");
+  const missingAnchors = data.anchors.filter(anchor => !anchor.online);
+  const showAnchorStatus = page === "dashboard" || page === "map" || page === "diagnostics";
 
   return (
     <div className="app-frame">
@@ -94,13 +90,7 @@ function App() {
           <div><StatusPill active={connected} activeText="실시간 연결" inactiveText="재연결 중" /></div>
           <div className="mode-switch">
             <span>운영 모드</span>
-            <button
-              disabled={busy}
-              className={data.mode === "hardware" ? "hardware" : ""}
-              onClick={() => void action(() => api.setMode(data.mode === "mock" ? "hardware" : "mock"))}
-            >
-              {data.mode.toUpperCase()}
-            </button>
+            <button disabled className="hardware">HARDWARE</button>
           </div>
         </div>
         <footer><span>v1.0.0-integrated</span><span>site-001</span></footer>
@@ -120,6 +110,23 @@ function App() {
         </header>
 
         {error && <div className="connection-banner">서버 갱신 지연: {error}</div>}
+        {showAnchorStatus && (
+          <div className={`anchor-status-banner ${!uwbTag?.online ? "unknown" : missingAnchors.length ? "warning" : "healthy"}`}>
+            <div>
+              <b>{!uwbTag?.online ? "UWB 태그 오프라인" : missingAnchors.length ? "앵커 신호 미수신" : "UWB 수신 정상"}</b>
+              <span>{!uwbTag?.online ? "태그 전원을 켜야 앵커 수신 여부를 확인할 수 있습니다." : missingAnchors.length ? `${missingAnchors.map(anchor => anchor.name).join(", ")} 신호가 20초 이상 수신되지 않았습니다.` : `앵커 ${data.anchors.length}개가 모두 수신되고 있습니다.`}</span>
+            </div>
+            <div className="anchor-status-chips">
+              {data.anchors.map((anchor, index) => <span key={anchor.anchor_id} className={uwbTag?.online && anchor.online ? "online" : "offline"}>A{index + 1} {uwbTag?.online ? anchor.online ? "정상" : "미수신" : "확인 불가"}</span>)}
+            </div>
+          </div>
+        )}
+        {evacuationIncident?.status === "active" && (
+          <div className="active-fire-banner" role="alert">
+            <div><b>화재 경보 활성</b><span>확인된 화재 위치와 가장 가까운 비상구 거리를 작업자 안전모로 안내 중입니다.</span></div>
+            <button disabled={busy} onClick={() => void action(() => api.cancelFire(evacuationIncident.incident_id, "resolved"))}>화재 종료</button>
+          </div>
+        )}
 
         {(page === "dashboard" || page === "map") && worker && (
           <>
@@ -151,17 +158,11 @@ function App() {
                   <EventLog events={data.events.slice(0, 5)} onRefresh={refresh} />
                 </article>
                 <article className="panel scenario-panel">
-                  <header><div><span className="eyebrow">INTEGRATED TEST</span><h2>Mock 시나리오</h2></div><StatusPill active={data.mode === "mock"} activeText="사용 가능" inactiveText="Hardware 모드" /></header>
-                  <p>별도 테스트 파일 없이 최종 시스템 안에서 전체 흐름을 확인합니다.</p>
-                  <div className="scenario-buttons">
-                    {scenarios.map(([id, label]) => (
-                      <button key={id} disabled={busy || data.mode !== "mock"} onClick={() => void action(() => api.runScenario(id))}>{label}</button>
-                    ))}
-                  </div>
+                  <header><div><span className="eyebrow">OPERATOR CONTROL</span><h2>관리자 빠른 제어</h2></div><StatusPill active activeText="실제 장치" inactiveText="오프라인" /></header>
+                  <p>등록된 안전모 장치에 경고를 보내거나 실제 화재 상황을 수동 발령합니다.</p>
                   <div className="quick-actions">
-                    <button disabled={busy} onClick={() => void action(() => api.mockVoice("현재 위험도 알려줘"))}>음성 명령</button>
-                    <button disabled={busy} onClick={() => void action(() => api.mockButton("triple_press"))}>버튼 비상</button>
-                    <button disabled={busy} onClick={() => void action(() => api.sendAlert())}>스피커 경고</button>
+                    <button disabled={busy || !data.devices.some(device => device.worker_id === worker.worker_id && device.device_type === "assistant_device" && device.online)} onClick={() => void action(() => api.sendAlert(data.devices.find(device => device.worker_id === worker.worker_id && device.device_type === "assistant_device")?.device_id))}>스피커 경고</button>
+                    <button className="fire-manual-button" disabled={busy || !!evacuationIncident} onClick={() => void action(() => api.triggerFire(worker.worker_id))}>화재 수동발령</button>
                   </div>
                 </article>
               </section>
@@ -210,7 +211,7 @@ function App() {
           <section className="page-panel diagnostic-page">
             <header><div><span className="eyebrow">HARDWARE DIAGNOSTIC</span><h2>통합 하드웨어 진단</h2></div><button onClick={() => void refresh()}>지금 새로고침</button></header>
             <p className="page-intro">카메라·마이크·스피커·버튼·UWB를 별도 스케치가 아닌 최종 펌웨어 heartbeat와 서버 수신 기록으로 확인합니다.</p>
-            <DiagnosticPanel devices={data.devices} mode={data.mode} />
+            <DiagnosticPanel devices={data.devices} anchors={data.anchors} mode={data.mode} />
           </section>
         )}
       </main>
@@ -219,4 +220,5 @@ function App() {
 }
 
 export default App;
+
 

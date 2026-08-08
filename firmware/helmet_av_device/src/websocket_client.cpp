@@ -22,6 +22,14 @@ static void onSocket(WStype_t type, uint8_t *payload, size_t length) {
       uint8_t repeats = doc["payload"]["repeats"] | 3;
       speakerPlayAlert(repeats);
     }
+    else if (command == "play_audio") {
+      String audioUrl = doc["payload"]["audio_url"] | "";
+      Serial.printf("[WS] 안전모 음성 URL='%s'\n", audioUrl.c_str());
+      if (!speakerPlayAudioUrl(audioUrl)) {
+        Serial.println("[WS][ERROR] 음성 재생 실패, 경고음으로 대체");
+        speakerPlayAlert(3);
+      }
+    }
     else if (command == "play_tone") {
       uint16_t freq = doc["payload"]["frequency"] | 1200;
       uint16_t duration = doc["payload"]["duration"] | 300;

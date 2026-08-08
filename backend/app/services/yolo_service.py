@@ -1,4 +1,5 @@
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,7 @@ from .camera_service import CAPTURE_DIR
 logger = logging.getLogger(__name__)
 _model: Any = None
 _model_attempted = False
+_vision_state: dict[str, dict] = {}
 
 
 def analyze_frame_dummy(filename: str) -> dict:
@@ -63,6 +65,8 @@ def _category(name: str) -> tuple[str | None, bool]:
         return "vest", not negative
     if "glove" in value:
         return "glove", not negative
+    if "fall" in value or "lying" in value or "man down" in value:
+        return "fallen", True
     if "person" in value or "worker" in value:
         return "person", True
     return None, True
@@ -86,6 +90,8 @@ def analyze_frame(filename: str) -> dict:
         ppe: dict[str, bool] = {}
         hazards = {"fire": False, "smoke": False}
         person_seen = False
+        max_fire_area_ratio = 0.0
+        horizontal_person = False
         colors = {
             "helmet": (0, 70, 255),
             "glove": (0, 220, 255),
@@ -93,6 +99,7 @@ def analyze_frame(filename: str) -> dict:
             "fire": (0, 0, 255),
             "smoke": (140, 140, 140),
             "person": (40, 220, 80),
+            "fallen": (0, 0, 255),
         }
         if result.boxes is not None:
             for box in result.boxes:
@@ -103,17 +110,30 @@ def analyze_frame(filename: str) -> dict:
                     continue
                 confidence = round(float(box.conf[0].item()), 3)
                 xyxy = [float(value) for value in box.xyxy[0].tolist()]
+                box_width = max(0.0, xyxy[2] - xyxy[0])
+                box_height = max(0.0, xyxy[3] - xyxy[1])
+                frame_area = float(image.shape[0] * image.shape[1]) if image is not None else 0.0
+                area_ratio = (box_width * box_height / frame_area) if frame_area else 0.0
+                aspect_ratio = box_width / max(box_height, 1.0)
                 detections.append({
                     "class": class_name,
                     "category": category,
                     "positive": positive,
                     "confidence": confidence,
+                    "area_ratio": round(area_ratio, 4),
+                    "aspect_ratio": round(aspect_ratio, 3),
                     "box": {"x1": xyxy[0], "y1": xyxy[1], "x2": xyxy[2], "y2": xyxy[3]},
                 })
                 if category == "person":
                     person_seen = True
+                    horizontal_person = horizontal_person or aspect_ratio >= 1.5
+                elif category == "fallen":
+                    hazards["fallen"] = hazards.get("fallen", False) or positive
+                    horizontal_person = horizontal_person or positive
                 elif category in ("fire", "smoke"):
                     hazards[category] = hazards[category] or positive
+                    if category == "fire" and positive:
+                        max_fire_area_ratio = max(max_fire_area_ratio, area_ratio)
                 else:
                     if category not in ppe or not positive:
                         ppe[category] = positive
@@ -123,6 +143,29 @@ def analyze_frame(filename: str) -> dict:
                     end = (int(xyxy[2]), int(xyxy[3]))
                     cv2.rectangle(image, start, end, color, 2)
                     cv2.putText(image, f"{class_name} {confidence:.2f}", (start[0], max(18, start[1] - 7)), cv2.FONT_HERSHEY_SIMPLEX, 0.48, color, 2)
+        now = time.monotonic()
+        state_key = filepath.name.split("_", 1)[0]
+        state = _vision_state.setdefault(state_key, {})
+        previous_area = float(state.get("fire_area_ratio") or 0.0)
+        previous_at = float(state.get("fire_at") or now)
+        elapsed = max(0.001, now - previous_at)
+        expansion_rate = (max_fire_area_ratio - previous_area) / previous_area if previous_area > 0 and elapsed <= 1.5 else 0.0
+        state["fire_area_ratio"] = max_fire_area_ratio
+        state["fire_at"] = now
+        if horizontal_person:
+            state.setdefault("fallen_since", now)
+        else:
+            state.pop("fallen_since", None)
+        fallen_confirmed = bool(hazards.get("fallen")) or (
+            horizontal_person and now - float(state.get("fallen_since", now)) >= 3.0
+        )
+        hazards.update({
+            "fire_area_ratio": round(max_fire_area_ratio, 4),
+            "fire_expansion_rate": round(max(0.0, expansion_rate), 4),
+            "large_fire": bool(max_fire_area_ratio >= 0.15 or expansion_rate >= 0.20),
+            "small_fire": bool(hazards.get("fire") and max_fire_area_ratio < 0.05),
+            "fallen": fallen_confirmed,
+        })
         if person_seen:
             for item in ("helmet", "vest", "glove"):
                 ppe.setdefault(item, False)

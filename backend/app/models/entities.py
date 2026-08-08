@@ -19,7 +19,7 @@ class Device(Base):
     rssi: Mapped[int | None] = mapped_column(Integer, nullable=True)
     battery: Mapped[float | None] = mapped_column(Float, nullable=True)
     firmware_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    online: Mapped[bool] = mapped_column(Boolean, default=True)
+    online: Mapped[bool] = mapped_column(Boolean, default=False)
     component_status_json: Mapped[str] = mapped_column(Text, default="{}")
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -34,6 +34,7 @@ class WorkerState(Base):
     __tablename__ = "worker_states"
     worker_id: Mapped[str] = mapped_column(String(40), primary_key=True)
     worker_name: Mapped[str] = mapped_column(String(80), default="작업자")
+    worker_role: Mapped[str] = mapped_column(String(40), default="general_worker")
     notes: Mapped[str] = mapped_column(Text, default="")
     helmet_id: Mapped[str] = mapped_column(String(40))
     x: Mapped[float] = mapped_column(Float, default=0)
@@ -56,7 +57,7 @@ class Anchor(Base):
     x: Mapped[float] = mapped_column(Float)
     y: Mapped[float] = mapped_column(Float)
     z: Mapped[float] = mapped_column(Float, default=2.0)
-    online: Mapped[bool] = mapped_column(Boolean, default=True)
+    online: Mapped[bool] = mapped_column(Boolean, default=False)
     last_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -65,6 +66,7 @@ class Zone(Base):
     zone_id: Mapped[str] = mapped_column(String(50), primary_key=True)
     zone_name: Mapped[str] = mapped_column(String(100))
     zone_type: Mapped[str] = mapped_column(String(30), default="rectangle")
+    zone_category: Mapped[str] = mapped_column(String(30), default="danger")
     coordinates_json: Mapped[str] = mapped_column(Text)
     required_ppe_json: Mapped[str] = mapped_column(Text, default="[]")
     allowed_worker_ids_json: Mapped[str] = mapped_column(Text, default="[]")
@@ -101,6 +103,7 @@ class Obstacle(Base):
     obstacle_id: Mapped[str] = mapped_column(String(50), primary_key=True)
     site_id: Mapped[str] = mapped_column(String(40), default="site-001", index=True)
     name: Mapped[str] = mapped_column(String(100))
+    object_type: Mapped[str] = mapped_column(String(30), default="obstacle")
     x: Mapped[float] = mapped_column(Float)
     y: Mapped[float] = mapped_column(Float)
     width: Mapped[float] = mapped_column(Float)
@@ -150,4 +153,16 @@ class CommandRecord(Base):
     payload_json: Mapped[str] = mapped_column(Text, default="{}")
     status: Mapped[str] = mapped_column(String(30), default="queued")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+class EvacuationIncident(Base):
+    __tablename__ = "evacuation_incidents"
+    incident_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    worker_id: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    source: Mapped[str] = mapped_column(String(30))
+    status: Mapped[str] = mapped_column(String(30), default="pending_manager", index=True)
+    fire_zone_json: Mapped[str] = mapped_column(Text, default="{}")
+    details_json: Mapped[str] = mapped_column(Text, default="{}")
+    cancel_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 

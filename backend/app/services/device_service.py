@@ -14,10 +14,23 @@ def register_device(db: Session, data: DeviceRegister) -> Device:
         db.add(device)
     for field in ("organization_id", "site_id", "worker_id", "helmet_id", "device_type", "firmware_version", "ip", "mac"):
         setattr(device, field, getattr(data, field))
-    device.online = True
-    device.last_seen = utcnow()
+    mark_device_seen(device)
     db.flush()
     return device
+
+
+def mark_device_seen(device: Device, channel: str | None = None) -> None:
+    now = utcnow()
+    device.online = True
+    device.last_seen = now
+    if channel == "camera":
+        device.last_camera_at = now
+    elif channel == "audio":
+        device.last_audio_at = now
+    elif channel == "button":
+        device.last_button_at = now
+    elif channel == "uwb":
+        device.last_uwb_at = now
 
 
 def update_heartbeat(db: Session, data: Heartbeat) -> Device:
@@ -36,8 +49,7 @@ def update_heartbeat(db: Session, data: Heartbeat) -> Device:
     device.battery = data.battery
     device.component_status_json = json.dumps(data.component_status, ensure_ascii=False)
     device.last_error = data.error
-    device.online = True
-    device.last_seen = utcnow()
+    mark_device_seen(device)
     db.flush()
     return device
 

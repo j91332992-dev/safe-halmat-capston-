@@ -27,7 +27,7 @@ Board: esp32 2.0.16
 #define FUNC_REPORT         0xE2
 #define FUNC_BEACON         0xE3
 
-#define TDMA_FRAME_MS       1400
+#define TDMA_FRAME_MS       300
 #define SLOT_DURATION_MS    150
 #define BEACON_GUARD_MS     20
 #define BEACON_TIMEOUT_MS   (TDMA_FRAME_MS * 3)
@@ -86,7 +86,7 @@ static uint32_t last_wifi_attempt_ms = 0;
 static uint32_t last_wifi_post_ms = 0;
 
 #define WIFI_RETRY_INTERVAL_MS 10000
-#define WIFI_POST_RETRY_MS     1000
+#define WIFI_POST_RETRY_MS     100
 #define WIFI_HTTP_TIMEOUT_MS   900
 
 extern dwt_txconfig_t txconfig_options;

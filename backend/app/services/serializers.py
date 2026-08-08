@@ -43,6 +43,7 @@ def worker_to_dict(worker) -> dict:
     return {
         "worker_id": worker.worker_id,
         "worker_name": worker.worker_name,
+        "worker_role": worker.worker_role,
         "notes": worker.notes,
         "helmet_id": worker.helmet_id,
         "x": worker.x,
@@ -52,9 +53,11 @@ def worker_to_dict(worker) -> dict:
         "risk_score": worker.risk_score,
         "risk_level": worker.risk_level,
         "risk_reasons": parse_json(worker.reasons_json, []),
+        "decision": (parse_json(worker.reasons_json, []) or [None])[0],
         "ppe": parse_json(worker.ppe_json, {}),
         "hazards": parse_json(worker.hazard_json, {}),
         "emergency": worker.emergency,
         "updated_at": iso(worker.updated_at),
     }
+
 

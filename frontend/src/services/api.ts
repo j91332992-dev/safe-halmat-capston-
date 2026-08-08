@@ -1,4 +1,4 @@
-import type {Anchor, CameraLatest, LayoutDraft, LayoutVersion, LocationPoint, Obstacle, Snapshot, VoiceResponse, Worker, Zone} from "../types";
+import type {Anchor, CameraLatest, EvacuationSnapshot, FireZone, LayoutDraft, LayoutVersion, LocationPoint, Obstacle, Snapshot, VoiceResponse, Worker, Zone} from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 
@@ -16,7 +16,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  updateWorkerProfile: (workerId: string, worker_name: string, notes: string) => request<Worker>("/api/workers/" + encodeURIComponent(workerId), {method: "PUT", body: JSON.stringify({worker_name, notes})}),
+  updateWorkerProfile: (workerId: string, worker_name: string, worker_role: Worker["worker_role"], notes: string) => request<Worker>("/api/workers/" + encodeURIComponent(workerId), {method: "PUT", body: JSON.stringify({worker_name, worker_role, notes})}),
   snapshot: () => request<Snapshot>("/api/dashboard/snapshot"),
   locationHistory: (workerId: string, limit = 300) =>
     request<LocationPoint[]>(`/api/locations/${workerId}/history?limit=${limit}`),
@@ -45,20 +45,19 @@ export const api = {
     request<Obstacle>("/api/layout/obstacles/" + encodeURIComponent(obstacle.obstacle_id), {method: "PUT", body: JSON.stringify(obstacle)}),
   deleteObstacle: (obstacleId: string) =>
     request<void>("/api/layout/obstacles/" + encodeURIComponent(obstacleId), {method: "DELETE"}),
-  setMode: (mode: "mock" | "hardware") =>
-    request<{mode: string}>("/api/system/mode", {method: "POST", body: JSON.stringify({mode})}),
-  runScenario: (scenario: string) =>
-    request("/api/system/mock/scenario", {
-      method: "POST",
-      body: JSON.stringify({scenario, worker_id: "worker-001"})
-    }),
+  confirmFireZone: (incidentId: string, zone: FireZone) =>
+    request<EvacuationSnapshot>("/api/evacuation/" + encodeURIComponent(incidentId) + "/confirm-zone", {method: "POST", body: JSON.stringify(zone)}),
+  cancelFire: (incidentId: string, reason: "false_alarm" | "no_fire" | "resolved") =>
+    request<EvacuationSnapshot>("/api/evacuation/" + encodeURIComponent(incidentId) + "/cancel", {method: "POST", body: JSON.stringify({reason})}),
+  triggerFire: (workerId: string, source: "manager" | "voice" | "yolo" = "manager") =>
+    request<EvacuationSnapshot>("/api/evacuation/trigger", {method: "POST", body: JSON.stringify({worker_id: workerId, source, details: {manual: source === "manager"}})}),
   sendAlert: (deviceId = "helmet-001-av") =>
     request(`/api/devices/${deviceId}/command`, {
       method: "POST",
       body: JSON.stringify({command_type: "play_alert", payload: {message: "관리자 경고"}})
     }),
-  mockVoice: (text: string, workerId = "worker-001", deviceId = "helmet-001-av") =>
-    request<VoiceResponse>("/api/audio/mock-command", {
+  sendTextCommand: (text: string, workerId = "worker-001", deviceId = "helmet-001-av") =>
+    request<VoiceResponse>("/api/audio/command", {
       method: "POST",
       body: JSON.stringify({worker_id: workerId, device_id: deviceId, text})
     }),
@@ -66,19 +65,8 @@ export const api = {
   cameraImageUrl: (deviceId: string, version: string | number = Date.now()) =>
     `${API_URL}/api/camera/${encodeURIComponent(deviceId)}/latest/image?v=${encodeURIComponent(String(version))}`,
   assetUrl: (path: string) => `${API_URL}${path}`,
-  mockButton: (event_type: string) =>
-    request("/api/button-event", {
-      method: "POST",
-      body: JSON.stringify({
-        organization_id: "org-001",
-        site_id: "site-001",
-        worker_id: "worker-001",
-        helmet_id: "helmet-001",
-        device_id: "helmet-001-av",
-        event_type
-      })
-    }),
   acknowledge: (eventId: string) => request(`/api/events/${eventId}/acknowledge`, {method: "POST"}),
   resolve: (eventId: string) => request(`/api/events/${eventId}/resolve`, {method: "POST"})
 };
+
 

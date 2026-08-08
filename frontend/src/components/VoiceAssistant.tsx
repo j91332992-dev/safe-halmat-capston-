@@ -18,7 +18,7 @@ export function VoiceAssistant({workers, devices, onRefresh}: Props) {
     if (!worker || !device || !text.trim()) return;
     setBusy(true); setError("");
     try {
-      const response = await api.mockVoice(text.trim(), worker.worker_id, device.device_id);
+      const response = await api.sendTextCommand(text.trim(), worker.worker_id, device.device_id);
       setResult(response);
       await onRefresh();
     } catch (cause) {
@@ -28,11 +28,11 @@ export function VoiceAssistant({workers, devices, onRefresh}: Props) {
 
   return (
     <section className="page-panel assistant-page">
-      <header><div><span className="eyebrow">SAFEY VOICE AI</span><h2>음성·AI 어시스턴트</h2></div><span>마이크 업로드와 동일한 명령 처리 흐름을 테스트합니다.</span></header>
+      <header><div><span className="eyebrow">SAFETY VOICE AI</span><h2>음성·AI 어시스턴트</h2></div><span>실제 안전모 마이크 명령을 확인하고 관리자가 텍스트 명령을 전송할 수 있습니다.</span></header>
       <div className="assistant-grid">
         <article className="assistant-command-card">
           <label>작업자<select value={worker?.worker_id ?? ""} onChange={event => setWorkerId(event.target.value)}>{workers.map(item => <option key={item.worker_id} value={item.worker_id}>{item.worker_name}</option>)}</select></label>
-          <label>명령<textarea value={text} onChange={event => setText(event.target.value)} rows={4} placeholder="안전모에 말할 명령을 입력하세요." /></label>
+          <label>관리자 텍스트 명령<textarea value={text} onChange={event => setText(event.target.value)} rows={4} placeholder="안전모로 전달할 명령을 입력하세요." /></label>
           <div className="assistant-suggestions">{suggestions.map(item => <button key={item} onClick={() => setText(item)}>{item}</button>)}</div>
           <button className="assistant-submit" disabled={busy || !device} onClick={() => void submit()}>{busy ? "처리 중..." : "명령 실행"}</button>
           {!device && <p className="assistant-error">선택 작업자에게 등록된 AV 장치가 없습니다.</p>}
@@ -43,7 +43,7 @@ export function VoiceAssistant({workers, devices, onRefresh}: Props) {
           {result ? <>
             <h3>{result.response}</h3>
             <dl><div><dt>의도</dt><dd>{result.intent}</dd></div><div><dt>인식 신뢰도</dt><dd>{Math.round(result.confidence * 100)}%</dd></div><div><dt>안전모 명령</dt><dd>{result.speaker_command ?? "없음"}</dd></div><div><dt>실시간 전달</dt><dd>{result.delivered_connections}개 연결</dd></div></dl>
-            {result.audio_url ? <audio key={result.audio_url} controls autoPlay src={api.assetUrl(result.audio_url)} /> : <p className="assistant-note">TTS 패키지 또는 네트워크를 사용할 수 없으면 텍스트 응답과 안전모 경고음만 동작합니다.</p>}
+            {result.audio_url ? <p className="assistant-note">안전모용 음성이 생성되었습니다. 웹에서는 재생하지 않습니다.</p> : <p className="assistant-note">음성 생성이 불가능하면 안전모에 텍스트 명령 또는 기본 경고가 전달됩니다.</p>}
           </> : <div className="assistant-empty"><strong>세이피 대기 중</strong><span>명령을 실행하면 분류 결과, 응답, TTS가 여기에 표시됩니다.</span></div>}
         </article>
       </div>

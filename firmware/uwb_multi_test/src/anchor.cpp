@@ -24,7 +24,7 @@ Board: esp32 2.0.16
 #define FUNC_REPORT         0xE2
 #define FUNC_BEACON         0xE3
 
-#define TDMA_FRAME_MS       1400
+#define TDMA_FRAME_MS       300
 #define SLOT_DURATION_MS    150
 #define BEACON_ENABLE       1
 #define BEACON_START_DELAY_MS 5000

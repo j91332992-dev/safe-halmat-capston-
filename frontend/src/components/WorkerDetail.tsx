@@ -1,3 +1,4 @@
+import {useEffect, useState} from "react";
 import {api} from "../services/api";
 import type {Device, Worker} from "../types";
 import {StatusPill} from "./StatusPill";
@@ -6,6 +7,12 @@ interface Props {worker: Worker; devices: Device[]; onRefresh: () => void}
 
 export function WorkerDetail({worker, devices, onRefresh}: Props) {
   const av = devices.find(device => device.device_type === "assistant_device");
+  const [cameraVersion, setCameraVersion] = useState(Date.now());
+  useEffect(() => {
+    if (!av?.device_id) return;
+    const timer = window.setInterval(() => setCameraVersion(Date.now()), 1000 / 3);
+    return () => window.clearInterval(timer);
+  }, [av?.device_id]);
   const uwb = devices.find(device => device.device_type === "position_device");
   const sendAlert = async () => {await api.sendAlert(av?.device_id); await onRefresh();};
   return (
@@ -20,7 +27,7 @@ export function WorkerDetail({worker, devices, onRefresh}: Props) {
         <div><span>현재 구역</span><strong>{worker.current_zone ?? "안전구역"}</strong></div>
         <div><span>보호구</span><strong>안전모 {worker.ppe.helmet === false ? "미착용" : "착용"} · 조끼 {worker.ppe.vest === false ? "미착용" : "착용"} · 장갑 {worker.ppe.glove === false ? "미착용" : "착용"}</strong></div>
       </div>
-      {av?.last_camera_at && <section className="worker-camera-mini"><div className="section-title"><h3>안전모 카메라</h3><span>{new Date(av.last_camera_at).toLocaleTimeString("ko-KR")}</span></div><img src={api.cameraImageUrl(av.device_id, av.last_camera_at)} alt={`${worker.worker_name} 최신 카메라 프레임`} /></section>}
+      {av?.last_camera_at && <section className="worker-camera-mini"><div className="section-title"><h3>안전모 카메라</h3><span>{new Date(av.last_camera_at).toLocaleTimeString("ko-KR")}</span></div><img src={api.cameraImageUrl(av.device_id, cameraVersion)} alt={`${worker.worker_name} 최신 카메라 프레임`} /></section>}
       <section>
         <div className="section-title"><h3>위험도 근거</h3><span>{worker.risk_reasons.length}개</span></div>
         <div className="reason-list">{worker.risk_reasons.length ? worker.risk_reasons.map(item => <div key={item.reason}><span>{item.reason}</span><b>+{item.points}</b></div>) : <p className="empty">감지된 위험 요인이 없습니다.</p>}</div>

@@ -97,8 +97,12 @@ docs/                     제작·배선·업로드·진단·협업 A-to-Z 문�
 - YOLO 모델 파일이 없을 때 dummy detection을 사용합니다. 실제 모델 연결 지점은 `backend/app/services/yolo_service.py`입니다.
 - faster-whisper/VOSK가 없을 때 dummy STT를 사용합니다. 연결 지점은 `backend/app/services/audio_service.py`, `speech_service.py`입니다.
 - DW3000 제조사/보드별 라이브러리가 확정되기 전에는 태그가 `uwb_mock.cpp`를 사용합니다. 실제 TWR 구현은 `uwb_dw3000_adapter.cpp`만 교체합니다.
-- ESP32-S3-CAM의 OV5640 핀맵은 보드 회로도 확인 전 `ENABLE_CAMERA_HARDWARE=false`입니다.
+- ESP32-S3-CAM의 OV5640 핀맵은 현재 통합 펌웨어에 반영되어 있습니다. 오디오 GPIO는 카메라 핀과 중복되지 않아야 합니다.
 - INMP441/MAX98357A I2S 드라이버의 실제 DMA 처리는 선택한 Arduino Core 버전에 맞춰 adapter 내부를 완성해야 합니다.
+
+## 현재 하드웨어 결선 상태
+
+실제 납땜 진행 상황, GPIO 충돌과 최종 재배선 기준은 [`docs/CURRENT_HARDWARE_WIRING_STATUS.md`](docs/CURRENT_HARDWARE_WIRING_STATUS.md)를 확인합니다.
 
 ## 실제 하드웨어 연결 순서 요약
 

@@ -2,6 +2,8 @@
 
 이 문서는 안전모 AV 장치, UWB 태그, UWB 앵커 4개와 전원부를 실제로 제작하고 최종 통합 프로그램에 연결하는 전체 절차입니다. 부품별 일회용 테스트 스케치는 만들지 않습니다. 확인은 최종 펌웨어의 시리얼 로그, 서버 API와 관리자 웹의 하드웨어 진단 화면으로 수행합니다.
 
+> 실제 납땜 진행 상태와 최종 펌웨어 핀 차이는 [`CURRENT_HARDWARE_WIRING_STATUS.md`](CURRENT_HARDWARE_WIRING_STATUS.md)를 우선 확인합니다. 현재 오디오 결선 GPIO는 카메라 GPIO와 충돌하므로 재배선 전 동시 구동하지 않습니다.
+
 ## 1. 담당 파트
 
 | 파트 | 담당 범위 | 주요 파일 | 완료 기준 |
@@ -62,27 +64,27 @@
 
 ## 6. AV 장치 핀 연결
 
-아래 GPIO는 추천 시작값일 뿐입니다. 실제 카메라 회로도와 겹치면 주변기기 핀을 변경합니다.
+아래 GPIO는 현재 최종 통합 펌웨어의 충돌 회피값입니다. 실제 납땜 상태가 다르면 펌웨어만 변경하지 말고 카메라 핀과의 중복을 먼저 해소합니다.
 
 | 부품 | 부품 핀 | ESP32 연결 | config 이름 | 주의 |
 |---|---|---:|---|---|
 | INMP441 | VCC | 3.3V | - | 5V 금지 |
 | INMP441 | GND | 공통 GND | - | 필수 |
-| INMP441 | SCK/BCLK | GPIO4 | `I2S_MIC_BCLK` | 충돌 확인 |
-| INMP441 | WS/LRCL | GPIO5 | `I2S_MIC_WS` | 충돌 확인 |
-| INMP441 | SD | GPIO6 | `I2S_MIC_DATA` | ESP32 입력 |
+| INMP441 | SCK/BCLK | GPIO1 | `I2S_MIC_BCLK` | 충돌 확인 |
+| INMP441 | WS/LRCL | GPIO2 | `I2S_MIC_WS` | 충돌 확인 |
+| INMP441 | SD | GPIO42 | `I2S_MIC_DATA` | ESP32 입력 |
 | INMP441 | L/R | GND | - | 왼쪽 채널 |
 | MAX98357A | VIN | 안정화 5V | - | TPS61088 출력 |
 | MAX98357A | GND | 공통 GND | - | 필수 |
-| MAX98357A | BCLK | GPIO15 | `I2S_SPK_BCLK` | 충돌 확인 |
-| MAX98357A | LRC/WS | GPIO16 | `I2S_SPK_WS` | 충돌 확인 |
-| MAX98357A | DIN | GPIO17 | `I2S_SPK_DATA` | ESP32 출력 |
+| MAX98357A | BCLK | GPIO41 | `I2S_SPK_BCLK` | 충돌 확인 |
+| MAX98357A | LRC/WS | GPIO40 | `I2S_SPK_WS` | 충돌 확인 |
+| MAX98357A | DIN | GPIO39 | `I2S_SPK_DATA` | ESP32 출력 |
 | MAX98357A | SPK+/SPK- | 8Ω 스피커 | - | SPK-는 GND가 아님 |
 | 버튼 | 한쪽 | GND | - | 누르면 LOW |
-| 버튼 | 다른 쪽 | GPIO18 | `BUTTON_PIN` | `INPUT_PULLUP` |
-| 배터리 분압 출력 | ADC | GPIO7 | `BATTERY_ADC_PIN` | 분압 필수 |
+| 버튼 | 다른 쪽 | GPIO0 | `BUTTON_PIN` | `INPUT_PULLUP` |
+| 배터리 분압 출력 | ADC | GPIO3 | `BATTERY_ADC_PIN` | 분압 필수 |
 
-OV5640의 D0~D7, XCLK, PCLK, VSYNC, HREF, SIOD, SIOC, PWDN, RESET은 보드 회로도 값만 사용합니다. 현재 `CAMERA_PIN_*=-1`, `ENABLE_CAMERA_HARDWARE=false`이므로 확인한 값을 모두 입력한 뒤 `true`로 바꿉니다.
+OV5640 핀은 현재 `config.h`에 실제 통합값이 입력되어 있고 `ENABLE_CAMERA_HARDWARE=true`입니다. 오디오 핀을 변경할 때 카메라의 GPIO4, 5, 6, 15, 16, 17을 사용하지 않습니다.
 
 ## 7. 카메라 제작과 확인
 

@@ -4,7 +4,7 @@ from statistics import median
 from ..config import settings
 
 
-_history: dict[str, deque[tuple[float, float]]] = defaultdict(lambda: deque(maxlen=5))
+_history: dict[str, deque[tuple[float, float]]] = defaultdict(lambda: deque(maxlen=3))
 
 
 def filter_location(worker_id: str, x: float, y: float, previous: tuple[float, float] | None) -> tuple[float, float]:

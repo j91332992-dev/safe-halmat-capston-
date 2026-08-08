@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useState} from "react";
-import type {Anchor, LocationPoint, Obstacle, Worker, Zone} from "../types";
+import type {Anchor, EvacuationRoute, FireZone, LocationPoint, Obstacle, Worker, Zone} from "../types";
 
 interface Props {
   width: number;
@@ -11,6 +11,8 @@ interface Props {
   history: LocationPoint[];
   lastLocationAt: string | null;
   selectedId?: string;
+  evacuationRoute?: EvacuationRoute;
+  fireZone?: FireZone | null;
   onSelect: (worker: Worker) => void;
 }
 
@@ -28,7 +30,7 @@ function timestamp(value: string | null) {
   return new Date(normalized).getTime();
 }
 
-export function SiteMap({width, height, anchors, obstacles, zones, workers, history, lastLocationAt, selectedId, onSelect}: Props) {
+export function SiteMap({width, height, anchors, obstacles, zones, workers, history, lastLocationAt, selectedId, evacuationRoute, fireZone, onSelect}: Props) {
   const scaleX = (x: number) => 50 + (x / width) * 900;
   const scaleY = (y: number) => 560 - (y / height) * 520;
   const [showTrail, setShowTrail] = useState(true);
@@ -75,7 +77,13 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, hist
         <span className={"map-reception " + (offline ? "offline" : "live")}><i /> {offline ? "수신 끊김" : "실시간"} · {ageLabel}</span>
         <strong>{width}m × {height}m</strong>
       </div>
-      {dangerZone && !offline && (
+      {evacuationRoute && (
+        <div className={"map-alert-strip evacuation " + (evacuationRoute.mode === "fire_confirmed" ? "avoidance" : "official")} role="alert">
+          <b>{evacuationRoute.mode === "fire_confirmed" ? "화재 위치 확인됨" : "화재 위치 확인 중"}</b>
+          <span>{evacuationRoute.message ?? evacuationRoute.instructions[0] ?? "비상 유도등을 확인하고 즉시 대피하세요."}</span>
+          {evacuationRoute.distance_m != null && <em>비상구 {evacuationRoute.distance_m.toFixed(1)}m</em>}
+        </div>
+      )}      {dangerZone && !offline && (
         <div className="map-alert-strip danger" role="alert"><b>위험구역 진입</b><span>{selectedWorker?.worker_name} 작업자가 ‘{dangerZone.zone_name}’ 안에 있습니다.</span></div>
       )}
       {offline && (
@@ -95,7 +103,7 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, hist
           <text x="730" y="550">화기 작업 구역</text>
         </g>
         {obstacles.map(obstacle => (
-          <g key={obstacle.obstacle_id} className="map-obstacle">
+          <g key={obstacle.obstacle_id} className={"map-obstacle " + (obstacle.object_type ?? "obstacle")}>
             <rect
               x={scaleX(obstacle.x)}
               y={scaleY(obstacle.y + obstacle.height)}
@@ -106,7 +114,12 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, hist
             <text x={scaleX(obstacle.x + obstacle.width / 2)} y={scaleY(obstacle.y + obstacle.height / 2)} textAnchor="middle" dominantBaseline="middle">{obstacle.name}</text>
           </g>
         ))}
-        {zones.filter(zone => zone.active && zone.zone_type === "rectangle").map(zone => (
+        {fireZone && (
+          <g className="map-fire-zone">
+            <rect x={scaleX(fireZone.x)} y={scaleY(fireZone.y + fireZone.height)} width={(fireZone.width / width) * 900} height={(fireZone.height / height) * 520} rx="10" />
+            <text x={scaleX(fireZone.x + fireZone.width / 2)} y={scaleY(fireZone.y + fireZone.height / 2)} textAnchor="middle" dominantBaseline="middle">{fireZone.name || "화재구간"} · 진입금지</text>
+          </g>
+        )}        {zones.filter(zone => zone.active && zone.zone_type === "rectangle").map(zone => (
           <g key={zone.zone_id} className={dangerZone?.zone_id === zone.zone_id ? "zone-active" : ""}>
             <rect
               x={scaleX(zone.coordinates.x)}
@@ -118,8 +131,7 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, hist
             />
             <text x={scaleX(zone.coordinates.x + zone.coordinates.width! / 2)} y={scaleY(zone.coordinates.y + zone.coordinates.height! / 2)} textAnchor="middle" dominantBaseline="middle" className="zone-name">{zone.zone_name}</text>
           </g>
-        ))}
-        {showTrail && trailPoints && (
+        ))}        {showTrail && trailPoints && (
           <g className="worker-route">
             <polyline points={trailPoints} className="route-line route-glow" />
             <polyline points={trailPoints} className="route-line" />
@@ -162,4 +174,6 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, hist
     </div>
   );
 }
+
+
 

@@ -20,6 +20,14 @@ export function CameraMonitor({workers, devices}: Props) {
     setImageError(false);
     setImageVersion(Date.now());
   }, [selected?.last_camera_at, selected?.device_id]);
+  useEffect(() => {
+    if (!selected?.device_id) return;
+    const timer = window.setInterval(() => {
+      setImageError(false);
+      setImageVersion(Date.now());
+    }, 1000 / 3);
+    return () => window.clearInterval(timer);
+  }, [selected?.device_id]);
 
   return (
     <section className="page-panel camera-page">
@@ -39,7 +47,7 @@ export function CameraMonitor({workers, devices}: Props) {
             {!imageError && selected.last_camera_at ? (
               <img src={api.cameraImageUrl(selected.device_id, imageVersion)} alt={`${worker?.worker_name ?? selected.worker_id} 카메라 최신 프레임`} onError={() => setImageError(true)} />
             ) : (
-              <div className="camera-placeholder"><strong>NO FRAME</strong><span>ESP32 카메라 또는 mock_camera.py에서 프레임을 보내면 표시됩니다.</span></div>
+              <div className="camera-placeholder"><strong>NO FRAME</strong><span>ESP32 안전모 카메라에서 실제 프레임을 수신하면 표시됩니다.</span></div>
             )}
             <small>마지막 수신: {selected.last_camera_at ? new Date(selected.last_camera_at).toLocaleString("ko-KR") : "없음"}</small>
           </article>

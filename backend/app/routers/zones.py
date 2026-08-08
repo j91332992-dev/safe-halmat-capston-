@@ -15,6 +15,7 @@ def serialize(row: Zone) -> dict:
         "zone_id": row.zone_id,
         "zone_name": row.zone_name,
         "zone_type": row.zone_type,
+        "zone_category": row.zone_category,
         "coordinates": json.loads(row.coordinates_json),
         "required_ppe": json.loads(row.required_ppe_json),
         "allowed_worker_ids": json.loads(row.allowed_worker_ids_json),
@@ -28,6 +29,7 @@ def serialize(row: Zone) -> dict:
 def assign(row: Zone, payload: ZoneIn) -> None:
     row.zone_name = payload.zone_name
     row.zone_type = payload.zone_type
+    row.zone_category = payload.zone_category
     row.coordinates_json = json.dumps(payload.coordinates)
     row.required_ppe_json = json.dumps(payload.required_ppe)
     row.allowed_worker_ids_json = json.dumps(payload.allowed_worker_ids)
@@ -71,4 +73,5 @@ def delete_zone(zone_id: str, db: Session = Depends(get_db)):
     db.delete(row)
     db.commit()
     return Response(status_code=204)
+
 

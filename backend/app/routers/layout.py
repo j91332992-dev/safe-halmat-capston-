@@ -17,7 +17,7 @@ def anchor_dict(row: Anchor) -> dict:
 
 
 def obstacle_dict(row: Obstacle) -> dict:
-    return {"obstacle_id": row.obstacle_id, "name": row.name, "x": row.x, "y": row.y, "width": row.width, "height": row.height}
+    return {"obstacle_id": row.obstacle_id, "object_type": row.object_type, "name": row.name, "x": row.x, "y": row.y, "width": row.width, "height": row.height}
 
 
 def zone_dict(row: Zone) -> dict:
@@ -25,6 +25,7 @@ def zone_dict(row: Zone) -> dict:
         "zone_id": row.zone_id,
         "zone_name": row.zone_name,
         "zone_type": row.zone_type,
+        "zone_category": row.zone_category,
         "coordinates": json.loads(row.coordinates_json),
         "required_ppe": json.loads(row.required_ppe_json),
         "allowed_worker_ids": json.loads(row.allowed_worker_ids_json),
@@ -49,6 +50,7 @@ def fit_obstacle(payload: ObstacleIn, layout: SiteLayout) -> dict:
     height = min(payload.height, layout.height)
     return {
         "name": payload.name,
+        "object_type": payload.object_type,
         "x": min(payload.x, max(0.0, layout.width - width)),
         "y": min(payload.y, max(0.0, layout.height - height)),
         "width": width,
@@ -111,10 +113,10 @@ def apply_draft(db: Session = Depends(get_db)):
     for item in payload.anchors:
         row = db.get(Anchor, item.anchor_id)
         if row:
-            for key, value in item.model_dump(exclude={"anchor_id"}).items():
+            for key, value in item.model_dump(exclude={"anchor_id", "online"}).items():
                 setattr(row, key, value)
         else:
-            db.add(Anchor(**item.model_dump()))
+            db.add(Anchor(**item.model_dump(exclude={"online"}), online=False))
 
     keep_obstacle_ids = {item.obstacle_id for item in payload.obstacles}
     obstacle_query = db.query(Obstacle).filter(Obstacle.site_id == layout.site_id)
@@ -143,6 +145,7 @@ def apply_draft(db: Session = Depends(get_db)):
             db.add(row)
         row.zone_name = item.zone_name
         row.zone_type = item.zone_type
+        row.zone_category = item.zone_category
         row.coordinates_json = json.dumps(item.coordinates)
         row.required_ppe_json = json.dumps(item.required_ppe)
         row.allowed_worker_ids_json = json.dumps(item.allowed_worker_ids)
@@ -244,3 +247,5 @@ def delete_version(version_id: str, db: Session = Depends(get_db)):
     db.delete(row)
     db.commit()
     return Response(status_code=204)
+
+

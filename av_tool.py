@@ -49,7 +49,7 @@ def main() -> None:
     elif args.command == "upload":
         code = mapped_platformio(["-t", "upload", "--upload-port", args.port])
     else:
-        code = subprocess.run([sys.executable, "-m", "platformio", "device", "monitor", "--port", args.port, "--baud", str(args.baud)]).returncode
+        code = subprocess.run([sys.executable, "-m", "platformio", "device", "monitor", "--port", args.port, "--baud", str(args.baud), "--dtr", "0", "--rts", "0"]).returncode
     raise SystemExit(code)
 
 

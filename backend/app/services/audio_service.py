@@ -18,8 +18,6 @@ async def save_audio(file: UploadFile, device_id: str) -> Path:
 
 
 async def stt(audio_path: Path) -> str:
-    return await transcribe_audio(audio_path) or dummy_stt(audio_path)
-
-
-def dummy_stt(_path: Path) -> str:
-    return "현재 위험도 알려줘"
+    # 실제 STT가 실패하거나 비활성화된 경우 명령을 만들지 않는다.
+    # 상시 마이크에서 가짜 테스트 문장은 반복 오작동을 일으킬 수 있다.
+    return (await transcribe_audio(audio_path) or "").strip()

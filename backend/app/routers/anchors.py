@@ -21,7 +21,7 @@ def list_anchors(db: Session = Depends(get_db)):
 def create_anchor(payload: AnchorIn, db: Session = Depends(get_db)):
     if db.get(Anchor, payload.anchor_id):
         raise HTTPException(409, "같은 anchor_id가 이미 있습니다.")
-    row = Anchor(**payload.model_dump())
+    row = Anchor(**payload.model_dump(exclude={"online"}), online=False)
     db.add(row)
     db.commit()
     return serialize(row)
@@ -32,7 +32,7 @@ def update_anchor(anchor_id: str, payload: AnchorIn, db: Session = Depends(get_d
     row = db.get(Anchor, anchor_id)
     if not row:
         raise HTTPException(404, "앵커를 찾을 수 없습니다.")
-    for key, value in payload.model_dump(exclude={"anchor_id"}).items():
+    for key, value in payload.model_dump(exclude={"anchor_id", "online"}).items():
         setattr(row, key, value)
     db.commit()
     return serialize(row)

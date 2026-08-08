@@ -10,6 +10,7 @@ interface Props {
 
 interface DraftProfile {
   worker_name: string;
+  worker_role: Worker["worker_role"];
   notes: string;
 }
 
@@ -21,7 +22,7 @@ export function WorkerManagement({workers, zones, onSaved}: Props) {
   useEffect(() => {
     setDrafts(current => Object.fromEntries(workers.map(worker => [
       worker.worker_id,
-      current[worker.worker_id] ?? {worker_name: worker.worker_name, notes: worker.notes ?? ""}
+      current[worker.worker_id] ?? {worker_name: worker.worker_name, worker_role: worker.worker_role, notes: worker.notes ?? ""}
     ])));
   }, [workers]);
 
@@ -34,7 +35,7 @@ export function WorkerManagement({workers, zones, onSaved}: Props) {
     }
     setSavingId(worker.worker_id);
     try {
-      await api.updateWorkerProfile(worker.worker_id, name, draft.notes);
+      await api.updateWorkerProfile(worker.worker_id, name, draft.worker_role, draft.notes);
       await onSaved();
       setMessage(name + " 작업자 정보를 저장했습니다.");
     } catch (error) {
@@ -53,9 +54,9 @@ export function WorkerManagement({workers, zones, onSaved}: Props) {
       <p className="page-intro">작업자 ID는 TAG 통신 연결에 사용하므로 유지하고, 표시 이름과 현장 특이사항을 관리합니다.</p>
       <div className="worker-manage-list">
         {workers.map(worker => {
-          const draft = drafts[worker.worker_id] ?? {worker_name: worker.worker_name, notes: worker.notes ?? ""};
+          const draft = drafts[worker.worker_id] ?? {worker_name: worker.worker_name, worker_role: worker.worker_role, notes: worker.notes ?? ""};
           const allowedZones = zones.filter(zone => zone.allowed_worker_ids?.includes(worker.worker_id));
-          const changed = draft.worker_name.trim() !== worker.worker_name || draft.notes.trim() !== (worker.notes ?? "");
+          const changed = draft.worker_name.trim() !== worker.worker_name || draft.worker_role !== worker.worker_role || draft.notes.trim() !== (worker.notes ?? "");
           return (
             <article key={worker.worker_id}>
               <header className="worker-card-head">
@@ -70,6 +71,7 @@ export function WorkerManagement({workers, zones, onSaved}: Props) {
               </div>
               <div className="worker-profile-form">
                 <label>표시 이름<input value={draft.worker_name} onChange={event => change(worker.worker_id, {worker_name: event.target.value})} /></label>
+                <label>작업 역할<select value={draft.worker_role} onChange={event => change(worker.worker_id, {worker_role: event.target.value as Worker["worker_role"]})}><option value="general_worker">일반작업자</option><option value="manager">관리자</option><option value="hot_work_authorized">화기인가자</option><option value="heavy_equipment_operator">중장비운전자</option><option value="unauthorized">비인가자</option></select></label>
                 <label>특이사항·주의사항<textarea rows={4} placeholder="예: 고소 작업 교육 이수, 특정 구역 접근 시 관리자 동행 필요" value={draft.notes} onChange={event => change(worker.worker_id, {notes: event.target.value})} /></label>
               </div>
               <div className="worker-zone-access"><b>출입 허용 제한구역</b>{allowedZones.length ? allowedZones.map(zone => <span key={zone.zone_id}>{zone.zone_name}</span>) : <em>지정된 구역 없음</em>}</div>
@@ -83,3 +85,9 @@ export function WorkerManagement({workers, zones, onSaved}: Props) {
     </section>
   );
 }
+
+
+
+
+
+

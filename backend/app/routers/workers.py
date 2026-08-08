@@ -15,6 +15,7 @@ def update_worker(worker_id: str, payload: WorkerUpdateIn, db: Session = Depends
     if not worker:
         raise HTTPException(404, "작업자를 찾을 수 없습니다.")
     worker.worker_name = payload.worker_name.strip()
+    worker.worker_role = payload.worker_role
     worker.notes = payload.notes.strip()
     db.commit()
     return worker_to_dict(worker)

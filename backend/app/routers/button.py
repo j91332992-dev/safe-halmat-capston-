@@ -5,6 +5,7 @@ from ..database import get_db, utcnow
 from ..models.entities import Device, WorkerState
 from ..schemas.api import ButtonEventIn
 from ..services.event_service import create_event, event_to_dict
+from ..services.device_service import mark_device_seen
 from ..services.risk_service import recalculate_risk
 from ..services.serializers import worker_to_dict
 from ..websocket import manager
@@ -29,7 +30,7 @@ async def button_event(payload: ButtonEventIn, db: Session = Depends(get_db)):
     event = create_event(db, "BUTTON_EVENT", actions[payload.event_type], severity, payload.worker_id, payload.device_id, payload.model_dump(mode="json"))
     device = db.get(Device, payload.device_id)
     if device:
-        device.last_button_at = utcnow()
+        mark_device_seen(device, "button")
     recalculate_risk(db, worker)
     db.commit()
     result = {"event": event_to_dict(event), "worker": worker_to_dict(worker)}

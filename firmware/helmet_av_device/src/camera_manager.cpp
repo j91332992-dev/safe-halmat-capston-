@@ -19,7 +19,9 @@ bool cameraBegin() {
   c.pin_d3 = CAMERA_PIN_D3; c.pin_d2 = CAMERA_PIN_D2; c.pin_d1 = CAMERA_PIN_D1; c.pin_d0 = CAMERA_PIN_D0;
   c.pin_vsync = CAMERA_PIN_VSYNC; c.pin_href = CAMERA_PIN_HREF; c.pin_pclk = CAMERA_PIN_PCLK;
   c.xclk_freq_hz = 10000000; c.ledc_timer = LEDC_TIMER_0; c.ledc_channel = LEDC_CHANNEL_0;
-  c.pixel_format = PIXFORMAT_JPEG; c.frame_size = FRAMESIZE_VGA; c.jpeg_quality = 12;
+  // OV5640 + ESP32-S3 PSRAM 기준: VGA(640x480), 고화질 JPEG, 목표 3fps.
+  // esp_camera의 JPEG 품질 값은 낮을수록 화질이 높다. 10은 전송량과 화질의 안정적인 상한이다.
+  c.pixel_format = PIXFORMAT_JPEG; c.frame_size = FRAMESIZE_VGA; c.jpeg_quality = CAMERA_JPEG_QUALITY;
   if (psramFound()) {
     c.fb_location = CAMERA_FB_IN_PSRAM;
     c.fb_count = 2;
@@ -43,12 +45,8 @@ bool cameraUploadIfDue() {
   if (!cameraReady || millis() - lastFrame < CAMERA_INTERVAL_MS) return false;
   if (WiFi.status() != WL_CONNECTED) return false;
 
-  // Flush stale DMA frame buffer to ensure freshest camera shot
-  camera_fb_t *fb_stale = esp_camera_fb_get();
-  if (fb_stale) {
-    esp_camera_fb_return(fb_stale);
-  }
-
+  // PSRAM에서는 CAMERA_GRAB_LATEST가 최신 프레임을 제공하므로 추가 캡처/폐기를 하지 않는다.
+  // 이 호출 수를 한 번으로 유지해야 333ms 주기를 안정적으로 맞출 수 있다.
   camera_fb_t *fb = esp_camera_fb_get();
   if (!fb) {
     Serial.println("[CAMERA] 캡처 실패");
@@ -59,6 +57,8 @@ bool cameraUploadIfDue() {
   HTTPClient http;
   String url = String(SERVER_BASE_URL) + "/api/camera/frame";
   http.begin(url);
+  http.setConnectTimeout(1000);
+  http.setTimeout(2500);
 
   String boundary = "----ESP32Boundary7MA4YWxkTrZu0gW";
   http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);

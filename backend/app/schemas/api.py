@@ -61,13 +61,14 @@ class AnchorIn(BaseModel):
     x: float
     y: float
     z: float = 2.0
-    online: bool = True
+    online: bool = False
 
 
 class ZoneIn(BaseModel):
     zone_id: str
     zone_name: str
     zone_type: Literal["rectangle", "circle", "polygon"] = "rectangle"
+    zone_category: Literal["general", "danger", "controlled", "confined", "safe", "rest", "shadow"] = "danger"
     coordinates: dict[str, Any]
     required_ppe: list[str] = Field(default_factory=list)
     allowed_worker_ids: list[str] = Field(default_factory=list)
@@ -77,35 +78,16 @@ class ZoneIn(BaseModel):
     active: bool = True
 
 
-class MockDetectionIn(BaseModel):
+class TextCommandIn(BaseModel):
     worker_id: str = "worker-001"
     device_id: str = "helmet-001-av"
-    vest: bool = True
-    glove: bool = True
-    helmet: bool = True
-    fire: bool = False
-    smoke: bool = False
-
-
-class MockCommandIn(BaseModel):
-    worker_id: str = "worker-001"
-    device_id: str = "helmet-001-av"
-    text: str = "현재 위험도 알려줘"
+    text: str = Field(min_length=1, max_length=2000)
+    sound_db: float | None = Field(default=None, ge=0, le=180)
 
 
 class DeviceCommandIn(BaseModel):
-    command_type: Literal["play_tone", "play_alert", "set_volume", "stop_alert", "request_status", "record_audio"]
+    command_type: Literal["play_tone", "play_alert", "play_audio", "set_volume", "stop_alert", "request_status", "record_audio"]
     payload: dict[str, Any] = Field(default_factory=dict)
-
-
-class SystemModeIn(BaseModel):
-    mode: Literal["mock", "hardware"]
-
-
-class MockScenarioIn(BaseModel):
-    scenario: Literal["normal", "danger_zone", "ppe_missing", "fire", "smoke", "emergency", "device_offline"]
-    worker_id: str = "worker-001"
-
 
 
 class SiteLayoutIn(BaseModel):
@@ -121,6 +103,7 @@ class ObstacleIn(BaseModel):
     y: float = Field(ge=0)
     width: float = Field(gt=0.05)
     height: float = Field(gt=0.05)
+    object_type: Literal["obstacle", "wall", "emergency_exit", "door"] = "obstacle"
 
 class LayoutDraftIn(BaseModel):
     site: SiteLayoutIn
@@ -133,4 +116,23 @@ class LayoutVersionCreate(BaseModel):
 
 class WorkerUpdateIn(BaseModel):
     worker_name: str = Field(min_length=1, max_length=80)
+    worker_role: Literal["general_worker", "manager", "hot_work_authorized", "heavy_equipment_operator", "unauthorized"] = "general_worker"
     notes: str = Field(default="", max_length=2000)
+
+
+class FireZoneIn(BaseModel):
+    name: str = Field(default="관리자 지정 화재구역", min_length=1, max_length=80)
+    x: float = Field(ge=0)
+    y: float = Field(ge=0)
+    width: float = Field(gt=0.05)
+    height: float = Field(gt=0.05)
+
+
+class FireTriggerIn(BaseModel):
+    worker_id: str = "worker-001"
+    source: Literal["voice", "yolo", "manager"] = "manager"
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class FireCancelIn(BaseModel):
+    reason: Literal["false_alarm", "no_fire", "resolved"] = "false_alarm"

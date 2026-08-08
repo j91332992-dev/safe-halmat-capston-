@@ -11,3 +11,4 @@ httpx>=0.28.1,<1
 openai>=1.40,<3
 edge-tts>=6.1,<8
 # Optional AI/CV/UWB math packages are listed in requirements-optional-ai.txt.
+miniaudio>=1.71,<2

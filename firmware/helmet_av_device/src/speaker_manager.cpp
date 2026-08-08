@@ -1,6 +1,10 @@
 #include "config.h"
+#include "app_modules.h"
 #include <Arduino.h>
 #include <driver/i2s.h>
+#include <HTTPClient.h>
+#include <WiFi.h>
+#include <cstring>
 
 static bool speakerReady = false;
 static uint8_t *speakerBuffer = NULL;
@@ -87,6 +91,7 @@ void speakerPlayTone(uint16_t frequency, uint16_t durationMs) {
     return;
   }
 
+  audioSetSuppressed(true);
   Serial.printf("[SPEAKER] 톤 출력 freq=%u duration=%u\n", frequency, durationMs);
 
   generateTone(speakerBuffer, speakerBufferSize, frequency, durationMs);
@@ -110,6 +115,7 @@ void speakerPlayTone(uint16_t frequency, uint16_t durationMs) {
   if (bytes_written != bytesToSend) {
     Serial.printf("[SPEAKER][ERROR] 전송 불완료: %zu 바이트 부족\n", bytesToSend - bytes_written);
   }
+  audioSetSuppressed(false);
 }
 
 void speakerPlayAlert(uint8_t repeats) {
@@ -119,9 +125,129 @@ void speakerPlayAlert(uint8_t repeats) {
   }
 }
 
+static uint16_t readLe16(const uint8_t *data) {
+  return (uint16_t)data[0] | ((uint16_t)data[1] << 8);
+}
+
+static uint32_t readLe32(const uint8_t *data) {
+  return (uint32_t)data[0] | ((uint32_t)data[1] << 8) | ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24);
+}
+
+bool speakerPlayAudioUrl(const String &audioUrl) {
+  if (!speakerReady || WiFi.status() != WL_CONNECTED || audioUrl.length() == 0) {
+    Serial.println("[SPEAKER][ERROR] 음성 재생 준비 실패");
+    return false;
+  }
+  String url = audioUrl;
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    if (!url.startsWith("/")) url = "/" + url;
+    url = String("http://") + SERVER_HOST + ":" + String(SERVER_PORT) + url;
+  }
+
+  HTTPClient http;
+  http.setConnectTimeout(5000);
+  http.setTimeout(10000);
+  if (!http.begin(url)) return false;
+  int status = http.GET();
+  if (status != HTTP_CODE_OK) {
+    Serial.printf("[SPEAKER][ERROR] TTS 다운로드 HTTP %d\n", status);
+    http.end();
+    return false;
+  }
+
+  WiFiClient *stream = http.getStreamPtr();
+  uint8_t header[44];
+  size_t headerRead = stream->readBytes(header, sizeof(header));
+  bool valid = headerRead == sizeof(header)
+    && memcmp(header, "RIFF", 4) == 0
+    && memcmp(header + 8, "WAVE", 4) == 0
+    && memcmp(header + 12, "fmt ", 4) == 0
+    && memcmp(header + 36, "data", 4) == 0;
+  if (!valid) {
+    Serial.println("[SPEAKER][ERROR] 지원하지 않는 WAV 헤더");
+    http.end();
+    return false;
+  }
+
+  uint16_t format = readLe16(header + 20);
+  uint16_t channels = readLe16(header + 22);
+  uint32_t sampleRate = readLe32(header + 24);
+  uint16_t bits = readLe16(header + 34);
+  uint32_t remaining = readLe32(header + 40);
+  if (format != 1 || channels != 1 || bits != 16 || sampleRate < 8000 || sampleRate > 48000) {
+    Serial.printf("[SPEAKER][ERROR] WAV 형식 불일치 format=%u channels=%u rate=%lu bits=%u\n",
+                  format, channels, (unsigned long)sampleRate, bits);
+    http.end();
+    return false;
+  }
+
+  audioSetSuppressed(true);
+  i2s_zero_dma_buffer(I2S_NUM_1);
+  i2s_set_clk(I2S_NUM_1, sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_MONO);
+  uint8_t buffer[1024];
+  Serial.printf("[SPEAKER] 안전모 음성 재생 시작 rate=%lu bytes=%lu\n",
+                (unsigned long)sampleRate, (unsigned long)remaining);
+
+  bool ok = true;
+  while (remaining > 0 && http.connected()) {
+    size_t wanted = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+    size_t received = stream->readBytes(buffer, wanted);
+    if (received == 0) {
+      ok = false;
+      break;
+    }
+    size_t written = 0;
+    esp_err_t result = i2s_write(I2S_NUM_1, buffer, received, &written, portMAX_DELAY);
+    if (result != ESP_OK || written != received) {
+      ok = false;
+      break;
+    }
+    remaining -= received;
+    delay(1);
+  }
+
+  i2s_set_clk(I2S_NUM_1, AUDIO_SAMPLE_RATE, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_MONO);
+  i2s_zero_dma_buffer(I2S_NUM_1);
+  http.end();
+  audioSetSuppressed(false);
+  Serial.printf("[SPEAKER] 안전모 음성 재생 %s\n", ok && remaining == 0 ? "완료" : "실패");
+  return ok && remaining == 0;
+}
+
+bool speakerPlayPcm(const uint8_t *data, size_t length, uint32_t sampleRate) {
+  if (!speakerReady || data == nullptr || length == 0 || sampleRate == 0) return false;
+  audioSetSuppressed(true);
+  i2s_zero_dma_buffer(I2S_NUM_1);
+  if (i2s_set_clk(I2S_NUM_1, sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_MONO) != ESP_OK) {
+    audioSetSuppressed(false);
+    return false;
+  }
+
+  size_t offset = 0;
+  bool ok = true;
+  while (offset < length) {
+    const size_t chunk = (length - offset) > 1024 ? 1024 : (length - offset);
+    size_t written = 0;
+    const esp_err_t result = i2s_write(I2S_NUM_1, data + offset, chunk, &written, portMAX_DELAY);
+    if (result != ESP_OK || written != chunk) {
+      ok = false;
+      break;
+    }
+    offset += written;
+  }
+
+  const uint32_t playbackMs = (uint32_t)((length * 1000ULL) / (sampleRate * sizeof(int16_t)));
+  delay(playbackMs + 100);
+  i2s_zero_dma_buffer(I2S_NUM_1);
+  i2s_set_clk(I2S_NUM_1, AUDIO_SAMPLE_RATE, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_MONO);
+  audioSetSuppressed(false);
+  Serial.printf("[SPEAKER] 녹음 재생 %s bytes=%u\n", ok ? "완료" : "실패", (unsigned)length);
+  return ok;
+}
 void speakerStop() {
   if (!speakerReady) return;
   i2s_zero_dma_buffer(I2S_NUM_1);
   Serial.println("[SPEAKER] 출력 중지");
 }
 bool speakerIsReady() { return speakerReady; }
+

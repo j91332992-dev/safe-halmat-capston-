@@ -8,7 +8,10 @@ from ..config import settings
 from ..models.entities import Anchor, Device, Location, SiteLayout, WorkerState, Zone
 from ..schemas.api import UwbDistancesIn
 from ..services.event_service import create_event, event_to_dict
+from ..services.evacuation_service import calculate_route, current_incident
 from ..services.location_filter_service import filter_location
+from ..services.device_service import mark_device_seen
+from ..services.presence_service import refresh_presence
 from ..services.location_service import solve_position
 from ..services.risk_service import recalculate_risk
 from ..services.serializers import worker_to_dict
@@ -25,10 +28,14 @@ async def upload_distances(payload: UwbDistancesIn, db: Session = Depends(get_db
     worker = db.get(WorkerState, payload.worker_id)
     if not worker:
         raise HTTPException(404, "작업자를 찾을 수 없습니다.")
-    anchors = [
-        {"anchor_id": a.anchor_id, "x": a.x, "y": a.y}
-        for a in db.query(Anchor).filter(Anchor.online.is_(True)).all()
-    ]
+    refresh_presence(db)
+    measured_ids = {item.anchor_id for item in payload.measurements}
+    measured_anchors = db.query(Anchor).filter(Anchor.anchor_id.in_(measured_ids)).all()
+    seen_at = utcnow()
+    for anchor in measured_anchors:
+        anchor.online = True
+        anchor.last_seen = seen_at
+    anchors = [{"anchor_id": item.anchor_id, "x": item.x, "y": item.y} for item in measured_anchors]
     measurements = measurements_to_dict(payload.measurements, apply_calibration=not payload.distances_calibrated)
     try:
         raw_x, raw_y, confidence = solve_position(anchors, measurements)
@@ -65,11 +72,22 @@ async def upload_distances(payload: UwbDistancesIn, db: Session = Depends(get_db
             worker.current_zone = None
             zone_event = create_event(db, "ZONE_EXITED", f"{zone.zone_name}에서 이탈했습니다.", "info", payload.worker_id, payload.device_id, {"zone_id": zone.zone_id})
     device = db.get(Device, payload.device_id)
-    if device:
-        device.last_uwb_at = utcnow()
+    if not device:
+        device = Device(
+            device_id=payload.device_id,
+            device_type="position_device",
+            organization_id=payload.organization_id,
+            site_id=payload.site_id,
+            worker_id=payload.worker_id,
+            helmet_id=payload.helmet_id,
+        )
+        db.add(device)
+    mark_device_seen(device, "uwb")
     recalculate_risk(db, worker)
     db.commit()
-    result = {"location": {"x": worker.x, "y": worker.y, "confidence": confidence, "raw_x": raw_x, "raw_y": raw_y}, "worker": worker_to_dict(worker), "event": event_to_dict(zone_event) if zone_event else None}
+    incident = current_incident(db)
+    route = calculate_route(db, worker, incident) if incident else None
+    result = {"location": {"x": worker.x, "y": worker.y, "confidence": confidence, "raw_x": raw_x, "raw_y": raw_y}, "worker": worker_to_dict(worker), "event": event_to_dict(zone_event) if zone_event else None, "evacuation_route": route}
     await manager.broadcast("location", result)
     return result
 
@@ -89,4 +107,7 @@ def location_history(worker_id: str, limit: int = 100, db: Session = Depends(get
         {"x": r.x, "y": r.y, "confidence": r.confidence, "created_at": r.created_at.isoformat() + "Z"}
         for r in reversed(rows)
     ]
+
+
+
 
