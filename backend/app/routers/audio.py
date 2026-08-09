@@ -80,15 +80,27 @@ async def process_text(db: Session, worker_id: str, device_id: str, text: str, s
     if audio_url and speaker_command:
         speaker_command = "play_audio"
 
+    # Only an unrecognized command gets a second listening turn.  A normal
+    # response must not re-open the microphone, because ambient speech could
+    # otherwise be processed as a command.
+    listen_again = intent == "unknown"
+    if listen_again:
+        wake_word_gate.arm(device_id)
+
     delivered = 0
     device_command_id = None
     if speaker_command:
-        record = queue_command(db, device_id, speaker_command, {"message": message, "audio_url": audio_url})
+        speaker_payload = {
+            "message": message,
+            "audio_url": audio_url,
+            "listen_again": listen_again,
+        }
+        record = queue_command(db, device_id, speaker_command, speaker_payload)
         device_command_id = record.command_id
         db.commit()
         delivered = await manager.send_device_command(
             device_id,
-            {"command_id": record.command_id, "command_type": speaker_command, "payload": {"message": message, "audio_url": audio_url}},
+            {"command_id": record.command_id, "command_type": speaker_command, "payload": speaker_payload},
         )
         record.status = "delivered" if delivered else "queued"
 

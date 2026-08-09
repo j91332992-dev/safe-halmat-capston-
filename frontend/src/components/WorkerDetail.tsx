@@ -25,7 +25,7 @@ export function WorkerDetail({worker, devices, onRefresh}: Props) {
         <div><span>현재 위치</span><strong>X {worker.x.toFixed(1)} · Y {worker.y.toFixed(1)}m</strong></div>
         <div><span>위치 신뢰도</span><strong>{Math.round(worker.confidence * 100)}%</strong></div>
         <div><span>현재 구역</span><strong>{worker.current_zone ?? "안전구역"}</strong></div>
-        <div><span>보호구</span><strong>안전모 {worker.ppe.helmet === false ? "미착용" : "착용"} · 조끼 {worker.ppe.vest === false ? "미착용" : "착용"} · 장갑 {worker.ppe.glove === false ? "미착용" : "착용"}</strong></div>
+        <div><span>보호구</span><strong>안전모 {worker.ppe.helmet === false ? "미착용" : worker.ppe.helmet === true ? "착용" : "판정 보류"} · 조끼 {worker.ppe.vest === false ? "미착용" : worker.ppe.vest === true ? "착용" : "판정 보류"} · 장갑 {worker.ppe.glove === false ? "미착용" : worker.ppe.glove === true ? "착용" : "판정 보류"}</strong></div>
       </div>
       {av?.last_camera_at && <section className="worker-camera-mini"><div className="section-title"><h3>안전모 카메라</h3><span>{new Date(av.last_camera_at).toLocaleTimeString("ko-KR")}</span></div><img src={api.cameraImageUrl(av.device_id, cameraVersion)} alt={`${worker.worker_name} 최신 카메라 프레임`} /></section>}
       <section>

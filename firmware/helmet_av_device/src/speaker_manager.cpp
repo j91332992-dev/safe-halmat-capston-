@@ -167,6 +167,28 @@ static uint32_t readLe32(const uint8_t *data) {
   return (uint32_t)data[0] | ((uint32_t)data[1] << 8) | ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24);
 }
 
+// 내장 안내 WAV 끝의 긴 무음 때문에 마이크 재개가 늦어지는 것을 막는다.
+// 실제 음성 뒤에 120ms만 남기고 나머지 무음은 재생하지 않는다.
+static size_t trimTrailingSilence(const uint8_t *pcm, size_t length, uint32_t sampleRate) {
+  if (!pcm || length < sizeof(int16_t) || sampleRate == 0) return length;
+  const size_t sampleCount = length / sizeof(int16_t);
+  size_t lastAudible = 0;
+  bool found = false;
+  for (size_t i = sampleCount; i > 0; --i) {
+    const int16_t sample = (int16_t)((uint16_t)pcm[(i - 1) * 2] |
+                                     ((uint16_t)pcm[(i - 1) * 2 + 1] << 8));
+    if (abs((int)sample) > 120) {
+      lastAudible = i;
+      found = true;
+      break;
+    }
+  }
+  if (!found) return length;
+  const size_t tailSamples = (sampleRate * 120U) / 1000U;
+  const size_t keptSamples = min(sampleCount, lastAudible + tailSamples);
+  return keptSamples * sizeof(int16_t);
+}
+
 bool speakerPlayAudioUrl(const String &audioUrl) {
   if (speakerCallMode) return false;
   if (!speakerReady || WiFi.status() != WL_CONNECTED || audioUrl.length() == 0) {
@@ -290,8 +312,12 @@ bool speakerPlayAcknowledgement() {
 
   uint32_t sampleRate = 0;
   memcpy(&sampleRate, acknowledgement_wav_start + 24, sizeof(sampleRate));
-  Serial.println("[SPEAKER] 내장 호출 응답 즉시 재생");
-  return speakerPlayPcm(acknowledgement_wav_start + 44, wavLength - 44, sampleRate);
+  const uint8_t *pcm = acknowledgement_wav_start + 44;
+  const size_t pcmLength = wavLength - 44;
+  const size_t playbackLength = trimTrailingSilence(pcm, pcmLength, sampleRate);
+  Serial.printf("[SPEAKER] 내장 호출 응답 재생 bytes=%u/%u\n",
+                (unsigned)playbackLength, (unsigned)pcmLength);
+  return speakerPlayPcm(pcm, playbackLength, sampleRate);
 }
 
 void speakerStop() {

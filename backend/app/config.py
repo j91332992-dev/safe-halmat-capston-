@@ -22,9 +22,16 @@ class Settings(BaseSettings):
     stt_model: str = "gpt-4o-mini-transcribe"
     stt_language: str = "ko"
     stt_prompt: str = "한국어 산업 안전 현장 대화입니다. 호출어 투투스와 작업자의 짧은 명령을 정확히 받아쓰고, 들리지 않는 내용은 추측하지 마세요."
-    wake_word_aliases: str = "투투스,투투 쓰,투투즈,두두스"
-    wake_word_fuzzy_threshold: float = 70.0
-    wake_followup_seconds: float = 5.0
+    # 짧은 호출어는 STT에서 받침/띄어쓰기 차이가 자주 난다. 자주 쓰는
+    # 전사 변형을 명시하고, 단어 전체가 아닌 일상 대화에 오작동하지 않는
+    # 수준으로 유사도 임계값을 조금 완화한다.
+    wake_word_aliases: str = "투투스,투투,투투 쓰,투투즈,투투스야,투투야,두두스,두두"
+    wake_word_fuzzy_threshold: float = 65.0
+    # 서버는 호출어를 먼저 받고, 안전모는 안내음을 끝까지 재생한 뒤 녹음을
+    # 재개한다. STT 전송 시간까지 고려해 서버 쪽 세션은 더 길게 유지한다.
+    # 호출어 → 안내음 재생 → 후속 음성 녹음 → STT 업로드 시간을 고려해
+    # 안전모의 8초 대기보다 길게 유지한다.
+    wake_followup_seconds: float = 20.0
     use_gpt_response: bool = True
     gpt_model: str = "gpt-5.6-sol"
     gpt_max_output_tokens: int = 160
@@ -34,8 +41,17 @@ class Settings(BaseSettings):
     yolo_enabled: bool = True
     yolo_model_path: str = str(BASE_DIR / "best.pt")
     yolo_confidence: float = 0.15
+    yolo_person_confidence: float = 0.35
+    # Camera upload and inference can skip frames.  Six seconds keeps the
+    # three-frame PPE decision stable without treating an old sighting as live.
+    yolo_ppe_window_seconds: float = 6.0
+    yolo_ppe_worn_frames: int = 2
+    yolo_ppe_person_frames: int = 3
+    yolo_ppe_confidence: float = 0.45
     yolo_fire_confidence: float = 0.60
     yolo_fire_confirm_frames: int = 3
+    yolo_smoke_confidence: float = 0.45
+    yolo_smoke_confirm_frames: int = 2
     model_config = SettingsConfigDict(env_file=BASE_DIR / ".env", extra="ignore")
 
     @property

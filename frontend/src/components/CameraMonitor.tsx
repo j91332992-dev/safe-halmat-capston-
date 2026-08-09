@@ -10,6 +10,7 @@ export function CameraMonitor({workers, devices}: Props) {
   const [deviceId, setDeviceId] = useState(avDevices[0]?.device_id ?? "");
   const [imageVersion, setImageVersion] = useState(Date.now());
   const [imageError, setImageError] = useState(false);
+  const [latest, setLatest] = useState<import("../types").CameraLatest | null>(null);
   const selected = avDevices.find(device => device.device_id === deviceId) ?? avDevices[0];
   const worker = useMemo(() => workers.find(item => item.worker_id === selected?.worker_id), [workers, selected]);
 
@@ -28,6 +29,24 @@ export function CameraMonitor({workers, devices}: Props) {
     }, 1000 / 3);
     return () => window.clearInterval(timer);
   }, [selected?.device_id]);
+  useEffect(() => {
+    if (!selected?.device_id) { setLatest(null); return; }
+    let active = true;
+    const load = () => api.latestCamera(selected.device_id).then(data => {
+      if (active) setLatest(data);
+    }).catch(() => { if (active) setLatest(null); });
+    load();
+    const timer = window.setInterval(load, 1000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [selected?.device_id]);
+  const judgement = latest?.analysis?.ppe_judgement;
+  const ppeLabel = (item: "helmet" | "vest" | "glove") => {
+    if (!judgement || !judgement.active) return "판정 보류";
+    if (worker?.ppe[item] === false) return "미착용";
+    if (worker?.ppe[item] === true) return "착용";
+    return "판정 중";
+  };
+  const ppeClass = (item: "helmet" | "vest" | "glove") => worker?.ppe[item] === false && judgement?.active ? "bad" : "good";
 
   return (
     <section className="page-panel camera-page">
@@ -55,12 +74,14 @@ export function CameraMonitor({workers, devices}: Props) {
             <span className="eyebrow">WORKER DETECTION</span>
             <h3>{worker?.worker_name ?? selected.worker_id}</h3>
             <div className="detection-list">
-              <div><span>안전모</span><b className={worker?.ppe.helmet === false ? "bad" : "good"}>{worker?.ppe.helmet === false ? "미착용" : "착용/정상"}</b></div>
-              <div><span>안전조끼</span><b className={worker?.ppe.vest === false ? "bad" : "good"}>{worker?.ppe.vest === false ? "미착용" : "착용/정상"}</b></div>
-              <div><span>장갑</span><b className={worker?.ppe.glove === false ? "bad" : "good"}>{worker?.ppe.glove === false ? "미착용" : "착용/정상"}</b></div>
-              <div><span>화재</span><b className={worker?.hazards.fire ? "bad" : "good"}>{worker?.hazards.fire ? "감지" : "없음"}</b></div>
+              <div><span>PPE 판정</span><b className={judgement?.active ? "good" : ""}>{judgement?.active ? `사람 확인 프레임 ${judgement.person_frames}/${judgement.person_frames_required}` : `판정 보류 · 사람 확인 프레임 ${judgement?.person_frames ?? 0}/${judgement?.person_frames_required ?? 3}`}</b></div>
+              <div><span>안전모</span><b className={ppeClass("helmet")}>{ppeLabel("helmet")}</b></div>
+              <div><span>안전조끼</span><b className={ppeClass("vest")}>{ppeLabel("vest")}</b></div>
+              <div><span>장갑</span><b className={ppeClass("glove")}>{ppeLabel("glove")}</b></div>
+              <div><span>화재</span><b className={worker?.hazards.fire ? "bad" : "good"}>{worker?.hazards.fire ? "감지 · 관리자 경고" : `확인 중 ${Number(worker?.hazards.fire_confirm_frames ?? 0)}/3`}</b></div>
               <div><span>연기</span><b className={worker?.hazards.smoke ? "bad" : "good"}>{worker?.hazards.smoke ? "감지" : "없음"}</b></div>
             </div>
+            <small>기준: 최근 {judgement?.window_seconds ?? 6}초 내 사람 {judgement?.person_frames_required ?? 3}프레임 확인 후 PPE 판정 · PPE {judgement?.ppe_frames_required ?? 2}프레임 이상이면 착용 · PPE confidence 45% 이상</small>
             <div className={`camera-risk level-${worker?.risk_level ?? "정상"}`}><span>통합 위험도</span><strong>{worker?.risk_score ?? 0}점 · {worker?.risk_level ?? "정상"}</strong></div>
           </article>
         </div>

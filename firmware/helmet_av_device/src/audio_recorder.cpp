@@ -202,10 +202,15 @@ static void vadTask(void *parameter) {
                     AUDIO_VAD_FRAME_MS);
     }
 
+    // "네, 말씀하세요" 직후에는 짧고 낮은 후속 명령도 포착해야 한다.
+    // 이 보정은 followupAwaitingSpeech가 켜진 짧은 시간에만 사용한다.
+    const uint32_t minimumLevel = followupAwaitingSpeech
+        ? AUDIO_FOLLOWUP_MIN_LEVEL
+        : AUDIO_VAD_MIN_LEVEL;
     uint32_t startThreshold = (uint32_t)(noiseFloor * AUDIO_VAD_NOISE_MULTIPLIER);
-    if (startThreshold < AUDIO_VAD_MIN_LEVEL) startThreshold = AUDIO_VAD_MIN_LEVEL;
+    if (startThreshold < minimumLevel) startThreshold = minimumLevel;
     uint32_t releaseThreshold = (uint32_t)(noiseFloor * AUDIO_VAD_RELEASE_MULTIPLIER);
-    if (releaseThreshold < AUDIO_VAD_MIN_LEVEL) releaseThreshold = AUDIO_VAD_MIN_LEVEL;
+    if (releaseThreshold < minimumLevel) releaseThreshold = minimumLevel;
 
     if (!captureActive && now - lastLevelLog >= 1000) {
       lastLevelLog = now;

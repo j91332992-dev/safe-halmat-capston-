@@ -85,3 +85,11 @@ def test_empty_stt_after_wake_requests_retry():
     assert decision.status == "command"
     assert decision.command_text == ""
     assert decision.reason == "armed_followup_empty"
+
+
+def test_retry_rearms_one_followup():
+    gate = WakeWordGate()
+    gate.arm("helmet-retry")
+    decision = gate.evaluate("helmet-retry", "location command")
+    assert decision.status == "command"
+    assert decision.reason == "armed_followup"

@@ -14,8 +14,8 @@ export interface Worker {
   risk_level: RiskLevel;
   risk_reasons: {reason: string; points: number; priority?: number; code?: string; voice_message?: string; action?: string}[];
   decision: {reason: string; points: number; priority: number; code: string; voice_message: string; action: string} | null;
-  ppe: {vest?: boolean; glove?: boolean; helmet?: boolean};
-  hazards: {fire?: boolean; smoke?: boolean};
+  ppe: {vest?: boolean | null; glove?: boolean | null; helmet?: boolean | null};
+  hazards: {fire?: boolean; smoke?: boolean; fire_candidate_confidence?: number; fire_confirm_frames?: number; smoke_candidate_confidence?: number; smoke_confirm_frames?: number};
   emergency: boolean;
   updated_at: string;
 }
@@ -178,9 +178,18 @@ export interface CameraLatest {
   analysis?: {
     mode: string;
     model: string;
-    ppe: Record<string, boolean>;
-    hazards: Record<string, boolean>;
+    ppe: Record<string, boolean | null>;
+    hazards: Record<string, boolean | number>;
     detections: unknown[];
+    ppe_judgement?: {
+      active: boolean;
+      status: "active" | "pending_person";
+      person_frames: number;
+      person_frames_required: number;
+      ppe_frames: Record<string, number>;
+      ppe_frames_required: number;
+      window_seconds: number;
+    };
   };
 }
 

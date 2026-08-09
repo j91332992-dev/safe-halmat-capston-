@@ -29,6 +29,11 @@ static void onSocket(WStype_t type, uint8_t *payload, size_t length) {
         Serial.println("[WS][ERROR] 음성 재생 실패, 경고음으로 대체");
         speakerPlayAlert(3);
       }
+      // The retry prompt has finished playing.  Keep the device listening
+      // for one more command, but only when the server explicitly asks.
+      if (doc["payload"]["listen_again"] | false) {
+        audioArmFollowup(AUDIO_FOLLOWUP_TIMEOUT_MS);
+      }
     }
     else if (command == "play_ack") {
       Serial.println("[WS] 내장 호출 응답 재생");
@@ -39,6 +44,9 @@ static void onSocket(WStype_t type, uint8_t *payload, size_t length) {
       uint16_t freq = doc["payload"]["frequency"] | 1200;
       uint16_t duration = doc["payload"]["duration"] | 300;
       speakerPlayTone(freq, duration);
+      if (doc["payload"]["listen_again"] | false) {
+        audioArmFollowup(AUDIO_FOLLOWUP_TIMEOUT_MS);
+      }
     }
     else if (command == "stop_alert") speakerStop();
     else if (command == "record_audio") {

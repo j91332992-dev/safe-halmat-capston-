@@ -82,6 +82,24 @@ def _update_fire_confirmation(state: dict, max_confidence: float) -> tuple[bool,
     return frames >= required, frames
 
 
+def _update_confirmation(state: dict, key: str, max_confidence: float, threshold: float, required: int) -> tuple[bool, int]:
+    """Confirm a hazard only when it is seen in consecutive frames."""
+    count_key = f"{key}_confirm_frames"
+    frames = int(state.get(count_key) or 0) + 1 if max_confidence >= threshold else 0
+    state[count_key] = frames
+    return frames >= max(1, required), frames
+
+
+def _recent_count(state: dict, key: str, now: float, window_seconds: float, seen: bool) -> int:
+    """Keep timestamped detections so PPE is never decided from one frame."""
+    history_key = f"{key}_history"
+    history = [float(value) for value in state.get(history_key, []) if now - float(value) <= window_seconds]
+    if seen:
+        history.append(now)
+    state[history_key] = history
+    return len(history)
+
+
 def analyze_frame(filename: str) -> dict:
     filepath = CAPTURE_DIR / filename
     if not filepath.exists():
@@ -100,8 +118,10 @@ def analyze_frame(filename: str) -> dict:
         ppe: dict[str, bool] = {}
         hazards = {"fire": False, "smoke": False}
         person_seen = False
+        ppe_seen = {"helmet": False, "vest": False, "glove": False}
         max_fire_area_ratio = 0.0
         max_fire_confidence = 0.0
+        max_smoke_confidence = 0.0
         horizontal_person = False
         colors = {
             "helmet": (0, 70, 255),
@@ -121,6 +141,10 @@ def analyze_frame(filename: str) -> dict:
                     continue
                 confidence = round(float(box.conf[0].item()), 3)
                 xyxy = [float(value) for value in box.xyxy[0].tolist()]
+                # A 0.15 helmet/PPE candidate is too weak to draw or use as
+                # evidence.  Keep a stricter threshold for every PPE item.
+                if category in {"helmet", "vest", "glove"} and confidence < float(settings.yolo_ppe_confidence):
+                    continue
                 box_width = max(0.0, xyxy[2] - xyxy[0])
                 box_height = max(0.0, xyxy[3] - xyxy[1])
                 frame_area = float(image.shape[0] * image.shape[1]) if image is not None else 0.0
@@ -136,8 +160,10 @@ def analyze_frame(filename: str) -> dict:
                     "box": {"x1": xyxy[0], "y1": xyxy[1], "x2": xyxy[2], "y2": xyxy[3]},
                 })
                 if category == "person":
-                    person_seen = True
-                    horizontal_person = horizontal_person or aspect_ratio >= 1.5
+                    # PPE 판정은 흐린 사람 후보가 아니라 35% 이상 사람 검출에서만 시작한다.
+                    if confidence >= float(settings.yolo_person_confidence):
+                        person_seen = True
+                        horizontal_person = horizontal_person or aspect_ratio >= 1.5
                 elif category == "fallen":
                     hazards["fallen"] = hazards.get("fallen", False) or positive
                     horizontal_person = horizontal_person or positive
@@ -145,11 +171,12 @@ def analyze_frame(filename: str) -> dict:
                     if category == "fire" and positive:
                         max_fire_confidence = max(max_fire_confidence, confidence)
                         max_fire_area_ratio = max(max_fire_area_ratio, area_ratio)
-                    elif category == "smoke":
-                        hazards["smoke"] = hazards["smoke"] or positive
+                    elif category == "smoke" and positive:
+                        max_smoke_confidence = max(max_smoke_confidence, confidence)
                 else:
-                    if category not in ppe or not positive:
-                        ppe[category] = positive
+                    if category in ppe_seen and positive:
+                        # PPE는 신뢰도 높은 사람이 함께 보인 프레임만 누적한다.
+                        ppe_seen[category] = True
                 if image is not None:
                     color = colors[category] if positive else (30, 30, 230)
                     start = (int(xyxy[0]), int(xyxy[1]))
@@ -165,6 +192,19 @@ def analyze_frame(filename: str) -> dict:
         expansion_rate = (max_fire_area_ratio - previous_area) / previous_area if previous_area > 0 and elapsed <= 1.5 else 0.0
         state["fire_area_ratio"] = max_fire_area_ratio
         state["fire_at"] = now
+        window = float(settings.yolo_ppe_window_seconds)
+        person_frames = _recent_count(state, "person", now, window, person_seen)
+        ppe_frames = {
+            item: _recent_count(state, f"ppe_{item}", now, window, person_seen and ppe_seen[item])
+            for item in ppe_seen
+        }
+        ppe_active = person_frames >= int(settings.yolo_ppe_person_frames)
+        # 사람이 충분히 확인되지 않으면 상태를 "판정 보류"로 명시한다.
+        # 이 값은 위험도에서 미착용으로 취급하지 않는다.
+        if ppe_active:
+            ppe = {item: ppe_frames[item] >= int(settings.yolo_ppe_worn_frames) for item in ppe_seen}
+        else:
+            ppe = {item: None for item in ppe_seen}
         if horizontal_person:
             state.setdefault("fallen_since", now)
         else:
@@ -173,14 +213,24 @@ def analyze_frame(filename: str) -> dict:
             horizontal_person and now - float(state.get("fallen_since", now)) >= 3.0
         )
         fire_confirmed, fire_confirm_frames = _update_fire_confirmation(state, max_fire_confidence)
+        smoke_confirmed, smoke_confirm_frames = _update_confirmation(
+            state,
+            "smoke",
+            max_smoke_confidence,
+            float(settings.yolo_smoke_confidence),
+            int(settings.yolo_smoke_confirm_frames),
+        )
         hazards.update({
             "fire": fire_confirmed,
             "fire_candidate_confidence": round(max_fire_confidence, 3),
             "fire_confirm_frames": fire_confirm_frames,
+            "smoke_candidate_confidence": round(max_smoke_confidence, 3),
+            "smoke_confirm_frames": smoke_confirm_frames,
             "fire_area_ratio": round(max_fire_area_ratio, 4),
             "fire_expansion_rate": round(max(0.0, expansion_rate), 4),
             "large_fire": bool(fire_confirmed and (max_fire_area_ratio >= 0.15 or expansion_rate >= 0.20)),
             "small_fire": bool(fire_confirmed and max_fire_area_ratio < 0.05),
+            "smoke": smoke_confirmed,
             "fallen": fallen_confirmed,
         })
         if person_seen:
@@ -199,6 +249,15 @@ def analyze_frame(filename: str) -> dict:
             "model": Path(settings.yolo_model_path).name,
             "detections": detections,
             "ppe": ppe,
+            "ppe_judgement": {
+                "active": ppe_active,
+                "status": "active" if ppe_active else "pending_person",
+                "person_frames": person_frames,
+                "person_frames_required": int(settings.yolo_ppe_person_frames),
+                "ppe_frames": ppe_frames,
+                "ppe_frames_required": int(settings.yolo_ppe_worn_frames),
+                "window_seconds": window,
+            },
             "hazards": hazards,
             "person_seen": person_seen,
             "source": filename,

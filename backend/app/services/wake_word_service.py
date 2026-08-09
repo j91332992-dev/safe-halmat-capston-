@@ -31,6 +31,11 @@ class WakeWordGate:
         with self._lock:
             self._armed_until.clear()
 
+    def arm(self, device_id: str) -> None:
+        """Allow one additional command after a retry prompt."""
+        with self._lock:
+            self._armed_until[device_id] = monotonic() + settings.wake_followup_seconds
+
     def evaluate(self, device_id: str, transcript: str) -> WakeDecision:
         text = (transcript or "").strip()
         normalized = normalize(text)
