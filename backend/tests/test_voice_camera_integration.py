@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.models.entities import WorkerState
 from app.routers.camera import _merge_detection
+from app.services.yolo_service import _update_fire_confirmation
 
 
 def test_real_camera_analysis_updates_worker_state():
@@ -20,6 +21,15 @@ def test_real_camera_analysis_updates_worker_state():
     assert '"helmet": false' in worker.ppe_json
     assert '"fire": false' in worker.hazard_json
 
+
+def test_yolo_fire_requires_high_confidence_consecutive_frames(monkeypatch):
+    monkeypatch.setattr("app.services.yolo_service.settings.yolo_fire_confidence", 0.60)
+    monkeypatch.setattr("app.services.yolo_service.settings.yolo_fire_confirm_frames", 3)
+    state = {}
+    assert _update_fire_confirmation(state, 0.30) == (False, 0)
+    assert _update_fire_confirmation(state, 0.75) == (False, 1)
+    assert _update_fire_confirmation(state, 0.75) == (False, 2)
+    assert _update_fire_confirmation(state, 0.75) == (True, 3)
 
 def test_operator_text_command_works_without_mock_endpoint(monkeypatch):
     async def no_tts(_message):

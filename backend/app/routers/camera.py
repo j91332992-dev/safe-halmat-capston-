@@ -20,6 +20,43 @@ from ..websocket import manager
 router = APIRouter(prefix="/api/camera", tags=["camera"])
 
 
+def _upsert_camera_event(
+    db: Session,
+    *,
+    worker_id: str,
+    device_id: str,
+    severity: str,
+    details: dict,
+) -> Event:
+    """Keep one rolling camera event per device instead of flooding the event log."""
+    rows = (
+        db.query(Event)
+        .filter(Event.device_id == device_id, Event.event_type == "CAMERA_FRAME")
+        .order_by(Event.created_at.desc())
+        .all()
+    )
+    event = rows[0] if rows else None
+    for stale in rows[1:]:
+        db.delete(stale)
+    if event is None:
+        return create_event(
+            db,
+            "CAMERA_FRAME",
+            "카메라 프레임 분석 결과를 수신했습니다.",
+            severity,
+            worker_id=worker_id,
+            device_id=device_id,
+            details=details,
+        )
+    event.worker_id = worker_id
+    event.severity = severity
+    event.status = "open"
+    event.message = "카메라 프레임 분석 결과를 수신했습니다."
+    event.details_json = json.dumps(details, ensure_ascii=False)
+    event.created_at = utcnow()
+    return event
+
+
 def _merge_detection(worker: WorkerState, analysis: dict) -> None:
     if analysis.get("mode") != "real":
         return
@@ -59,13 +96,11 @@ async def upload_frame(
     missing = [name for name, worn in ppe.items() if worn is False]
     severity = "danger" if hazards.get("fire") or hazards.get("smoke") else "warning" if missing else "info"
     image_name = analysis.get("annotated_source") or path.name
-    event = create_event(
+    event = _upsert_camera_event(
         db,
-        "CAMERA_FRAME",
-        "카메라 프레임 분석 결과를 수신했습니다.",
-        severity,
         worker_id=worker_id,
         device_id=device_id,
+        severity=severity,
         details={
             "filename": image_name,
             "raw_filename": path.name,

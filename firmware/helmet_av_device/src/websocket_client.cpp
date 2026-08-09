@@ -30,6 +30,11 @@ static void onSocket(WStype_t type, uint8_t *payload, size_t length) {
         speakerPlayAlert(3);
       }
     }
+    else if (command == "play_ack") {
+      Serial.println("[WS] 내장 호출 응답 재생");
+      if (!speakerPlayAcknowledgement()) speakerPlayTone(1200, 180);
+      audioArmFollowup(AUDIO_FOLLOWUP_TIMEOUT_MS);
+    }
     else if (command == "play_tone") {
       uint16_t freq = doc["payload"]["frequency"] | 1200;
       uint16_t duration = doc["payload"]["duration"] | 300;

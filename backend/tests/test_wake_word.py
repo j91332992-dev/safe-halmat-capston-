@@ -77,3 +77,11 @@ def test_stt_prompt_echo_is_ignored():
         decision = gate.evaluate("helmet-prompt-echo", phrase)
         assert decision.status == "ignored"
         assert decision.reason == "stt_prompt_echo"
+
+def test_empty_stt_after_wake_requests_retry():
+    gate = WakeWordGate()
+    assert gate.evaluate("helmet-empty-followup", "투투스").status == "armed"
+    decision = gate.evaluate("helmet-empty-followup", "")
+    assert decision.status == "command"
+    assert decision.command_text == ""
+    assert decision.reason == "armed_followup_empty"

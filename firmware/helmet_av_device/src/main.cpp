@@ -68,6 +68,12 @@ void loop() {
 #else
   wifiMaintain();
   audioLoop();
+  if (audioConsumeFollowupTimeout()) {
+    Serial.println("[VAD] 5초간 발화 없음, 호출 세션 종료");
+    speakerPlayTone(900, 80);
+    delay(35);
+    speakerPlayTone(650, 110);
+  }
   websocketLoop();
   callLoop();
   cameraUploadIfDue();

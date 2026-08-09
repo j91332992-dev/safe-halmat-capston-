@@ -4,15 +4,23 @@ from pathlib import Path
 from ..config import settings
 
 logger = logging.getLogger(__name__)
+_client = None
+
+
+def _get_client():
+    global _client
+    if _client is None:
+        from openai import AsyncOpenAI
+
+        _client = AsyncOpenAI(api_key=settings.openai_api_key)
+    return _client
 
 
 async def transcribe_audio(audio_path: Path) -> str | None:
     if not settings.use_whisper_stt or not settings.openai_api_key:
         return None
     try:
-        from openai import AsyncOpenAI
-
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        client = _get_client()
         with audio_path.open("rb") as audio_file:
             transcript = await client.audio.transcriptions.create(
                 model=settings.stt_model,

@@ -86,7 +86,7 @@ class TextCommandIn(BaseModel):
 
 
 class DeviceCommandIn(BaseModel):
-    command_type: Literal["play_tone", "play_alert", "play_audio", "set_volume", "stop_alert", "request_status", "record_audio"]
+    command_type: Literal["play_tone", "play_alert", "play_audio", "play_ack", "set_volume", "stop_alert", "request_status", "record_audio"]
     payload: dict[str, Any] = Field(default_factory=dict)
 
 

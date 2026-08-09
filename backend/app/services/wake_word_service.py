@@ -35,6 +35,13 @@ class WakeWordGate:
         text = (transcript or "").strip()
         normalized = normalize(text)
         if not normalized:
+            now = monotonic()
+            with self._lock:
+                deadline = self._armed_until.get(device_id, 0.0)
+                if deadline > now:
+                    self._armed_until.pop(device_id, None)
+                    return WakeDecision("command", text, "", "armed_followup_empty")
+                self._armed_until.pop(device_id, None)
             return WakeDecision("ignored", text, reason="stt_empty")
 
         if any(marker in normalized for marker in STT_PROMPT_ECHO_MARKERS):

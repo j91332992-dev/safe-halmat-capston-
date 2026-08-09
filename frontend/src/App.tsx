@@ -1,4 +1,5 @@
 import {useEffect, useMemo, useState} from "react";
+import {useLocation, useNavigate} from "react-router-dom";
 import {CameraMonitor} from "./components/CameraMonitor";
 import {DiagnosticPanel} from "./components/DiagnosticPanel";
 import {EventLog} from "./components/EventLog";
@@ -16,26 +17,66 @@ import {api} from "./services/api";
 
 type Page = "dashboard" | "map" | "camera" | "assistant" | "layout" | "history" | "workers" | "devices" | "events" | "zones" | "diagnostics";
 
-const navigation: {id: Page; label: string; mark: string}[] = [
-  {id: "dashboard", label: "통합 대시보드", mark: "⌂"},
-  {id: "map", label: "실시간 지도", mark: "◇"},
-  {id: "camera", label: "카메라 관제", mark: "▤"},
-  {id: "assistant", label: "음성·AI", mark: "◉"},
-  {id: "layout", label: "지도 설계", mark: "⌗"},
-  {id: "history", label: "위치 기록 재생", mark: "▶"},
-  {id: "workers", label: "작업자 관리", mark: "♙"},
-  {id: "devices", label: "장치 관리", mark: "▣"},
-  {id: "events", label: "이벤트 로그", mark: "≡"},
-  {id: "zones", label: "위험구역 관리", mark: "△"},
-  {id: "diagnostics", label: "하드웨어 진단", mark: "⊙"}
+const navigation: {id: Page; path: string; label: string}[] = [
+  {id: "dashboard", path: "/dashboard", label: "통합 대시보드"},
+  {id: "map", path: "/map", label: "실시간 지도"},
+  {id: "layout", path: "/layout", label: "지도 설계"},
+  {id: "history", path: "/history", label: "위치 기록 재생"},
+  {id: "camera", path: "/camera", label: "카메라 관제"},
+  {id: "workers", path: "/workers", label: "작업자 관리"},
+  {id: "devices", path: "/device", label: "장치 관리"},
+  {id: "events", path: "/event", label: "이벤트 로그"},
+  {id: "zones", path: "/danger", label: "위험구역 관리"},
+  {id: "diagnostics", path: "/hardware", label: "하드웨어 진단"},
+  {id: "assistant", path: "/assistant", label: "음성·AI"}
 ];
+
+type NavigationGroupId = "location" | "media" | "safety" | "system";
+
+const navigationGroups: {id: NavigationGroupId; label: string; pages: Page[]}[] = [
+  {id: "location", label: "위치 관제", pages: ["map", "history", "layout"]},
+  {id: "media", label: "영상·AI 관제", pages: ["camera", "assistant"]},
+  {id: "safety", label: "안전 관리", pages: ["workers", "zones", "events"]},
+  {id: "system", label: "장치·시스템", pages: ["devices", "diagnostics"]}
+];
+
+function MenuIcon({page}: {page: Page}) {
+  const paths: Record<Page, React.ReactNode> = {
+    dashboard: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
+    map: <><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3Z"/><path d="M9 3v15M15 6v15"/></>,
+    camera: <><path d="M14.5 4 16 7h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3l1.5-3Z"/><circle cx="12" cy="13" r="3.5"/></>,
+    assistant: <><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></>,
+    layout: <><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z"/><path d="M17 14v6M14 17h6"/></>,
+    history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></>,
+    workers: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
+    devices: <><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 6h6M10 18h4"/></>,
+    events: <><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3" cy="6" r="1"/><circle cx="3" cy="12" r="1"/><circle cx="3" cy="18" r="1"/></>,
+    zones: <><path d="M12 3 2.8 20h18.4Z"/><path d="M12 9v5M12 17h.01"/></>,
+    diagnostics: <><path d="M14.7 6.3a4 4 0 0 0-5 5L3 18l3 3 6.7-6.7a4 4 0 0 0 5-5l-3 3-3-3Z"/></>
+  };
+  return <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[page]}</svg>;
+}
+
+function KpiIcon({type}: {type: "workers" | "location" | "risk" | "zone"}) {
+  const paths = {
+    workers: <><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 6a3 3 0 0 1 0 6M17 15a5 5 0 0 1 4 5"/></>,
+    location: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></>,
+    risk: <><path d="M12 3 4 6v5c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10V6Z"/><path d="M12 8v5M12 16h.01"/></>,
+    zone: <><path d="M12 3 2.8 20h18.4Z"/><path d="M12 9v5M12 17h.01"/></>
+  };
+  return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[type]}</svg>;
+}
 
 
 function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const currentNavigation = navigation.find(item => item.path === location.pathname);
+  const page = currentNavigation?.id ?? "dashboard";
   const {data, locationHistory, connected, error, refresh} = useSafetyData();
-  const [page, setPage] = useState<Page>("dashboard");
   const [selectedId, setSelectedId] = useState("worker-001");
   const [busy, setBusy] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<NavigationGroupId, boolean>>({location: false, media: false, safety: false, system: false});
   const worker = useMemo(() => data?.workers.find(item => item.worker_id === selectedId) ?? data?.workers[0], [data, selectedId]);
   const evacuationIncident = data?.evacuation?.incident ?? null;
   const emergencyWorker = data?.workers.find(item => item.emergency) ?? null;
@@ -44,7 +85,7 @@ function App() {
     item.event_type === "VOICE_COMMAND" &&
     ["help", "emergency"].includes(String(item.details?.intent ?? "")) &&
     item.status !== "resolved"
-) ?? null;
+  ) ?? null;
   const callRequestEvent = data?.events.find(item =>
     item.event_type === "VOICE_COMMAND" &&
     String(item.details?.intent ?? "") === "call_manager" &&
@@ -59,6 +100,15 @@ function App() {
   useEffect(() => {
     if (data?.workers[0] && !selectedId) setSelectedId(data.workers[0].worker_id);
   }, [data, selectedId]);
+
+  useEffect(() => {
+    if (!currentNavigation) navigate("/dashboard", {replace: true});
+  }, [currentNavigation, navigate]);
+
+  useEffect(() => {
+    const currentGroup = navigationGroups.find(group => group.pages.includes(page));
+    if (currentGroup) setOpenGroups(current => ({...current, [currentGroup.id]: true}));
+  }, [page]);
 
   const action = async (callback: () => Promise<unknown>) => {
     setBusy(true);
@@ -86,6 +136,18 @@ function App() {
   const uwbTag = data.devices.find(device => device.device_type === "position_device");
   const missingAnchors = data.anchors.filter(anchor => !anchor.online);
   const showAnchorStatus = page === "dashboard" || page === "map" || page === "diagnostics";
+  const overviewItems: {page: Page; value: string; detail: string}[] = [
+    {page: "map", value: `${data.workers.length}명 표시`, detail: `작업자 X ${worker?.x.toFixed(1) ?? "-"} · Y ${worker?.y.toFixed(1) ?? "-"}m`},
+    {page: "layout", value: `${data.anchors.length}개 앵커`, detail: `현장 ${data.site.width}m × ${data.site.height}m`},
+    {page: "history", value: `${worker ? locationHistory[worker.worker_id]?.length ?? 0 : 0}개 좌표`, detail: "최근 위치 기록 재생"},
+    {page: "camera", value: `${data.devices.filter(device => device.device_type === "assistant_device" && device.online).length}대 온라인`, detail: "안전모 카메라 관제"},
+    {page: "workers", value: `${data.workers.length}명 등록`, detail: "작업자 상태와 권한"},
+    {page: "devices", value: `${online}/${data.devices.length} 연결`, detail: "AV · UWB 장치 상태"},
+    {page: "events", value: `${critical}건 미처리`, detail: `최근 이벤트 ${data.events.length}건`},
+    {page: "zones", value: `${data.zones.filter(zone => zone.active).length}곳 활성`, detail: "위험구역과 PPE 요건"},
+    {page: "diagnostics", value: `${data.anchors.length - missingAnchors.length}/${data.anchors.length} 수신`, detail: "하드웨어 통합 진단"},
+    {page: "assistant", value: data.devices.some(device => device.device_type === "assistant_device" && device.online) ? "사용 가능" : "오프라인", detail: "음성 · AI 명령 전송"}
+  ];
 
   return (
     <div className="app-frame">
@@ -96,11 +158,24 @@ function App() {
         </div>
         <nav aria-label="주 메뉴">
           <span className="nav-caption">관제 메뉴</span>
-          {navigation.map(item => (
-            <button key={item.id} className={page === item.id ? "active" : ""} onClick={() => setPage(item.id)}>
-              <i>{item.mark}</i>{item.label}
-              {item.id === "events" && critical > 0 && <b>{critical}</b>}
-            </button>
+          <button className={page === "dashboard" ? "active" : ""} onClick={() => navigate("/dashboard")}>
+            <i><MenuIcon page="dashboard" /></i>통합 대시보드
+          </button>
+          {navigationGroups.map(group => (
+            <div className={`nav-group ${group.pages.includes(page) ? "current" : ""}`} key={group.id}>
+              <button className="nav-group-toggle" aria-expanded={openGroups[group.id]} onClick={() => setOpenGroups(current => ({...current, [group.id]: !current[group.id]}))}>
+                <span>{group.label}</span><i className="nav-chevron">{openGroups[group.id] ? "−" : "+"}</i>
+              </button>
+              {openGroups[group.id] && <div className="nav-group-items">
+                {group.pages.map(pageId => {
+                  const item = navigation.find(entry => entry.id === pageId)!;
+                  return <button key={item.id} className={`group-item ${page === item.id ? "active" : ""}`} onClick={() => navigate(item.path)}>
+                    <i><MenuIcon page={item.id} /></i>{item.label}
+                    {item.id === "events" && critical > 0 && <b>{critical}</b>}
+                  </button>;
+                })}
+              </div>}
+            </div>
           ))}
         </nav>
         <div className="sidebar-system">
@@ -155,7 +230,7 @@ function App() {
             </div>
           </div>
         )}
-{callRequestEvent && callRequestWorker && callDevice && (
+        {callRequestEvent && callRequestWorker && callDevice && (
           <div className="active-call-request-banner" role="alert">
             <div><b>관리자 통화 요청 · {callRequestWorker.worker_name}</b><span>안전모에서 관리자 연결을 요청했습니다.</span></div>
             <div className="call-request-actions">
@@ -164,35 +239,26 @@ function App() {
             </div>
           </div>
         )}
-        {(page === "dashboard" || page === "map") && worker && (
+
+        {page === "dashboard" && worker && (
           <>
             <section className="kpi-row">
-              <article><span className="kpi-icon teal">◎</span><div><small>실시간 작업자</small><strong>{data.workers.length}<em>명</em></strong></div><StatusPill active /></article>
-              <article><span className="kpi-icon blue">⌁</span><div><small>위치 신뢰도</small><strong>{Math.round(worker.confidence * 100)}<em>%</em></strong></div><span className="trend">UWB 4 anchor</span></article>
-              <article><span className={`kpi-icon risk-${worker.risk_level}`}>!</span><div><small>최고 위험도</small><strong>{worker.risk_score}<em>점</em></strong></div><span className={`level level-${worker.risk_level}`}>{worker.risk_level}</span></article>
-              <article><span className="kpi-icon orange">△</span><div><small>활성 위험구역</small><strong>{data.zones.filter(zone => zone.active).length}<em>곳</em></strong></div><span className="trend">{critical} alert</span></article>
+              <article><span className="kpi-icon teal"><KpiIcon type="workers" /></span><div><small>실시간 작업자</small><strong>{data.workers.length}<em>명</em></strong></div><StatusPill active /></article>
+              <article><span className="kpi-icon blue"><KpiIcon type="location" /></span><div><small>위치 신뢰도</small><strong>{Math.round(worker.confidence * 100)}<em>%</em></strong></div><span className="trend">UWB 4 anchor</span></article>
+              <article><span className={`kpi-icon risk-${worker.risk_level}`}><KpiIcon type="risk" /></span><div><small>최고 위험도</small><strong>{worker.risk_score}<em>점</em></strong></div><span className={`level level-${worker.risk_level}`}>{worker.risk_level}</span></article>
+              <article><span className="kpi-icon orange"><KpiIcon type="zone" /></span><div><small>활성 위험구역</small><strong>{data.zones.filter(zone => zone.active).length}<em>곳</em></strong></div><span className="trend">{critical} alert</span></article>
             </section>
-            <section className={`dashboard-grid ${page === "map" ? "map-focus" : ""}`}>
-              <SiteMap
-                width={data.site.width}
-                height={data.site.height}
-                anchors={data.anchors}
-                obstacles={data.obstacles}
-                zones={data.zones}
-                workers={data.workers}
-                history={locationHistory[worker.worker_id] ?? []}
-                lastLocationAt={data.devices.find(device => device.worker_id === worker.worker_id && device.device_type === "position_device")?.last_uwb_at ?? null}
-                selectedId={worker.worker_id}
-                evacuationRoute={data.evacuation.routes[worker.worker_id]}
-                fireZone={evacuationIncident?.fire_zone ?? null}
-                onSelect={item => setSelectedId(item.worker_id)}
-              />
+            <section className="system-overview-grid" aria-label="주요 관제 기능 요약">
+              {overviewItems.map(item => {
+                const navigationItem = navigation.find(entry => entry.id === item.page)!;
+                return <button key={item.page} onClick={() => navigate(navigationItem.path)}><i><MenuIcon page={item.page} /></i><span><small>{navigationItem.label}</small><strong>{item.value}</strong><em>{item.detail}</em></span><b>→</b></button>;
+              })}
+            </section>
+            <section className="dashboard-overview-grid">
               <WorkerDetail worker={worker} devices={data.devices.filter(device => device.worker_id === worker.worker_id)} onRefresh={refresh} />
-            </section>
-            {page === "dashboard" && (
-              <section className="lower-grid">
+              <div className="dashboard-side-stack">
                 <article className="panel events-panel">
-                  <header><div><span className="eyebrow">RECENT EVENTS</span><h2>최근 이벤트</h2></div><button onClick={() => setPage("events")}>전체 보기 →</button></header>
+                  <header><div><span className="eyebrow">RECENT EVENTS</span><h2>최근 이벤트</h2></div><button onClick={() => navigate("/event")}>전체 보기 →</button></header>
                   <EventLog events={data.events.slice(0, 5)} onRefresh={refresh} />
                 </article>
                 <article className="panel scenario-panel">
@@ -204,9 +270,29 @@ function App() {
                     <button className="fire-manual-button" disabled={busy || !!evacuationIncident} onClick={() => void action(() => api.triggerFire(worker.worker_id))}>화재 수동발령</button>
                   </div>
                 </article>
-              </section>
-            )}
+              </div>
+            </section>
           </>
+        )}
+
+        {page === "map" && worker && (
+          <section className="map-page-grid">
+            <SiteMap
+              width={data.site.width}
+              height={data.site.height}
+              anchors={data.anchors}
+              obstacles={data.obstacles}
+              zones={data.zones}
+              workers={data.workers}
+              history={locationHistory[worker.worker_id] ?? []}
+              lastLocationAt={data.devices.find(device => device.worker_id === worker.worker_id && device.device_type === "position_device")?.last_uwb_at ?? null}
+              selectedId={worker.worker_id}
+              evacuationRoute={data.evacuation.routes[worker.worker_id]}
+              fireZone={evacuationIncident?.fire_zone ?? null}
+              onSelect={item => setSelectedId(item.worker_id)}
+            />
+            <WorkerDetail worker={worker} devices={data.devices.filter(device => device.worker_id === worker.worker_id)} onRefresh={refresh} />
+          </section>
         )}
 
         {page === "camera" && <CameraMonitor workers={data.workers} devices={data.devices} />}
@@ -235,11 +321,24 @@ function App() {
           </section>
         )}
 
-        {page === "events" && <section className="page-panel"><header><div><span className="eyebrow">EVENT CENTER</span><h2>이벤트 로그</h2></div><span>{data.events.length}건 표시</span></header><EventLog events={data.events} onRefresh={refresh} expanded /></section>}
+        {page === "events" && <section className="page-panel management-page event-management-page">
+          <header><div><span className="eyebrow">EVENT CENTER</span><h2>이벤트 로그</h2><p>현장에서 수신된 안전 알림의 처리 상태를 한눈에 확인합니다.</p></div><span>{data.events.length}건 표시</span></header>
+          <div className="management-overview">
+            <article><i><MenuIcon page="events" /></i><span><small>전체 이벤트</small><strong>{data.events.length}<em>건</em></strong></span></article>
+            <article><i className="warning"><MenuIcon page="zones" /></i><span><small>미처리 경보</small><strong>{critical}<em>건</em></strong></span></article>
+            <article><i className="success"><MenuIcon page="workers" /></i><span><small>처리 완료</small><strong>{data.events.filter(event => event.status === "resolved").length}<em>건</em></strong></span></article>
+          </div>
+          <EventLog events={data.events} onRefresh={refresh} expanded />
+        </section>}
 
         {page === "zones" && (
-          <section className="page-panel">
-            <header><div><span className="eyebrow">DANGER ZONE</span><h2>위험구역 관리</h2></div><span>초기 버전은 API로 좌표를 편집합니다.</span></header>
+          <section className="page-panel management-page zone-management-page">
+            <header><div><span className="eyebrow">DANGER ZONE</span><h2>위험구역 관리</h2><p>현장 위험구역의 상태와 작업자 보호구 요건을 관리합니다.</p></div><span>좌표 변경은 지도 설계에서 진행합니다.</span></header>
+            <div className="management-overview">
+              <article><i><MenuIcon page="zones" /></i><span><small>등록 구역</small><strong>{data.zones.length}<em>곳</em></strong></span></article>
+              <article><i className="warning"><MenuIcon page="zones" /></i><span><small>활성 구역</small><strong>{data.zones.filter(zone => zone.active).length}<em>곳</em></strong></span></article>
+              <article><i className="success"><MenuIcon page="workers" /></i><span><small>등록 작업자</small><strong>{data.workers.length}<em>명</em></strong></span></article>
+            </div>
             <div className="zone-grid">
               {data.zones.map(zone => <article key={zone.zone_id}><span className="zone-chip">{zone.active ? "활성" : "비활성"}</span><h3>{zone.zone_name}</h3><p>{zone.warning_message}</p><dl><div><dt>ID</dt><dd>{zone.zone_id}</dd></div><div><dt>형태</dt><dd>{zone.zone_type}</dd></div><div><dt>가중치</dt><dd>+{zone.risk_weight}</dd></div><div><dt>필수 PPE</dt><dd>{zone.required_ppe.join(", ")}</dd></div></dl></article>)}
             </div>
@@ -264,19 +363,12 @@ function App() {
             <div className="sos-modal-actions"><button disabled={busy} onClick={() => void action(() => api.acknowledge(emergencyEvent.event_id))}>신고 확인</button><button className="resolve" disabled={busy} onClick={() => void action(() => api.resolve(emergencyEvent.event_id))}>상황 종료</button></div>
           </section>
         </div>
-      )}      {evacuationIncident?.status === "pending_manager" && (
-        <FireEvacuationModal
-          incident={evacuationIncident}
-          site={data.site}
-          obstacles={data.obstacles}
-          workers={data.workers}
-          onRefresh={refresh}
-        />
+      )}
+      {evacuationIncident?.status === "pending_manager" && (
+        <FireEvacuationModal incident={evacuationIncident} site={data.site} obstacles={data.obstacles} workers={data.workers} onRefresh={refresh} />
       )}
     </div>
   );
 }
 
 export default App;
-
-

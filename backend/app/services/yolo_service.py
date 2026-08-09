@@ -72,6 +72,16 @@ def _category(name: str) -> tuple[str | None, bool]:
     return None, True
 
 
+def _update_fire_confirmation(state: dict, max_confidence: float) -> tuple[bool, int]:
+    required = max(1, int(settings.yolo_fire_confirm_frames))
+    if max_confidence >= float(settings.yolo_fire_confidence):
+        frames = int(state.get("fire_confirm_frames") or 0) + 1
+    else:
+        frames = 0
+    state["fire_confirm_frames"] = frames
+    return frames >= required, frames
+
+
 def analyze_frame(filename: str) -> dict:
     filepath = CAPTURE_DIR / filename
     if not filepath.exists():
@@ -91,6 +101,7 @@ def analyze_frame(filename: str) -> dict:
         hazards = {"fire": False, "smoke": False}
         person_seen = False
         max_fire_area_ratio = 0.0
+        max_fire_confidence = 0.0
         horizontal_person = False
         colors = {
             "helmet": (0, 70, 255),
@@ -131,9 +142,11 @@ def analyze_frame(filename: str) -> dict:
                     hazards["fallen"] = hazards.get("fallen", False) or positive
                     horizontal_person = horizontal_person or positive
                 elif category in ("fire", "smoke"):
-                    hazards[category] = hazards[category] or positive
                     if category == "fire" and positive:
+                        max_fire_confidence = max(max_fire_confidence, confidence)
                         max_fire_area_ratio = max(max_fire_area_ratio, area_ratio)
+                    elif category == "smoke":
+                        hazards["smoke"] = hazards["smoke"] or positive
                 else:
                     if category not in ppe or not positive:
                         ppe[category] = positive
@@ -159,11 +172,15 @@ def analyze_frame(filename: str) -> dict:
         fallen_confirmed = bool(hazards.get("fallen")) or (
             horizontal_person and now - float(state.get("fallen_since", now)) >= 3.0
         )
+        fire_confirmed, fire_confirm_frames = _update_fire_confirmation(state, max_fire_confidence)
         hazards.update({
+            "fire": fire_confirmed,
+            "fire_candidate_confidence": round(max_fire_confidence, 3),
+            "fire_confirm_frames": fire_confirm_frames,
             "fire_area_ratio": round(max_fire_area_ratio, 4),
             "fire_expansion_rate": round(max(0.0, expansion_rate), 4),
-            "large_fire": bool(max_fire_area_ratio >= 0.15 or expansion_rate >= 0.20),
-            "small_fire": bool(hazards.get("fire") and max_fire_area_ratio < 0.05),
+            "large_fire": bool(fire_confirmed and (max_fire_area_ratio >= 0.15 or expansion_rate >= 0.20)),
+            "small_fire": bool(fire_confirmed and max_fire_area_ratio < 0.05),
             "fallen": fallen_confirmed,
         })
         if person_seen:

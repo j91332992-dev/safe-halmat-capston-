@@ -21,7 +21,10 @@ def snapshot(db: Session = Depends(get_db)):
     workers = db.query(WorkerState).all()
     layout = db.get(SiteLayout, settings.site_id)
     zones = db.query(Zone).all()
-    events = db.query(Event).order_by(Event.created_at.desc()).limit(50).all()
+    recent_events = db.query(Event).order_by(Event.created_at.desc()).limit(50).all()
+    unresolved_events = db.query(Event).filter(Event.status != "resolved").order_by(Event.created_at.desc()).all()
+    events_by_id = {row.event_id: row for row in [*unresolved_events, *recent_events]}
+    events = sorted(events_by_id.values(), key=lambda row: row.created_at, reverse=True)
     return {
         "mode": settings.operation_mode,
         "site": {

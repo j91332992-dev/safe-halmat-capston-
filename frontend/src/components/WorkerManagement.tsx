@@ -50,8 +50,13 @@ export function WorkerManagement({workers, zones, onSaved}: Props) {
 
   return (
     <section className="page-panel worker-management">
-      <header><div><span className="eyebrow">WORKER & HELMET</span><h2>작업자·안전모 관리</h2></div><span>등록 작업자 {workers.length}명</span></header>
+      <header><div><span className="eyebrow">WORKER & HELMET</span><h2>작업자·안전모 관리</h2></div><span className="worker-count-badge">등록 작업자 <b>{workers.length}명</b></span></header>
       <p className="page-intro">작업자 ID는 TAG 통신 연결에 사용하므로 유지하고, 표시 이름과 현장 특이사항을 관리합니다.</p>
+      <div className="worker-overview">
+        <article><small>등록 작업자</small><strong>{workers.length}<em>명</em></strong><span>안전모 프로필</span></article>
+        <article><small>정상 상태</small><strong>{workers.filter(worker => worker.risk_score === 0).length}<em>명</em></strong><span>현재 위험도 기준</span></article>
+        <article><small>구역 권한 지정</small><strong>{workers.filter(worker => zones.some(zone => zone.allowed_worker_ids?.includes(worker.worker_id))).length}<em>명</em></strong><span>제한구역 출입 권한</span></article>
+      </div>
       <div className="worker-manage-list">
         {workers.map(worker => {
           const draft = drafts[worker.worker_id] ?? {worker_name: worker.worker_name, worker_role: worker.worker_role, notes: worker.notes ?? ""};
@@ -60,8 +65,8 @@ export function WorkerManagement({workers, zones, onSaved}: Props) {
           return (
             <article key={worker.worker_id}>
               <header className="worker-card-head">
-                <div className="worker-avatar">{worker.worker_name.slice(0, 1)}</div>
-                <div className="worker-identifiers"><b>{worker.worker_id}</b><span>안전모 {worker.helmet_id}</span></div>
+                <div className="worker-avatar" aria-hidden="true">{worker.worker_name.slice(0, 1)}</div>
+                <div className="worker-identifiers"><strong>{draft.worker_name || worker.worker_name}</strong><b>{worker.worker_id}</b><span>안전모 {worker.helmet_id}</span></div>
                 <span className={"level level-" + worker.risk_level}>{worker.risk_level} · {worker.risk_score}점</span>
               </header>
               <div className="worker-live-summary">
@@ -85,8 +90,6 @@ export function WorkerManagement({workers, zones, onSaved}: Props) {
     </section>
   );
 }
-
-
 
 
 

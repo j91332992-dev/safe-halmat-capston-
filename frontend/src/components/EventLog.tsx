@@ -22,7 +22,7 @@ export function EventLog({events, onRefresh, expanded = false}: Props) {
           <span className="event-actions">{event.status === "open" && <button onClick={() => void change(event.event_id, "ack")}>확인</button>}{event.status !== "resolved" && <button onClick={() => void change(event.event_id, "resolve")}>종료</button>}</span>
         </div>;
       })}
-      {!events.length && <p className="empty">표시할 이벤트가 없습니다.</p>}
+      {!events.length && <div className="event-empty-state"><span aria-hidden="true">✓</span><b>현재 확인할 이벤트가 없습니다</b><p>새로운 안전 알림이 수신되면 시간과 처리 상태가 이곳에 표시됩니다.</p></div>}
     </div>
     {photo && <div className="photo-modal" role="dialog" aria-modal="true" aria-label="카메라 이벤트 사진" onClick={() => setPhoto(null)}><div onClick={event => event.stopPropagation()}><button onClick={() => setPhoto(null)}>닫기</button><img src={photo} alt="카메라 이벤트 감지 화면" /></div></div>}
   </>;

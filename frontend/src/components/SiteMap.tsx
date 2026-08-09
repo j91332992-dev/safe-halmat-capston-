@@ -1,5 +1,6 @@
 import {useEffect, useMemo, useState} from "react";
 import type {Anchor, EvacuationRoute, FireZone, LocationPoint, Obstacle, Worker, Zone} from "../types";
+import {AnchorSymbol} from "./AnchorSymbol";
 
 interface Props {
   width: number;
@@ -92,11 +93,11 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, hist
       <svg className="site-map" viewBox="0 0 1000 600" role="img" aria-label="작업 현장 실시간 위치 지도">
         <defs>
           <pattern id="grid" width="75" height="65" patternUnits="userSpaceOnUse">
-            <path d="M 75 0 L 0 0 0 65" fill="none" stroke="rgba(116,166,196,.11)" strokeWidth="1" />
+            <path d="M 75 0 L 0 0 0 65" className="map-grid-line" fill="none" strokeWidth="1" />
           </pattern>
           <filter id="glow"><feGaussianBlur stdDeviation="5" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
         </defs>
-        <rect x="35" y="25" width="930" height="550" rx="18" fill="#091827" stroke="#1c3a51" strokeWidth="2" />
+        <rect x="35" y="25" width="930" height="550" rx="18" className="map-floor" strokeWidth="2" />
         <rect x="35" y="25" width="930" height="550" rx="18" fill="url(#grid)" />
         <g className="map-labels">
           <text x="55" y="55">A 구역 · 조립/이동 통로</text>
@@ -142,7 +143,7 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, hist
         {anchors.map(anchor => (
           <g key={anchor.anchor_id} transform={`translate(${scaleX(anchor.x)}, ${scaleY(anchor.y)})`} className="anchor-node">
             <circle r="19" className={anchor.online ? "online" : "offline"} />
-            <path d="M-7 5 L0-8 L7 5 Z M0-7 V10" />
+            <AnchorSymbol />
             <text y="36" textAnchor="middle">{anchor.anchor_id.replace("anchor-", "A")}</text>
           </g>
         ))}
@@ -175,6 +176,4 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, hist
     </div>
   );
 }
-
-
 

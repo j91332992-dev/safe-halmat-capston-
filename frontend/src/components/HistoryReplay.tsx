@@ -1,6 +1,7 @@
 import {useEffect, useMemo, useState} from "react";
 import {api} from "../services/api";
 import type {Anchor, LocationPoint, Obstacle, Snapshot, Worker, Zone} from "../types";
+import {AnchorSymbol} from "./AnchorSymbol";
 
 interface Props {
   site: Snapshot["site"];
@@ -75,7 +76,7 @@ export function HistoryReplay({site, anchors, obstacles, zones, workers}: Props)
           {obstacles.map(item => <g key={item.obstacle_id} className="map-obstacle"><rect x={sx(item.x)} y={sy(item.y + item.height)} width={(item.width / site.width) * 900} height={(item.height / site.height) * 520} /><text x={sx(item.x + item.width / 2)} y={sy(item.y + item.height / 2)} textAnchor="middle" dominantBaseline="middle">{item.name}</text></g>)}
           {zones.filter(zone => zone.active && zone.zone_type === "rectangle").map(zone => <g key={zone.zone_id}><rect className="danger-zone" x={sx(zone.coordinates.x)} y={sy(zone.coordinates.y + zone.coordinates.height!)} width={(zone.coordinates.width! / site.width) * 900} height={(zone.coordinates.height! / site.height) * 520} /><text className="zone-name" x={sx(zone.coordinates.x + zone.coordinates.width! / 2)} y={sy(zone.coordinates.y + zone.coordinates.height! / 2)} textAnchor="middle">{zone.zone_name}</text></g>)}
           {route && <><polyline points={route} className="route-line route-glow" /><polyline points={route} className="route-line" /></>}
-          {anchors.map((anchor, anchorIndex) => <g key={anchor.anchor_id} transform={"translate(" + sx(anchor.x) + "," + sy(anchor.y) + ")"} className="anchor-node"><circle r="16" className="online" /><text textAnchor="middle" y="4">A{anchorIndex + 1}</text></g>)}
+          {anchors.map((anchor, anchorIndex) => <g key={anchor.anchor_id} transform={"translate(" + sx(anchor.x) + "," + sy(anchor.y) + ")"} className="anchor-node"><circle r="18" className="online" /><AnchorSymbol /><text textAnchor="middle" y="34">A{anchorIndex + 1}</text></g>)}
           {current && <g transform={"translate(" + sx(current.x) + "," + sy(current.y) + ")"} className="replay-worker"><circle r="24" /><text x="32" y="4">{worker?.worker_name}</text></g>}
         </svg>
         {!loading && points.length === 0 && <div className="replay-empty">선택한 범위에 저장된 위치 기록이 없습니다.</div>}

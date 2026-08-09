@@ -28,12 +28,12 @@ def build_response(intent: str, worker: dict) -> tuple[str, str | None]:
         "evacuation_route": (route_instruction, "play_alert"),
         "repeat_warning": (current_warning, "play_alert"),
     }
-    return responses.get(intent, ("명령을 이해하지 못했습니다. 다시 말씀해 주세요.", None))
+    return responses.get(intent, ("다시 한 번 말씀해 주세요.", "play_tone"))
 
 
 async def build_response_smart(intent: str, worker: dict) -> tuple[str, str | None]:
     fallback = build_response(intent, worker)
-    if intent in {"fire_report", "evacuation_route", "call_manager"}:
+    if intent in {"unknown", "fire_report", "evacuation_route", "call_manager"}:
         return fallback
     if not settings.use_gpt_response or not settings.openai_api_key:
         return fallback
