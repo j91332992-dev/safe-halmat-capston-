@@ -7,6 +7,11 @@
 #include <cstring>
 #include <freertos/queue.h>
 
+extern "C" {
+  extern const uint8_t acknowledgement_wav_start[];
+  extern const uint8_t acknowledgement_wav_end[];
+}
+
 static bool speakerReady = false;
 static uint8_t *speakerBuffer = NULL;
 static size_t speakerBufferSize = 16000 * 2; // 1초 (약 32KB)
@@ -275,6 +280,20 @@ bool speakerPlayPcm(const uint8_t *data, size_t length, uint32_t sampleRate) {
   Serial.printf("[SPEAKER] 녹음 재생 %s bytes=%u\n", ok ? "완료" : "실패", (unsigned)length);
   return ok;
 }
+bool speakerPlayAcknowledgement() {
+  const size_t wavLength = acknowledgement_wav_end - acknowledgement_wav_start;
+  if (wavLength <= 44 || memcmp(acknowledgement_wav_start, "RIFF", 4) != 0 ||
+      memcmp(acknowledgement_wav_start + 8, "WAVE", 4) != 0) {
+    Serial.println("[SPEAKER] 내장 호출 응답 WAV 형식 오류");
+    return false;
+  }
+
+  uint32_t sampleRate = 0;
+  memcpy(&sampleRate, acknowledgement_wav_start + 24, sizeof(sampleRate));
+  Serial.println("[SPEAKER] 내장 호출 응답 즉시 재생");
+  return speakerPlayPcm(acknowledgement_wav_start + 44, wavLength - 44, sampleRate);
+}
+
 void speakerStop() {
   if (!speakerReady) return;
   i2s_zero_dma_buffer(I2S_NUM_1);

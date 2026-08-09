@@ -87,3 +87,35 @@ def test_manager_call_intent_accepts_name_prefix():
     assert resolve_intent("관리자 연결") == ("call_manager", 0.96)
     assert resolve_intent("김민우 전화 연결") == ("call_manager", 0.96)
     assert resolve_intent("전화 연결") == ("call_manager", 0.96)
+
+
+def test_manager_call_intent_accepts_semantic_variants():
+    for phrase in (
+        "팀장에게 연결해 줘",
+        "팀장에게 전화 연결해 주세요",
+        "팀장에게 연락해 줘",
+        "현장 소장님과 통화하고 싶어",
+        "관제실로 이어 줘",
+        "안전 관리자 불러 주세요",
+    ):
+        intent, confidence = resolve_intent(phrase)
+        assert intent == "call_manager"
+        assert confidence >= 0.96
+
+
+def test_unrelated_contact_sentence_is_not_manager_call():
+    assert resolve_intent("집에 연락해 줘")[0] != "call_manager"
+
+
+def test_supported_queries_accept_semantic_variants():
+    examples = {
+        "지금 위험 상태가 어떤지 알려 줘": "risk_query",
+        "내가 있는 위치가 어디야": "location_query",
+        "내 현재 상태를 확인해 줘": "status_report",
+        "가까운 비상구가 어디인지 안내해 줘": "evacuation_route",
+        "아까 경고를 한 번 더 말해 줘": "repeat_warning",
+    }
+    for phrase, expected in examples.items():
+        intent, confidence = resolve_intent(phrase)
+        assert intent == expected
+        assert confidence >= 0.96

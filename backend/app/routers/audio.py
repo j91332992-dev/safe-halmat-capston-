@@ -55,6 +55,25 @@ async def process_text(db: Session, worker_id: str, device_id: str, text: str, s
 
     # 위험 상태를 먼저 저장해 외부 AI/TTS 대기 중 SQLite 쓰기 잠금을 잡지 않는다.
     db.commit()
+
+    # 명령을 이해한 즉시 짧은 성공음을 내어, TTS 생성 중에도 작업자가 인식 성공을 알 수 있게 한다.
+    feedback_delivered = 0
+    feedback_command_id = None
+    if intent != "unknown":
+        feedback_payload = {"frequency": 1850, "duration": 110, "purpose": "intent_recognized"}
+        feedback = queue_command(db, device_id, "play_tone", feedback_payload)
+        feedback_command_id = feedback.command_id
+        db.commit()
+        feedback_delivered = await manager.send_device_command(
+            device_id,
+            {
+                "command_id": feedback.command_id,
+                "command_type": "play_tone",
+                "payload": feedback_payload,
+            },
+        )
+        feedback.status = "delivered" if feedback_delivered else "queued"
+
     message, speaker_command = await build_response_smart(intent, worker_data)
     audio_path = await generate_tts(message)
     audio_url = f"/tts/{audio_path.name}" if audio_path else None
@@ -90,6 +109,8 @@ async def process_text(db: Session, worker_id: str, device_id: str, text: str, s
             "audio_url": audio_url,
             "device_command_id": device_command_id,
             "delivered_connections": delivered,
+            "feedback_command_id": feedback_command_id,
+            "feedback_delivered_connections": feedback_delivered,
             "evacuation_created": evacuation_created,
         },
     )
@@ -103,6 +124,8 @@ async def process_text(db: Session, worker_id: str, device_id: str, text: str, s
         "speaker_command": speaker_command,
         "audio_url": audio_url,
         "delivered_connections": delivered,
+        "feedback_command_id": feedback_command_id,
+        "feedback_delivered_connections": feedback_delivered,
         "event": event_to_dict(event),
         "worker": worker_to_dict(worker),
         "evacuation": evacuation_snapshot(db) if current_incident(db) else {"incident": None, "routes": {}},
@@ -137,14 +160,10 @@ async def upload_audio(
 
         if decision.status == "armed":
             acknowledgement = "네, 말씀하세요."
-            audio_path = await generate_tts(acknowledgement)
-            audio_url = f"/tts/{audio_path.name}" if audio_path else None
-            command_type = "play_audio" if audio_url else "play_tone"
+            command_type = "play_ack"
             payload = {
                 "message": acknowledgement,
-                "audio_url": audio_url,
-                "frequency": 1200,
-                "duration": 180,
+                "local_asset": "acknowledgement",
             }
             record = queue_command(db, device_id, command_type, payload)
             device_command_id = record.command_id

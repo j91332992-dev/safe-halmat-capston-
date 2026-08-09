@@ -13,6 +13,8 @@ static volatile bool forceStartRequested = false;
 static volatile bool forceStopRequested = false;
 static volatile bool vadSuppressed = false;
 static volatile uint32_t vadResumeAt = 0;
+static volatile bool followupAwaitingSpeech = false;
+static volatile uint32_t followupDeadline = 0;
 
 static const size_t frameSamples = (AUDIO_SAMPLE_RATE * AUDIO_VAD_FRAME_MS) / 1000;
 static const size_t frameBytes = frameSamples * sizeof(int16_t);
@@ -27,6 +29,8 @@ static volatile size_t pendingBytes = 0;
 static size_t preRollWrite = 0;
 static size_t preRollCount = 0;
 static TaskHandle_t vadTaskHandle = nullptr;
+static TaskHandle_t uploadTaskHandle = nullptr;
+static volatile bool uploadInProgress = false;
 static portMUX_TYPE audioMux = portMUX_INITIALIZER_UNLOCKED;
 static uint32_t lastUploadAttempt = 0;
 static uint32_t lastHealthLog = 0;
@@ -128,6 +132,10 @@ static void finishCapture() {
 static void startCaptureFromPreRoll(uint32_t level, uint32_t threshold, bool forced) {
   copyPreRollToCapture();
   captureActive = true;
+  portENTER_CRITICAL(&audioMux);
+  followupAwaitingSpeech = false;
+  followupDeadline = 0;
+  portEXIT_CRITICAL(&audioMux);
   Serial.printf("[VAD] 발화 시작 mode=%s level=%lu threshold=%lu pre_roll=%ums\n",
                 forced ? "manual" : "auto",
                 (unsigned long)level,
@@ -266,6 +274,25 @@ static void vadTask(void *parameter) {
   }
 }
 
+static void audioUploadTask(void *parameter) {
+  (void)parameter;
+  while (true) {
+    size_t queued = 0;
+    portENTER_CRITICAL(&audioMux);
+    queued = pendingBytes;
+    portEXIT_CRITICAL(&audioMux);
+
+    if (audioReady && queued > 0 && WiFi.status() == WL_CONNECTED &&
+        millis() - lastUploadAttempt >= 100) {
+      lastUploadAttempt = millis();
+      uploadInProgress = true;
+      audioUpload();
+      uploadInProgress = false;
+    }
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
 bool audioBegin() {
   i2s_config_t cfg = {
     .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
@@ -318,6 +345,15 @@ bool audioBegin() {
     return false;
   }
 
+  const BaseType_t uploadCreated = xTaskCreatePinnedToCore(
+      audioUploadTask, "audio-upload", 6144, nullptr, 1, &uploadTaskHandle, 0);
+  if (uploadCreated != pdPASS) {
+    audioReady = false;
+    vTaskDelete(vadTaskHandle);
+    vadTaskHandle = nullptr;
+    Serial.println("[AUDIO] 업로드 작업 생성 실패");
+    return false;
+  }
   Serial.printf("[AUDIO] INMP441 상시 VAD 준비 완료, 최대 %d초, task=OK, core=1\n",
                 AUDIO_MAX_RECORD_SECONDS);
   return true;
@@ -430,14 +466,7 @@ void audioLoop() {
                   audioIsListening() ? 1 : 0,
                   (unsigned)pendingBytes);
   }
-  if (!audioReady || WiFi.status() != WL_CONNECTED) return;
-  size_t queued = 0;
-  portENTER_CRITICAL(&audioMux);
-  queued = pendingBytes;
-  portEXIT_CRITICAL(&audioMux);
-  if (queued == 0 || millis() - lastUploadAttempt < 250) return;
-  lastUploadAttempt = millis();
-  audioUpload();
+  // 음성 업로드는 별도 코어의 audioUploadTask에서 처리해 메인 루프와 WebSocket을 막지 않는다.
 }
 
 void audioSetSuppressed(bool suppressed) {
@@ -447,8 +476,37 @@ void audioSetSuppressed(bool suppressed) {
   portEXIT_CRITICAL(&audioMux);
 }
 
+void audioArmFollowup(uint32_t timeoutMs) {
+  portENTER_CRITICAL(&audioMux);
+  followupAwaitingSpeech = true;
+  followupDeadline = millis() + timeoutMs;
+  portEXIT_CRITICAL(&audioMux);
+  Serial.printf("[VAD] 후속 명령 대기 시작 timeout=%lums\n", (unsigned long)timeoutMs);
+}
+
+bool audioConsumeFollowupTimeout() {
+  bool expired = false;
+  const uint32_t now = millis();
+  portENTER_CRITICAL(&audioMux);
+  if (followupAwaitingSpeech && (int32_t)(now - followupDeadline) >= 0) {
+    followupAwaitingSpeech = false;
+    followupDeadline = 0;
+    expired = true;
+  }
+  portEXIT_CRITICAL(&audioMux);
+  return expired;
+}
+
 bool audioIsListening() {
   return audioReady && !suppressionIsActive();
+}
+
+bool audioIsBusy() {
+  bool busy = false;
+  portENTER_CRITICAL(&audioMux);
+  busy = captureActive || pendingBytes > 0 || uploadInProgress || callMode;
+  portEXIT_CRITICAL(&audioMux);
+  return busy;
 }
 
 bool audioIsReady() {
@@ -458,6 +516,10 @@ void audioSetCallMode(bool enabled) {
   callMode = enabled;
   if (callMicQueue) xQueueReset(callMicQueue);
   if (enabled) {
+    portENTER_CRITICAL(&audioMux);
+    followupAwaitingSpeech = false;
+    followupDeadline = 0;
+    portEXIT_CRITICAL(&audioMux);
     discardCapture("실시간 통화 시작");
     pendingBytes = 0;
     resetPreRoll();

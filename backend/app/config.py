@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     stt_prompt: str = "한국어 산업 안전 현장 대화입니다. 호출어 투투스와 작업자의 짧은 명령을 정확히 받아쓰고, 들리지 않는 내용은 추측하지 마세요."
     wake_word_aliases: str = "투투스,투투 쓰,투투즈,두두스"
     wake_word_fuzzy_threshold: float = 70.0
-    wake_followup_seconds: float = 20.0
+    wake_followup_seconds: float = 5.0
     use_gpt_response: bool = True
     gpt_model: str = "gpt-5.6-sol"
     gpt_max_output_tokens: int = 160
@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     yolo_enabled: bool = True
     yolo_model_path: str = str(BASE_DIR / "best.pt")
     yolo_confidence: float = 0.15
+    yolo_fire_confidence: float = 0.60
+    yolo_fire_confirm_frames: int = 3
     model_config = SettingsConfigDict(env_file=BASE_DIR / ".env", extra="ignore")
 
     @property

@@ -2,6 +2,7 @@ import {memo, useEffect, useRef, useState} from "react";
 import type {PointerEvent as ReactPointerEvent} from "react";
 import {api} from "../services/api";
 import type {Anchor, LayoutDraft, LayoutVersion, Obstacle, Snapshot, Worker, Zone} from "../types";
+import {AnchorSymbol} from "./AnchorSymbol";
 
 interface Props {
   site: Snapshot["site"];
@@ -455,15 +456,18 @@ function LayoutEditorComponent({site, anchors, obstacles, zones, workers, onSave
             <defs><pattern id="blueprint-grid" width="43" height="27" patternUnits="userSpaceOnUse"><path d="M43 0H0V27" fill="none" stroke="rgba(95,202,243,.12)" /></pattern></defs>
             <rect x={PAD_X} y={MAP_TOP} width={MAP_W} height={MAP_H} rx="4" className="blueprint-floor" onPointerDown={() => setSelection(null)} />
             <rect x={PAD_X} y={MAP_TOP} width={MAP_W} height={MAP_H} rx="4" fill="url(#blueprint-grid)" pointerEvents="none" />
-            <text x={PAD_X} y="35" className="dimension-label">가로 X = {width.toFixed(2)}m</text>
-            <text x="17" y={(MAP_TOP + MAP_BOTTOM) / 2} className="dimension-label vertical">세로 Y = {height.toFixed(2)}m</text>
+            <text x={(PAD_X + MAP_RIGHT) / 2} y="29" textAnchor="middle" className="dimension-label">가로 X = {width.toFixed(2)}m</text>
+            <text x="23" y={(MAP_TOP + MAP_BOTTOM) / 2} textAnchor="middle" className="dimension-label vertical" transform={`rotate(-90 23 ${(MAP_TOP + MAP_BOTTOM) / 2})`}>세로 Y = {height.toFixed(2)}m</text>
 
             {localObstacles.map(item => {
               const selected = selection?.kind === "obstacle" && selection.id === item.obstacle_id;
+              const isExit = item.object_type === "emergency_exit";
+              const centerX = sx(item.x + item.width / 2);
+              const centerY = sy(item.y + item.height / 2);
               return <g key={item.obstacle_id} className={"blueprint-obstacle " + (item.object_type ?? "obstacle") + " " + (selected ? "selected" : "")}>
                 <rect x={sx(item.x)} y={sy(item.y + item.height)} width={(item.width / width) * MAP_W} height={(item.height / height) * MAP_H} onPointerDown={event => beginRect(event, "obstacle", item.obstacle_id, item)} />
-                <text className="center-label" x={sx(item.x + item.width / 2)} y={sy(item.y + item.height / 2) - 4} textAnchor="middle">{item.name}</text>
-                <text className="center-size" x={sx(item.x + item.width / 2)} y={sy(item.y + item.height / 2) + 14} textAnchor="middle">{item.width.toFixed(2)} × {item.height.toFixed(2)}m</text>
+                <text className="center-label" x={centerX} y={centerY + (isExit ? 4 : -4)} textAnchor="middle">{item.name}</text>
+                <text className="center-size" x={centerX} y={isExit ? sy(item.y) + 14 : centerY + 14} textAnchor="middle">{item.width.toFixed(2)} × {item.height.toFixed(2)}m</text>
                 {selected && renderHandles("obstacle", item.obstacle_id, item)}
               </g>;
             })}
@@ -481,8 +485,14 @@ function LayoutEditorComponent({site, anchors, obstacles, zones, workers, onSave
 
             {localAnchors.map((anchor, index) => {
               const selected = selection?.kind === "anchor" && selection.id === anchor.anchor_id;
+              const onRight = anchor.x > width / 2;
+              const onBottom = anchor.y < height / 2;
+              const labelX = onRight ? -28 : 28;
+              const labelAnchor = onRight ? "end" : "start";
               return <g key={anchor.anchor_id} className={"blueprint-anchor " + (selected ? "selected" : "")} transform={"translate(" + sx(anchor.x) + "," + sy(anchor.y) + ")"} onPointerDown={event => beginAnchor(event, anchor)}>
-                <circle r="18" /><text textAnchor="middle" y="4">A{index + 1}</text><text className="anchor-coordinate" textAnchor="middle" y="37">({anchor.x.toFixed(2)}, {anchor.y.toFixed(2)})</text>
+                <circle r="20" /><AnchorSymbol />
+                <text className="anchor-name" x={labelX} y={onBottom ? 34 : -3} textAnchor={labelAnchor}>A{index + 1}</text>
+                <text className="anchor-coordinate" x={labelX} y={onBottom ? 47 : 12} textAnchor={labelAnchor}>({anchor.x.toFixed(2)}, {anchor.y.toFixed(2)})</text>
               </g>;
             })}
           </svg>
@@ -527,5 +537,3 @@ const sameDesign = (left: Props, right: Props) =>
   === JSON.stringify([right.site, right.anchors, right.obstacles, right.zones, right.workers.map(worker => [worker.worker_id, worker.worker_name])]);
 
 export const LayoutEditor = memo(LayoutEditorComponent, sameDesign);
-
-
