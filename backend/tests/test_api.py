@@ -37,7 +37,19 @@ def test_real_heartbeat_is_the_only_way_to_mark_device_online():
         snapshot = client.get("/api/dashboard/snapshot").json()
         av = next(item for item in snapshot["devices"] if item["device_id"] == "helmet-001-av")
         assert av["online"] is True
-        assert av["battery"] == 77
+        assert "battery" not in av
+
+
+def test_speaker_result_records_actual_device_acknowledgement():
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/devices/helmet-001-av/component-result",
+            json={"component": "speaker", "status": "ok", "command_id": "speaker-test-1"},
+        )
+        assert response.status_code == 200
+        device = response.json()["device"]
+        assert device["last_speaker_at"] is not None
+        assert device["last_speaker_status"] == "ok: speaker-test-1"
 
 
 def test_mock_scenario_endpoint_is_removed():

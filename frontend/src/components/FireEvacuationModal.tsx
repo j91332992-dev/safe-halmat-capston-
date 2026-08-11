@@ -1,12 +1,13 @@
 import {useEffect, useRef, useState} from "react";
 import {api} from "../services/api";
-import type {EvacuationIncident, FireZone, Obstacle, Worker} from "../types";
+import type {Device, EvacuationIncident, FireZone, Obstacle, Worker} from "../types";
 
 interface Props {
   incident: EvacuationIncident;
   site: {width: number; height: number};
   obstacles: Obstacle[];
   workers: Worker[];
+  devices: Device[];
   onRefresh: () => Promise<unknown>;
 }
 
@@ -16,7 +17,7 @@ const sourceLabel: Record<string, string> = {
   manager: "관리자 수동 신고"
 };
 
-export function FireEvacuationModal({incident, site, obstacles, workers, onRefresh}: Props) {
+export function FireEvacuationModal({incident, site, obstacles, workers, devices, onRefresh}: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const dragStart = useRef<{x: number; y: number} | null>(null);
   const [zone, setZone] = useState<FireZone>(() => ({
@@ -28,10 +29,19 @@ export function FireEvacuationModal({incident, site, obstacles, workers, onRefre
   }));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("지도에서 화재구간을 드래그하거나 아래 수치를 입력하세요.");
+  const [cameraVersion, setCameraVersion] = useState(Date.now());
+  const reporter = workers.find(worker => worker.worker_id === incident.worker_id);
+  const cameraDevice = devices.find(device => device.worker_id === incident.worker_id && device.device_type === "assistant_device");
 
   useEffect(() => {
     if (incident.fire_zone && Object.keys(incident.fire_zone).length) setZone(incident.fire_zone);
   }, [incident.incident_id, incident.fire_zone]);
+
+  useEffect(() => {
+    if (!cameraDevice?.device_id) return;
+    const timer = window.setInterval(() => setCameraVersion(Date.now()), 500);
+    return () => window.clearInterval(timer);
+  }, [cameraDevice?.device_id]);
 
   const point = (event: React.PointerEvent<SVGSVGElement>) => {
     const rect = svgRef.current!.getBoundingClientRect();
@@ -80,8 +90,6 @@ export function FireEvacuationModal({incident, site, obstacles, workers, onRefre
       setBusy(false);
     }
   };
-  const reporter = workers.find(worker => worker.worker_id === incident.worker_id);
-
   return (
     <div className="fire-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="fire-modal-title">
       <section className="fire-modal">
@@ -97,6 +105,12 @@ export function FireEvacuationModal({incident, site, obstacles, workers, onRefre
           <b>현재 즉시 대피 안내 중</b>
           <span>화재 위치를 확인하는 동안에도 가장 가까운 비상구 거리와 비상 유도등을 따라 즉시 대피하라는 안내를 전송합니다.</span>
         </div>
+        <section className="fire-camera-evidence">
+          <header><div><span className="eyebrow">LIVE HELMET CAMERA</span><h3>화재 발생 카메라 영상</h3></div><b>{cameraDevice?.online ? "실시간 수신" : "카메라 오프라인"}</b></header>
+          {cameraDevice?.last_camera_at
+            ? <img src={api.cameraImageUrl(cameraDevice.device_id, cameraVersion)} alt="화재 발생 안전모 최신 카메라 영상" />
+            : <div className="fire-camera-placeholder">수신된 안전모 카메라 영상이 없습니다.</div>}
+        </section>
         <div className="fire-modal-grid">
           <div>
             <svg ref={svgRef} className="fire-zone-picker" viewBox="0 0 800 500" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>

@@ -7,13 +7,18 @@ from fastapi.staticfiles import StaticFiles
 from .config import BASE_DIR, settings
 from .database import init_database
 from .routers import ALL_ROUTERS
+from .routers.camera import start_camera_processor, stop_camera_processor
 from .websocket import call_manager, manager
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_database()
-    yield
+    await start_camera_processor()
+    try:
+        yield
+    finally:
+        await stop_camera_processor()
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)

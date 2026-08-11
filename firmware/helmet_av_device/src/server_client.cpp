@@ -34,13 +34,27 @@ bool serverRegister() {
 
 bool serverHeartbeat() {
   JsonDocument doc; addCommon(doc);
-  doc["rssi"] = WiFi.RSSI(); doc["battery"] = batteryPercent();
+  doc["rssi"] = WiFi.RSSI();
   JsonObject status = doc["component_status"].to<JsonObject>();
   status["camera"] = cameraIsReady() ? "ready" : "error";
-  status["mic"] = audioIsReady() ? "ready" : "error"; status["speaker"] = speakerIsReady() ? "ready" : "error"; status["button"] = "ready";
+  status["mic"] = audioIsReady() ? "ready" : "error";
+  status["speaker"] = speakerIsReady() ? "ready" : "error";
   bool ok = postJson("/api/devices/heartbeat", doc);
-  Serial.printf("[HEARTBEAT] %s RSSI=%d battery=%.1f\n", ok ? "성공" : "실패", WiFi.RSSI(), batteryPercent());
+  Serial.printf("[HEARTBEAT] %s RSSI=%d\n", ok ? "성공" : "실패", WiFi.RSSI());
   return ok;
+}
+
+bool serverReportComponent(
+    const String &component,
+    const String &status,
+    const String &commandId,
+    const String &detail) {
+  JsonDocument doc;
+  doc["component"] = component;
+  doc["status"] = status;
+  doc["command_id"] = commandId;
+  if (detail.length()) doc["detail"] = detail;
+  return postJson(String("/api/devices/") + DEVICE_ID + "/component-result", doc);
 }
 
 bool serverSendButtonEvent(const String &eventType) {

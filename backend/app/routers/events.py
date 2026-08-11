@@ -7,7 +7,7 @@ from ..database import get_db
 from ..models.entities import Event, WorkerState
 from ..services.event_service import event_to_dict
 from ..services.risk_service import recalculate_risk
-from ..websocket import manager
+from ..websocket import call_manager, manager
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -33,6 +33,11 @@ async def change_status(event_id: str, status: str, db: Session) -> dict:
     row = db.get(Event, event_id)
     if not row:
         raise HTTPException(404, "이벤트를 찾을 수 없습니다.")
+    intent = None
+    try:
+        intent = json.loads(row.details_json or "{}").get("intent")
+    except (json.JSONDecodeError, TypeError):
+        pass
     row.status = status
     if status == "resolved" and row.worker_id and _life_safety_intent(row):
         related = db.query(Event).filter(Event.worker_id == row.worker_id, Event.status != "resolved").all()
@@ -44,6 +49,9 @@ async def change_status(event_id: str, status: str, db: Session) -> dict:
             worker.emergency = False
             recalculate_risk(db, worker)
     db.commit()
+    if status == "resolved" and intent == "call_manager" and row.device_id:
+        await call_manager.cancel_call_request(row.device_id, row.event_id, reason="dismissed")
+        db.refresh(row)
     result = event_to_dict(row)
     await manager.broadcast("event_status", result)
     return result

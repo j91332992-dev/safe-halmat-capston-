@@ -26,16 +26,15 @@ export interface Device {
   worker_id: string;
   ip: string | null;
   rssi: number | null;
-  battery: number | null;
   online: boolean;
   component_status: Record<string, string>;
   last_error: string | null;
   last_seen: string;
   last_camera_at: string | null;
   last_audio_at: string | null;
-  last_button_at: string | null;
   last_uwb_at: string | null;
   last_speaker_status: string | null;
+  last_speaker_at: string | null;
 }
 
 export interface Anchor {

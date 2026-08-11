@@ -28,6 +28,13 @@ class Heartbeat(BaseModel):
     error: str | None = None
 
 
+class ComponentResultIn(BaseModel):
+    component: Literal["speaker"]
+    status: Literal["ok", "error"]
+    command_id: str | None = None
+    detail: str | None = None
+
+
 class ButtonEventIn(BaseModel):
     organization_id: str = "org-001"
     site_id: str = "site-001"
@@ -86,7 +93,7 @@ class TextCommandIn(BaseModel):
 
 
 class DeviceCommandIn(BaseModel):
-    command_type: Literal["play_tone", "play_alert", "play_audio", "play_ack", "set_volume", "stop_alert", "request_status", "record_audio"]
+    command_type: Literal["play_tone", "play_alert", "play_audio", "play_ack", "set_volume", "stop_alert", "start_call_ringing", "stop_call_ringing", "request_status", "record_audio"]
     payload: dict[str, Any] = Field(default_factory=dict)
 
 

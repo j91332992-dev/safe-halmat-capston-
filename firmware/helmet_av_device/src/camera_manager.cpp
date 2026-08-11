@@ -42,9 +42,11 @@ bool cameraBegin() {
 
 bool cameraUploadIfDue() {
 #if ENABLE_CAMERA_HARDWARE
-  const uint32_t interval =
-      audioIsBusy() ? CAMERA_VOICE_INTERVAL_MS : CAMERA_INTERVAL_MS;
-  if (!cameraReady || millis() - lastFrame < interval) return false;
+  // Voice capture/upload has priority.  Starting a synchronous camera POST
+  // here can occupy the Wi-Fi client for up to 2.5 seconds and delay the wake
+  // acknowledgement that is arriving over WebSocket.
+  if (audioIsBusy()) return false;
+  if (!cameraReady || millis() - lastFrame < CAMERA_INTERVAL_MS) return false;
   if (WiFi.status() != WL_CONNECTED) return false;
 
   // PSRAM에서는 CAMERA_GRAB_LATEST가 최신 프레임을 제공하므로 추가 캡처/폐기를 하지 않는다.

@@ -176,7 +176,8 @@ static void vadTask(void *parameter) {
         xQueueReceive(callMicQueue, dropped, 0);
         xQueueSend(callMicQueue, frame, 0);
       }
-      continue;
+      // Keep normal VAD active as well so strict local-control phrases such as
+      // "끊어줘" can be uploaded while the live PCM stream continues.
     }
 
     if (suppressionIsActive()) {
@@ -476,7 +477,9 @@ void audioLoop() {
 
 void audioSetSuppressed(bool suppressed) {
   portENTER_CRITICAL(&audioMux);
-  vadSuppressed = suppressed;
+  // This helmet's acoustic layout does not feed meaningful speaker audio back
+  // into the microphone. Keep VAD enabled to support spoken barge-in commands.
+  vadSuppressed = false;
   if (!suppressed) vadResumeAt = millis() + AUDIO_VAD_SPEAKER_COOLDOWN_MS;
   portEXIT_CRITICAL(&audioMux);
 }

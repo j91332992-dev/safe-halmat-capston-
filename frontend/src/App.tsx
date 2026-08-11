@@ -76,6 +76,7 @@ function App() {
   const {data, locationHistory, connected, error, refresh} = useSafetyData();
   const [selectedId, setSelectedId] = useState("worker-001");
   const [busy, setBusy] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<NavigationGroupId, boolean>>({location: false, media: false, safety: false, system: false});
   const worker = useMemo(() => data?.workers.find(item => item.worker_id === selectedId) ?? data?.workers[0], [data, selectedId]);
   const evacuationIncident = data?.evacuation?.incident ?? null;
@@ -91,11 +92,18 @@ function App() {
     String(item.details?.intent ?? "") === "call_manager" &&
     item.status !== "resolved"
   ) ?? null;
+  const missedCallEvents = data?.events.filter(item =>
+    item.event_type === "MISSED_CALL" && item.status !== "resolved"
+  ) ?? [];
+  const latestMissedCall = missedCallEvents[0] ?? null;
   const callRequestWorker = data?.workers.find(item => item.worker_id === callRequestEvent?.worker_id) ?? null;
   const activeCallWorker = callRequestWorker ?? emergencyWorker ?? worker ?? null;
   const callDevice = data?.devices.find(device =>
     device.worker_id === activeCallWorker?.worker_id && device.device_type === "assistant_device"
   ) ?? null;
+  const unresolvedAlerts = data?.events.filter(event =>
+    ["danger", "emergency"].includes(event.severity) && event.status !== "resolved"
+  ) ?? [];
 
   useEffect(() => {
     if (data?.workers[0] && !selectedId) setSelectedId(data.workers[0].worker_id);
@@ -131,7 +139,7 @@ function App() {
     );
   }
 
-  const critical = data.events.filter(event => ["danger", "emergency"].includes(event.severity) && event.status !== "resolved").length;
+  const critical = unresolvedAlerts.length;
   const online = data.devices.filter(device => device.online).length;
   const uwbTag = data.devices.find(device => device.device_type === "position_device");
   const missingAnchors = data.anchors.filter(anchor => !anchor.online);
@@ -198,7 +206,7 @@ function App() {
           <div className="top-status">
             <div><span>현재 시각</span><strong>{new Date().toLocaleTimeString("ko-KR", {hour: "2-digit", minute: "2-digit"})}</strong></div>
             <div><span>장치 연결</span><strong>{online}/{data.devices.length}</strong></div>
-            <div className={critical ? "critical" : ""}><span>미처리 경보</span><strong>{critical}</strong></div>
+            <div className={critical ? "critical" : ""}><button className="top-alert-trigger" onClick={() => setAlertsOpen(true)}><span>미처리 경보</span><strong>{critical}</strong></button></div>
           </div>
         </header>
 
@@ -237,6 +245,15 @@ function App() {
               <HelmetCall deviceId={callDevice.device_id} workerName={callRequestWorker.worker_name} />
               <button disabled={busy} onClick={() => void action(() => api.resolve(callRequestEvent.event_id))}>요청 닫기</button>
             </div>
+          </div>
+        )}
+        {latestMissedCall && (
+          <div className="missed-call-banner" role="alert">
+            <div>
+              <b>부재중 통화 {missedCallEvents.length}건</b>
+              <span>안전모의 관리자 연결 요청에 30초 동안 응답하지 못했습니다.</span>
+            </div>
+            <button disabled={busy} onClick={() => void action(() => api.resolve(latestMissedCall.event_id))}>확인</button>
           </div>
         )}
 
@@ -310,11 +327,11 @@ function App() {
           <section className="page-panel">
             <header><div><span className="eyebrow">DEVICE REGISTRY</span><h2>등록 장치 {data.devices.length}대</h2></div></header>
             <div className="device-table">
-              <div className="device-row head"><span>장치 ID</span><span>종류</span><span>상태</span><span>IP / RSSI</span><span>배터리</span><span>마지막 수신</span></div>
+              <div className="device-row head"><span>장치 ID</span><span>종류</span><span>상태</span><span>IP / RSSI</span><span>마지막 수신</span></div>
               {data.devices.map(device => (
                 <div className="device-row" key={device.device_id}>
                   <strong>{device.device_id}</strong><span>{device.device_type}</span><StatusPill active={device.online} activeText="온라인" inactiveText="오프라인" />
-                  <span>{device.ip ?? "-"} / {device.rssi ?? "-"} dBm</span><span>{Math.round(device.battery ?? 0)}%</span><span>{new Date(device.last_seen).toLocaleString("ko-KR")}</span>
+                  <span>{device.ip ?? "-"} / {device.rssi ?? "-"} dBm</span><span>{new Date(device.last_seen).toLocaleString("ko-KR")}</span>
                 </div>
               ))}
             </div>
@@ -348,8 +365,8 @@ function App() {
         {page === "diagnostics" && (
           <section className="page-panel diagnostic-page">
             <header><div><span className="eyebrow">HARDWARE DIAGNOSTIC</span><h2>통합 하드웨어 진단</h2></div><button onClick={() => void refresh()}>지금 새로고침</button></header>
-            <p className="page-intro">카메라·마이크·스피커·버튼·UWB를 별도 스케치가 아닌 최종 펌웨어 heartbeat와 서버 수신 기록으로 확인합니다.</p>
-            <DiagnosticPanel devices={data.devices} anchors={data.anchors} mode={data.mode} />
+            <p className="page-intro">카메라·마이크·스피커·UWB의 실제 서버 수신 및 장치 재생 응답 기록을 확인합니다.</p>
+            <DiagnosticPanel devices={data.devices} anchors={data.anchors} mode={data.mode} onRefresh={refresh} />
           </section>
         )}
       </main>
@@ -365,7 +382,15 @@ function App() {
         </div>
       )}
       {evacuationIncident?.status === "pending_manager" && (
-        <FireEvacuationModal incident={evacuationIncident} site={data.site} obstacles={data.obstacles} workers={data.workers} onRefresh={refresh} />
+        <FireEvacuationModal incident={evacuationIncident} site={data.site} obstacles={data.obstacles} workers={data.workers} devices={data.devices} onRefresh={refresh} />
+      )}
+      {alertsOpen && (
+        <div className="alerts-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="alerts-modal-title" onClick={() => setAlertsOpen(false)}>
+          <section className="alerts-modal" onClick={event => event.stopPropagation()}>
+            <header><div><span className="eyebrow">UNRESOLVED ALERTS</span><h2 id="alerts-modal-title">미처리 경보 {critical}건</h2></div><button onClick={() => setAlertsOpen(false)}>닫기</button></header>
+            <EventLog events={unresolvedAlerts} onRefresh={refresh} expanded />
+          </section>
+        </div>
       )}
     </div>
   );

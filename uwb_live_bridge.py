@@ -79,11 +79,14 @@ def load_calibration(path: Path, disabled: bool = False) -> dict[str, float]:
 class DistanceProcessor:
     """최근 거리 중앙값과 앵커별 보정을 적용합니다."""
 
-    def __init__(self, calibration: dict[str, float], history_size: int = 5):
+    def __init__(self, calibration: dict[str, float], history_size: int = 5, anchor_hold_seconds: float = 2.5):
         self.calibration = calibration
         self.history = defaultdict(lambda: deque(maxlen=history_size))
+        self.last_seen: dict[str, float] = {}
+        self.anchor_hold_seconds = anchor_hold_seconds
 
     def process(self, frame: TagFrame) -> list[dict]:
+        now = time.monotonic()
         current: dict[str, int] = {}
         for raw_cm, anchor_number in zip(frame.ranges_cm, frame.anchor_numbers):
             anchor_id = ANCHOR_ID_MAP.get(anchor_number)
@@ -91,14 +94,24 @@ class DistanceProcessor:
                 continue
             current[anchor_id] = raw_cm
             self.history[anchor_id].append(raw_cm)
+            self.last_seen[anchor_id] = now
 
         measurements = []
-        for anchor_id in sorted(current):
+        recent_anchor_ids = {
+            anchor_id for anchor_id, seen_at in self.last_seen.items()
+            if now - seen_at <= self.anchor_hold_seconds
+        }
+        for anchor_id in sorted(recent_anchor_ids):
             samples = self.history[anchor_id]
             smoothed_cm = float(median(samples))
             distance_m = max(0.05, smoothed_cm / 100.0 + self.calibration.get(anchor_id, 0.0))
             spread_cm = max(samples) - min(samples) if len(samples) > 1 else 0
-            quality = max(0.55, min(0.99, 0.98 - spread_cm / 250.0))
+            age = now - self.last_seen[anchor_id]
+            held_penalty = 0.15 if anchor_id not in current else 0.0
+            age_penalty = held_penalty + min(
+                0.20, age / max(0.001, self.anchor_hold_seconds) * 0.20
+            )
+            quality = max(0.40, min(0.99, 0.98 - spread_cm / 250.0 - age_penalty))
             measurements.append(
                 {
                     "anchor_id": anchor_id,
@@ -171,7 +184,7 @@ class BackendClient:
 
 def run_bridge(args: argparse.Namespace) -> None:
     calibration = load_calibration(args.calibration, args.no_calibration)
-    processor = DistanceProcessor(calibration, args.history_size)
+    processor = DistanceProcessor(calibration, args.history_size, args.anchor_hold_seconds)
     backend = BackendClient(args.api_url)
     backend.wait_until_ready()
     print(f"[보정] {calibration}")
@@ -231,6 +244,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--calibration", type=Path, default=DEFAULT_CALIBRATION_FILE)
     parser.add_argument("--no-calibration", action="store_true")
     parser.add_argument("--history-size", type=int, default=5)
+    parser.add_argument("--anchor-hold-seconds", type=float, default=2.5)
     parser.add_argument("--post-interval", type=float, default=0.2)
     parser.add_argument("--show-raw", action="store_true")
     return parser

@@ -37,7 +37,6 @@ export function WorkerDetail({worker, devices, onRefresh}: Props) {
         <div className="device-mini">
           <div><span>AV 장치</span><StatusPill active={Boolean(av?.online)} activeText="온라인" inactiveText="오프라인" /></div>
           <div><span>UWB 태그</span><StatusPill active={Boolean(uwb?.online)} activeText="온라인" inactiveText="오프라인" /></div>
-          <div><span>배터리</span><strong>{Math.round(av?.battery ?? 0)}% / {Math.round(uwb?.battery ?? 0)}%</strong></div>
         </div>
       </section>
       <button className="alert-button" onClick={() => void sendAlert()}><span>!</span> 안전모에 경고 보내기</button>

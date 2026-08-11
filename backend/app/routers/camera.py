@@ -1,11 +1,14 @@
 import asyncio
+from contextlib import suppress
+from dataclasses import dataclass
 import json
+import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from ..database import get_db, utcnow
+from ..database import SessionLocal, get_db, utcnow
 from ..models.entities import Device, Event, WorkerState
 from ..services.camera_service import CAPTURE_DIR, save_frame
 from ..services.event_service import create_event, event_to_dict
@@ -15,9 +18,60 @@ from ..services.evacuation_guidance_service import assistant_device_id, send_hel
 from ..services.risk_service import recalculate_risk
 from ..services.serializers import worker_to_dict
 from ..services.yolo_service import analyze_frame
+from ..services.inference_priority import voice_requests_active, wait_for_voice_idle
 from ..websocket import manager
 
 router = APIRouter(prefix="/api/camera", tags=["camera"])
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class CameraJob:
+    filename: str
+    device_id: str
+    worker_id: str
+    helmet_id: str
+
+
+# Only retain the newest waiting frame. YOLO processes one frame at a time;
+# allowing a backlog would make fire/PPE decisions describe old video.
+_camera_queue: asyncio.Queue[CameraJob] | None = None
+_camera_worker_task: asyncio.Task | None = None
+_dropped_stale_frames = 0
+
+
+def enqueue_camera_job(job: CameraJob) -> bool:
+    """Queue the newest frame and return True when an older queued frame was dropped."""
+    global _dropped_stale_frames
+    if _camera_queue is None:
+        raise RuntimeError("Camera processor is not running")
+    dropped = False
+    if _camera_queue.full():
+        with suppress(asyncio.QueueEmpty):
+            _camera_queue.get_nowait()
+            _camera_queue.task_done()
+            _dropped_stale_frames += 1
+            dropped = True
+    _camera_queue.put_nowait(job)
+    return dropped
+
+
+async def start_camera_processor() -> None:
+    global _camera_queue, _camera_worker_task
+    if _camera_worker_task is None or _camera_worker_task.done():
+        _camera_queue = asyncio.Queue(maxsize=1)
+        _camera_worker_task = asyncio.create_task(_camera_worker(), name="camera-yolo-worker")
+
+
+async def stop_camera_processor() -> None:
+    global _camera_queue, _camera_worker_task
+    if _camera_worker_task is None:
+        return
+    _camera_worker_task.cancel()
+    with suppress(asyncio.CancelledError):
+        await _camera_worker_task
+    _camera_worker_task = None
+    _camera_queue = None
 
 
 def _upsert_camera_event(
@@ -68,7 +122,77 @@ def _merge_detection(worker: WorkerState, analysis: dict) -> None:
     worker.hazard_json = json.dumps(current_hazards, ensure_ascii=False)
 
 
-@router.post("/frame")
+async def _process_camera_job(job: CameraJob) -> None:
+    await wait_for_voice_idle()
+    analysis = await asyncio.to_thread(analyze_frame, job.filename)
+    with SessionLocal() as db:
+        worker = db.get(WorkerState, job.worker_id)
+        if worker is None:
+            return
+        _merge_detection(worker, analysis)
+        recalculate_risk(db, worker)
+
+        hazards = analysis.get("hazards") or {}
+        evacuation_created = False
+        if hazards.get("fire") or hazards.get("large_fire"):
+            _, evacuation_created = trigger_fire(
+                db,
+                "yolo",
+                job.worker_id,
+                {"analysis": analysis, "filename": job.filename},
+            )
+        ppe = analysis.get("ppe") or {}
+        missing = [name for name, worn in ppe.items() if worn is False]
+        severity = "danger" if hazards.get("fire") or hazards.get("smoke") else "warning" if missing else "info"
+        image_name = analysis.get("annotated_source") or job.filename
+        event = _upsert_camera_event(
+            db,
+            worker_id=job.worker_id,
+            device_id=job.device_id,
+            severity=severity,
+            details={
+                "filename": image_name,
+                "raw_filename": job.filename,
+                "url": f"/captures/{image_name}",
+                "analysis": analysis,
+                "helmet_id": job.helmet_id,
+                "evacuation_created": evacuation_created,
+            },
+        )
+        db.commit()
+        result = event_to_dict(event)
+        result["worker"] = worker_to_dict(worker)
+        result["evacuation"] = evacuation_snapshot(db)
+        if evacuation_created and result["evacuation"]["incident"]:
+            route = result["evacuation"]["routes"].get(job.worker_id)
+            if route:
+                result["helmet_guidance"] = await send_helmet_guidance(
+                    job.worker_id,
+                    assistant_device_id(db, job.worker_id),
+                    result["evacuation"]["incident"]["incident_id"],
+                    route,
+                    force=True,
+                )
+    await manager.broadcast("camera_frame", result)
+
+
+async def _camera_worker() -> None:
+    if _camera_queue is None:
+        raise RuntimeError("Camera queue was not initialized")
+    queue = _camera_queue
+    while True:
+        job = await queue.get()
+        try:
+            await _process_camera_job(job)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Camera analysis failed for %s", job.filename)
+        finally:
+            queue.task_done()
+
+
+@router.post("/frame", status_code=202)
 async def upload_frame(
     file: UploadFile = File(...),
     device_id: str = Form(...),
@@ -84,42 +208,27 @@ async def upload_frame(
         raise HTTPException(404, "작업자를 찾을 수 없습니다.")
     path = await save_frame(file, device_id)
     mark_device_seen(device, "camera")
-    analysis = await asyncio.to_thread(analyze_frame, path.name)
-    _merge_detection(worker, analysis)
-    recalculate_risk(db, worker)
-
-    hazards = analysis.get("hazards") or {}
-    evacuation_created = False
-    if hazards.get("fire") or hazards.get("large_fire"):
-        _, evacuation_created = trigger_fire(db, "yolo", worker_id, {"analysis": analysis, "filename": path.name})
-    ppe = analysis.get("ppe") or {}
-    missing = [name for name, worn in ppe.items() if worn is False]
-    severity = "danger" if hazards.get("fire") or hazards.get("smoke") else "warning" if missing else "info"
-    image_name = analysis.get("annotated_source") or path.name
-    event = _upsert_camera_event(
-        db,
-        worker_id=worker_id,
-        device_id=device_id,
-        severity=severity,
-        details={
-            "filename": image_name,
-            "raw_filename": path.name,
-            "url": f"/captures/{image_name}",
-            "analysis": analysis,
-            "helmet_id": helmet_id,
-            "evacuation_created": evacuation_created,
-        },
-    )
     db.commit()
-    result = event_to_dict(event)
-    result["worker"] = worker_to_dict(worker)
-    result["evacuation"] = evacuation_snapshot(db)
-    if evacuation_created and result["evacuation"]["incident"]:
-        route = result["evacuation"]["routes"].get(worker_id)
-        if route:
-            result["helmet_guidance"] = await send_helmet_guidance(worker_id, assistant_device_id(db, worker_id), result["evacuation"]["incident"]["incident_id"], route, force=True)
-    await manager.broadcast("camera_frame", result)
-    return result
+    dropped_stale = enqueue_camera_job(CameraJob(path.name, device_id, worker_id, helmet_id))
+    return {
+        "accepted": True,
+        "device_id": device_id,
+        "filename": path.name,
+        "processing": "queued",
+        "queue_depth": _camera_queue.qsize() if _camera_queue is not None else 0,
+        "dropped_stale": dropped_stale,
+    }
+
+
+@router.get("/processor/status")
+def processor_status():
+    return {
+        "running": _camera_worker_task is not None and not _camera_worker_task.done(),
+        "queue_depth": _camera_queue.qsize() if _camera_queue is not None else 0,
+        "queue_capacity": _camera_queue.maxsize if _camera_queue is not None else 1,
+        "dropped_stale_frames": _dropped_stale_frames,
+        "voice_requests_active": voice_requests_active(),
+    }
 
 
 @router.get("/{device_id}/latest")

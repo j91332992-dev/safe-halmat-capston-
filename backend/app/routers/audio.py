@@ -17,13 +17,22 @@ from ..services.risk_service import recalculate_risk
 from ..services.serializers import worker_to_dict
 from ..services.speech_service import normalize, resolve_intent
 from ..services.tts_generator_service import generate_tts
+from ..services.voice_execution_gate import voice_execution_gate
 from ..services.wake_word_service import wake_word_gate
-from ..websocket import manager
+from ..services.inference_priority import voice_priority
+from ..websocket import call_manager, manager
 
 router = APIRouter(prefix="/api/audio", tags=["audio"])
 
 
-async def process_text(db: Session, worker_id: str, device_id: str, text: str, sound_db: float | None = None) -> dict:
+async def process_text(
+    db: Session,
+    worker_id: str,
+    device_id: str,
+    text: str,
+    sound_db: float | None = None,
+    allow_retry: bool = True,
+) -> dict:
     worker = db.get(WorkerState, worker_id)
     if not worker:
         raise HTTPException(404, "작업자를 찾을 수 없습니다.")
@@ -56,10 +65,15 @@ async def process_text(db: Session, worker_id: str, device_id: str, text: str, s
     # 위험 상태를 먼저 저장해 외부 AI/TTS 대기 중 SQLite 쓰기 잠금을 잡지 않는다.
     db.commit()
 
+    if intent == "stop_speaking":
+        await manager.send_device_command(device_id, {"command_type": "stop_alert", "payload": {}})
+    if intent == "hang_up":
+        await call_manager.end_call(device_id)
+
     # 명령을 이해한 즉시 짧은 성공음을 내어, TTS 생성 중에도 작업자가 인식 성공을 알 수 있게 한다.
     feedback_delivered = 0
     feedback_command_id = None
-    if intent != "unknown":
+    if intent not in {"unknown", "stop_speaking", "hang_up"}:
         feedback_payload = {"frequency": 1850, "duration": 110, "purpose": "intent_recognized"}
         feedback = queue_command(db, device_id, "play_tone", feedback_payload)
         feedback_command_id = feedback.command_id
@@ -74,8 +88,13 @@ async def process_text(db: Session, worker_id: str, device_id: str, text: str, s
         )
         feedback.status = "delivered" if feedback_delivered else "queued"
 
-    message, speaker_command = await build_response_smart(intent, worker_data)
-    audio_path = await generate_tts(message)
+    complex_request = intent == "unknown" and len(normalize(text)) >= 6
+    terminal_unknown = intent == "unknown" and not allow_retry and not complex_request
+    if terminal_unknown or intent in {"stop_speaking", "hang_up"}:
+        message, speaker_command = "", None
+    else:
+        message, speaker_command = await build_response_smart(intent, worker_data, text)
+    audio_path = await generate_tts(message) if message else None
     audio_url = f"/tts/{audio_path.name}" if audio_path else None
     if audio_url and speaker_command:
         speaker_command = "play_audio"
@@ -83,7 +102,7 @@ async def process_text(db: Session, worker_id: str, device_id: str, text: str, s
     # Only an unrecognized command gets a second listening turn.  A normal
     # response must not re-open the microphone, because ambient speech could
     # otherwise be processed as a command.
-    listen_again = intent == "unknown"
+    listen_again = intent == "unknown" and allow_retry and not complex_request
     if listen_again:
         wake_word_gate.arm(device_id)
 
@@ -94,6 +113,7 @@ async def process_text(db: Session, worker_id: str, device_id: str, text: str, s
             "message": message,
             "audio_url": audio_url,
             "listen_again": listen_again,
+            "start_call_ringing": intent == "call_manager",
         }
         record = queue_command(db, device_id, speaker_command, speaker_payload)
         device_command_id = record.command_id
@@ -127,6 +147,10 @@ async def process_text(db: Session, worker_id: str, device_id: str, text: str, s
         },
     )
     db.flush()
+    if intent == "call_manager":
+        # Commit before the detached timeout task opens its own DB session.
+        db.commit()
+        await call_manager.begin_call_request(device_id, worker_id, event.event_id)
     return {
         "command_id": command.id,
         "text": text,
@@ -151,6 +175,7 @@ async def upload_audio(
     worker_id: str = Form(...),
     sound_db: float | None = Form(None),
     db: Session = Depends(get_db),
+    _voice_priority: None = Depends(voice_priority),
 ):
     device = db.get(Device, device_id)
     if not device:
@@ -203,7 +228,27 @@ async def upload_audio(
             "delivered_connections": delivered,
         }
 
-    result = await process_text(db, worker_id, device_id, decision.command_text, sound_db)
+    allowed, execution_reason = voice_execution_gate.allow(device_id, decision.command_text)
+    if not allowed:
+        db.commit()
+        return {
+            "status": "ignored",
+            "text": decision.transcript,
+            "reason": execution_reason,
+            "wake_word": "투투스",
+            "followup_seconds": 0,
+            "delivered_connections": 0,
+        }
+
+    retry_followup = decision.reason in {"retry_followup", "retry_followup_empty"}
+    result = await process_text(
+        db,
+        worker_id,
+        device_id,
+        decision.command_text,
+        sound_db,
+        allow_retry=not retry_followup,
+    )
     result["status"] = "command"
     result["transcript"] = decision.transcript
     result["wake_reason"] = decision.reason
@@ -213,7 +258,11 @@ async def upload_audio(
 
 
 @router.post("/command")
-async def text_command(payload: TextCommandIn, db: Session = Depends(get_db)):
+async def text_command(
+    payload: TextCommandIn,
+    db: Session = Depends(get_db),
+    _voice_priority: None = Depends(voice_priority),
+):
     if not db.get(Device, payload.device_id):
         raise HTTPException(404, "선택한 안전모 장치가 등록되지 않았습니다.")
     result = await process_text(db, payload.worker_id, payload.device_id, payload.text, payload.sound_db)

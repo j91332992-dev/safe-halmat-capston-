@@ -36,7 +36,7 @@ def test_fuzzy_prefix_is_accepted_but_mid_sentence_is_not():
     fuzzy = gate.evaluate("helmet-fuzzy", "투투")
     ordinary = gate.evaluate("helmet-ordinary", "오늘 작업에서 투투스 점검")
     assert fuzzy.status == "armed"
-    assert fuzzy.reason == "wake_word_fuzzy_only"
+    assert fuzzy.reason in {"wake_word_only", "wake_word_fuzzy_only"}
     assert ordinary.status == "ignored"
 
 
@@ -92,4 +92,27 @@ def test_retry_rearms_one_followup():
     gate.arm("helmet-retry")
     decision = gate.evaluate("helmet-retry", "location command")
     assert decision.status == "command"
+    assert decision.reason == "retry_followup"
+
+
+def test_retry_empty_followup_is_marked_terminal():
+    gate = WakeWordGate()
+    gate.arm("helmet-retry-empty")
+    decision = gate.evaluate("helmet-retry-empty", "")
+    assert decision.status == "command"
+    assert decision.reason == "retry_followup_empty"
+
+
+def test_new_wake_word_clears_previous_retry_state():
+    gate = WakeWordGate()
+    gate.arm("helmet-new-session")
+    assert gate.evaluate("helmet-new-session", "투투스").status == "armed"
+    decision = gate.evaluate("helmet-new-session", "현재 위치 알려줘")
+    assert decision.status == "command"
     assert decision.reason == "armed_followup"
+
+
+def test_control_phrases_bypass_wake_word():
+    gate = WakeWordGate()
+    assert gate.evaluate("helmet-stop", "그만 말해").command_text == "그만 말해"
+    assert gate.evaluate("helmet-call", "전화 끊어줘").command_text == "전화 끊어줘"

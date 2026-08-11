@@ -28,6 +28,7 @@ class Device(Base):
     last_button_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_uwb_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_speaker_status: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    last_speaker_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class WorkerState(Base):

@@ -25,16 +25,19 @@ class WakeDecision:
 class WakeWordGate:
     def __init__(self) -> None:
         self._armed_until: dict[str, float] = {}
+        self._retry_armed: set[str] = set()
         self._lock = Lock()
 
     def reset(self) -> None:
         with self._lock:
             self._armed_until.clear()
+            self._retry_armed.clear()
 
     def arm(self, device_id: str) -> None:
         """Allow one additional command after a retry prompt."""
         with self._lock:
             self._armed_until[device_id] = monotonic() + settings.wake_followup_seconds
+            self._retry_armed.add(device_id)
 
     def evaluate(self, device_id: str, transcript: str) -> WakeDecision:
         text = (transcript or "").strip()
@@ -45,8 +48,12 @@ class WakeWordGate:
                 deadline = self._armed_until.get(device_id, 0.0)
                 if deadline > now:
                     self._armed_until.pop(device_id, None)
-                    return WakeDecision("command", text, "", "armed_followup_empty")
+                    retry = device_id in self._retry_armed
+                    self._retry_armed.discard(device_id)
+                    reason = "retry_followup_empty" if retry else "armed_followup_empty"
+                    return WakeDecision("command", text, "", reason)
                 self._armed_until.pop(device_id, None)
+                self._retry_armed.discard(device_id)
             return WakeDecision("ignored", text, reason="stt_empty")
 
         if any(marker in normalized for marker in STT_PROMPT_ECHO_MARKERS):
@@ -54,9 +61,10 @@ class WakeWordGate:
 
         # 생명안전 명령은 웨이크워드 없이도 즉시 처리한다.
         intent, confidence = resolve_intent(text)
-        if intent in {"emergency", "help", "fire_report"} and confidence >= 0.75:
+        if intent in {"emergency", "help", "fire_report", "stop_speaking", "hang_up"} and confidence >= 0.75:
             with self._lock:
                 self._armed_until.pop(device_id, None)
+                self._retry_armed.discard(device_id)
             return WakeDecision("command", text, text, "life_critical_bypass")
 
         aliases = sorted(
@@ -69,6 +77,7 @@ class WakeWordGate:
                 continue
             command = normalized[len(alias):]
             with self._lock:
+                self._retry_armed.discard(device_id)
                 if command:
                     self._armed_until.pop(device_id, None)
                 else:
@@ -95,6 +104,7 @@ class WakeWordGate:
             if best_score >= settings.wake_word_fuzzy_threshold:
                 command = normalized[best_length:]
                 with self._lock:
+                    self._retry_armed.discard(device_id)
                     if command:
                         self._armed_until.pop(device_id, None)
                     else:
@@ -110,8 +120,12 @@ class WakeWordGate:
             deadline = self._armed_until.get(device_id, 0.0)
             if deadline > now:
                 self._armed_until.pop(device_id, None)
-                return WakeDecision("command", text, text, "armed_followup")
+                retry = device_id in self._retry_armed
+                self._retry_armed.discard(device_id)
+                reason = "retry_followup" if retry else "armed_followup"
+                return WakeDecision("command", text, text, reason)
             self._armed_until.pop(device_id, None)
+            self._retry_armed.discard(device_id)
         return WakeDecision("ignored", text, reason="wake_word_missing")
 
 

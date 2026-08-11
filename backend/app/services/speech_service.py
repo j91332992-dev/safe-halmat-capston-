@@ -26,6 +26,12 @@ CALL_ACTIONS = (
     "연결", "전화", "통화", "연락", "호출", "불러", "이어줘", "바꿔줘",
 )
 
+STOP_SPEAKING_PHRASES = ("그만", "그만말해", "조용히", "멈춰", "말그만")
+HANG_UP_PHRASES = (
+    "끊어줘", "전화끊어", "통화종료", "통화끝", "그만통화",
+    "전화중단", "통화중단", "연결중단", "중단",
+)
+
 
 def normalize(text: str) -> str:
     return re.sub(r"[^0-9A-Za-z가-힣]", "", text).lower()
@@ -35,6 +41,10 @@ def resolve_intent(text: str) -> tuple[str, float]:
     normalized = normalize(text)
     if not normalized:
         return "unknown", 0.0
+    if any(phrase in normalized for phrase in HANG_UP_PHRASES):
+        return "hang_up", 1.0
+    if any(phrase in normalized for phrase in STOP_SPEAKING_PHRASES):
+        return "stop_speaking", 1.0
     if any(target in normalized for target in CALL_TARGETS) and any(
         action in normalized for action in CALL_ACTIONS
     ):
@@ -61,7 +71,9 @@ def resolve_intent(text: str) -> tuple[str, float]:
     if normalized in LIFE_CRITICAL:
         return LIFE_CRITICAL[normalized], 1.0
     for intent, samples in COMMANDS.items():
-        if any(sample in normalized or normalized in sample for sample in samples):
+        # Only match a complete known phrase inside the transcript. Reversing
+        # this check made one-syllable STT noise such as "어" match "불이났어요".
+        if any(sample in normalized for sample in samples):
             return intent, 0.96
     try:
         from rapidfuzz import fuzz

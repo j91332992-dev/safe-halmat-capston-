@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     site_height_m: float = 8.2
     device_offline_seconds: int = 20
     location_ema_alpha: float = 0.65
+    location_stationary_radius_m: float = 0.15
+    # Keep receiving positions continuously, but leave a stationary marker fixed
+    # until movement from the last accepted position reaches 30 cm twice.
+    location_move_start_m: float = 0.30
+    location_move_confirm_samples: int = 2
+    location_stop_step_m: float = 0.08
+    location_stop_confirm_samples: int = 5
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     openai_api_key: str | None = None
     use_whisper_stt: bool = True
@@ -32,15 +39,19 @@ class Settings(BaseSettings):
     # 호출어 → 안내음 재생 → 후속 음성 녹음 → STT 업로드 시간을 고려해
     # 안전모의 8초 대기보다 길게 유지한다.
     wake_followup_seconds: float = 20.0
+    voice_command_cooldown_seconds: float = 3.0
     use_gpt_response: bool = True
     gpt_model: str = "gpt-5.6-sol"
-    gpt_max_output_tokens: int = 160
+    gpt_max_output_tokens: int = 80
     use_edge_tts: bool = True
     tts_voice: str = "ko-KR-SunHiNeural"
     call_device_token: str = ""
+    call_answer_timeout_seconds: float = 30.0
     yolo_enabled: bool = True
     yolo_model_path: str = str(BASE_DIR / "best.pt")
-    yolo_confidence: float = 0.15
+    # Match backend/test_webcam.py: Ultralytics default confidence and 320px input.
+    yolo_confidence: float = 0.25
+    yolo_image_size: int = 320
     yolo_person_confidence: float = 0.35
     # Camera upload and inference can skip frames.  Six seconds keeps the
     # three-frame PPE decision stable without treating an old sighting as live.
@@ -48,7 +59,9 @@ class Settings(BaseSettings):
     yolo_ppe_worn_frames: int = 2
     yolo_ppe_person_frames: int = 3
     yolo_ppe_confidence: float = 0.45
-    yolo_fire_confidence: float = 0.60
+    # Require a strong detection in three consecutive analyzed frames before
+    # raising a fire incident. This favors avoiding false alarms.
+    yolo_fire_confidence: float = 0.75
     yolo_fire_confirm_frames: int = 3
     yolo_smoke_confidence: float = 0.45
     yolo_smoke_confirm_frames: int = 2

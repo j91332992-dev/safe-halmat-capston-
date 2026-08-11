@@ -19,6 +19,31 @@ const statusText: Record<CallStatus, string> = {
   error: "연결 다시 시도"
 };
 
+type CallTone = "connected" | "ended";
+
+function playCallTone(context: AudioContext, tone: CallTone) {
+  if (context.state === "closed") return;
+  const notes = tone === "connected"
+    ? [{frequency: 1480, start: 0, duration: 0.18}]
+    : [{frequency: 1100, start: 0, duration: 0.12}, {frequency: 650, start: 0.17, duration: 0.22}];
+  const now = context.currentTime + 0.02;
+  for (const note of notes) {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const startsAt = now + note.start;
+    const endsAt = startsAt + note.duration;
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(note.frequency, startsAt);
+    gain.gain.setValueAtTime(0.0001, startsAt);
+    gain.gain.exponentialRampToValueAtTime(0.12, startsAt + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, endsAt);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(startsAt);
+    oscillator.stop(endsAt + 0.01);
+  }
+}
+
 function resample(input: Float32Array, inputRate: number, outputRate = 16000): Int16Array {
   const outputLength = Math.max(1, Math.round(input.length * outputRate / inputRate));
   const output = new Int16Array(outputLength);
@@ -45,8 +70,12 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
   const pendingRef = useRef<Int16Array>(new Int16Array(0));
   const nextPlaybackRef = useRef(0);
   const closingRef = useRef(false);
+  const callConnectedRef = useRef(false);
 
-  const stop = () => {
+  const stop = (playEndTone = true) => {
+    const context = contextRef.current;
+    const shouldPlayEndTone = playEndTone && callConnectedRef.current;
+    callConnectedRef.current = false;
     closingRef.current = true;
     const socket = socketRef.current;
     if (socket?.readyState === WebSocket.OPEN) {
@@ -58,7 +87,16 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
     sourceRef.current?.disconnect();
     muteRef.current?.disconnect();
     streamRef.current?.getTracks().forEach(track => track.stop());
-    if (contextRef.current && contextRef.current.state !== "closed") void contextRef.current.close();
+    if (context && context.state !== "closed") {
+      if (shouldPlayEndTone) {
+        playCallTone(context, "ended");
+        window.setTimeout(() => {
+          if (context.state !== "closed") void context.close();
+        }, 550);
+      } else {
+        void context.close();
+      }
+    }
     processorRef.current = null;
     sourceRef.current = null;
     muteRef.current = null;
@@ -70,7 +108,7 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
     setStatus("idle");
   };
 
-  useEffect(() => stop, []);
+  useEffect(() => () => stop(false), []);
 
   useEffect(() => {
     if (status !== "connected") return;
@@ -158,7 +196,12 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
         }
         const message = JSON.parse(event.data) as {type?: string; status?: string};
         if (message.type !== "call_status") return;
-        if (message.status === "connected") setStatus("connected");
+        if (message.status === "connected") {
+          if (!callConnectedRef.current && contextRef.current) playCallTone(contextRef.current, "connected");
+          callConnectedRef.current = true;
+          setStatus("connected");
+        }
+        else if (message.status === "ended") stop();
         else if (message.status === "device_offline") setStatus("offline");
         else if (message.status === "busy") setStatus("busy");
         else if (message.status === "unauthorized") setStatus("error");

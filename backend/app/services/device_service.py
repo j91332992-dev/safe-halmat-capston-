@@ -46,7 +46,8 @@ def update_heartbeat(db: Session, data: Heartbeat) -> Device:
         )
         db.add(device)
     device.rssi = data.rssi
-    device.battery = data.battery
+    # This hardware revision has no wired battery measurement circuit.
+    device.battery = None
     device.component_status_json = json.dumps(data.component_status, ensure_ascii=False)
     device.last_error = data.error
     mark_device_seen(device)

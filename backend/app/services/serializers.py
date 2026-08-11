@@ -25,7 +25,6 @@ def device_to_dict(device) -> dict:
         "ip": device.ip,
         "mac": device.mac,
         "rssi": device.rssi,
-        "battery": device.battery,
         "firmware_version": device.firmware_version,
         "online": device.online,
         "component_status": parse_json(device.component_status_json, {}),
@@ -36,6 +35,7 @@ def device_to_dict(device) -> dict:
         "last_button_at": iso(device.last_button_at),
         "last_uwb_at": iso(device.last_uwb_at),
         "last_speaker_status": device.last_speaker_status,
+        "last_speaker_at": iso(device.last_speaker_at),
     }
 
 

@@ -107,6 +107,20 @@ def test_unrelated_contact_sentence_is_not_manager_call():
     assert resolve_intent("집에 연락해 줘")[0] != "call_manager"
 
 
+def test_one_syllable_noise_is_not_a_fire_command():
+    assert resolve_intent("어")[0] == "unknown"
+    assert resolve_intent("불이 났어요")[0] == "fire_report"
+
+
+def test_spoken_playback_and_call_stop_commands():
+    assert resolve_intent("그만 말해") == ("stop_speaking", 1.0)
+    assert resolve_intent("조용히 해") == ("stop_speaking", 1.0)
+    assert resolve_intent("전화 끊어줘") == ("hang_up", 1.0)
+    assert resolve_intent("통화 종료") == ("hang_up", 1.0)
+    assert resolve_intent("중단") == ("hang_up", 1.0)
+    assert resolve_intent("연결 중단") == ("hang_up", 1.0)
+
+
 def test_supported_queries_accept_semantic_variants():
     examples = {
         "지금 위험 상태가 어떤지 알려 줘": "risk_query",

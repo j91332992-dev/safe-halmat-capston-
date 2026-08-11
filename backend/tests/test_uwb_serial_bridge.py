@@ -58,6 +58,23 @@ def test_partial_frame_keeps_only_valid_anchors():
         "anchor-004",
     ]
 
+
+def test_transient_anchor_002_dropout_uses_recent_value():
+    processor = DistanceProcessor({}, history_size=3, anchor_hold_seconds=1.0)
+    full = parse_tag_line(
+        "T0,mask:F,seq:1,beacon:1,range:(450,510,560,470),ancid:(0,1,2,3)"
+    )
+    missing_a002 = parse_tag_line(
+        "T0,mask:D,seq:2,beacon:2,range:(451,0,561,471),ancid:(0,-1,2,3)"
+    )
+    assert full is not None and missing_a002 is not None
+    processor.process(full)
+    measurements = processor.process(missing_a002)
+    by_id = {item["anchor_id"]: item for item in measurements}
+    assert set(by_id) == {"anchor-001", "anchor-002", "anchor-003", "anchor-004"}
+    assert by_id["anchor-002"]["distance_m"] == 5.10
+    assert by_id["anchor-002"]["quality"] < by_id["anchor-001"]["quality"]
+
 def test_parse_anchor_receiver_frame():
     frame = parse_tag_line(
         "T0,mask:F,seq:21,fail:0,range:(454,524,572,486,0,0,0,0),ancid:(0,1,2,3,-1,-1,-1,-1)"

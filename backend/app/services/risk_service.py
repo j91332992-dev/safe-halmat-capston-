@@ -115,9 +115,6 @@ def evaluate_risk(db: Session, worker: WorkerState) -> dict:
 
     if worker.confidence < 0.45:
         return _decision(4, "LOW_POSITION_CONFIDENCE", "위치 신뢰도 낮음", 20, "위치 신호가 불안정합니다. 앵커 가시성을 확인하세요.", "CHECK_UWB")
-    if any((item.battery is not None and item.battery <= 15) for item in devices):
-        return _decision(4, "LOW_BATTERY", "배터리 15% 이하", 20, "안전모 배터리가 부족합니다. 충전 또는 교체하세요.", "CHARGE_DEVICE")
-
     return _decision(5, "SAFE", "정상", 0, "", "NONE")
 
 

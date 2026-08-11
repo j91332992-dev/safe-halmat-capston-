@@ -82,6 +82,10 @@ def init_database() -> None:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE obstacles ADD COLUMN object_type TEXT NOT NULL DEFAULT 'obstacle'"))
 
+    if "last_speaker_at" not in {column["name"] for column in inspect(engine).get_columns("devices")}:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE devices ADD COLUMN last_speaker_at DATETIME"))
+
     with session_scope() as db:
         if not db.get(SiteLayout, settings.site_id):
             db.add(SiteLayout(site_id=settings.site_id, name=settings.site_name, width=settings.site_width_m, height=settings.site_height_m))

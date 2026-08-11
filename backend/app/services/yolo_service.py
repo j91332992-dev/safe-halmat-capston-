@@ -110,7 +110,14 @@ def analyze_frame(filename: str) -> dict:
     try:
         import cv2
 
-        results = model(str(filepath), verbose=False, conf=settings.yolo_confidence)
+        # Keep the inference parameters identical to test_webcam.py. Rendering
+        # remains filtered to the safety categories used by the ESP dashboard.
+        results = model(
+            str(filepath),
+            verbose=False,
+            imgsz=settings.yolo_image_size,
+            conf=settings.yolo_confidence,
+        )
         result = results[0]
         names = result.names
         image = cv2.imread(str(filepath))
@@ -141,8 +148,6 @@ def analyze_frame(filename: str) -> dict:
                     continue
                 confidence = round(float(box.conf[0].item()), 3)
                 xyxy = [float(value) for value in box.xyxy[0].tolist()]
-                # A 0.15 helmet/PPE candidate is too weak to draw or use as
-                # evidence.  Keep a stricter threshold for every PPE item.
                 if category in {"helmet", "vest", "glove"} and confidence < float(settings.yolo_ppe_confidence):
                     continue
                 box_width = max(0.0, xyxy[2] - xyxy[0])

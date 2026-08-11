@@ -18,6 +18,7 @@ static size_t speakerBufferSize = 16000 * 2; // 1초 (약 32KB)
 static QueueHandle_t callSpeakerQueue = nullptr;
 static TaskHandle_t callSpeakerTaskHandle = nullptr;
 static volatile bool speakerCallMode = false;
+static volatile bool speakerStopRequested = false;
 
 // 톤 생성 (사인파)
 void generateTone(uint8_t *buffer, size_t bufferSize, uint16_t frequency, uint16_t durationMs) {
@@ -118,11 +119,11 @@ callSpeakerQueue = xQueueCreate(AUDIO_CALL_QUEUE_FRAMES, AUDIO_CALL_FRAME_BYTES)
   return true;
 }
 
-void speakerPlayTone(uint16_t frequency, uint16_t durationMs) {
-  if (speakerCallMode) return;
+bool speakerPlayTone(uint16_t frequency, uint16_t durationMs) {
+  if (speakerCallMode) return false;
   if (!speakerReady) {
     Serial.println("[SPEAKER] 스피커가 초기화되지 않음");
-    return;
+    return false;
   }
 
   audioSetSuppressed(true);
@@ -150,6 +151,7 @@ void speakerPlayTone(uint16_t frequency, uint16_t durationMs) {
     Serial.printf("[SPEAKER][ERROR] 전송 불완료: %zu 바이트 부족\n", bytesToSend - bytes_written);
   }
   audioSetSuppressed(false);
+  return result == ESP_OK && bytes_written == bytesToSend;
 }
 
 void speakerPlayAlert(uint8_t repeats) {
@@ -238,6 +240,7 @@ bool speakerPlayAudioUrl(const String &audioUrl) {
     return false;
   }
 
+  speakerStopRequested = false;
   audioSetSuppressed(true);
   i2s_zero_dma_buffer(I2S_NUM_1);
   i2s_set_clk(I2S_NUM_1, sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_MONO);
@@ -246,7 +249,7 @@ bool speakerPlayAudioUrl(const String &audioUrl) {
                 (unsigned long)sampleRate, (unsigned long)remaining);
 
   bool ok = true;
-  while (remaining > 0 && http.connected()) {
+  while (remaining > 0 && http.connected() && !speakerStopRequested) {
     size_t wanted = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
     size_t received = stream->readBytes(buffer, wanted);
     if (received == 0) {
@@ -283,7 +286,8 @@ bool speakerPlayPcm(const uint8_t *data, size_t length, uint32_t sampleRate) {
 
   size_t offset = 0;
   bool ok = true;
-  while (offset < length) {
+  speakerStopRequested = false;
+  while (offset < length && !speakerStopRequested) {
     const size_t chunk = (length - offset) > 1024 ? 1024 : (length - offset);
     size_t written = 0;
     const esp_err_t result = i2s_write(I2S_NUM_1, data + offset, chunk, &written, portMAX_DELAY);
@@ -294,8 +298,10 @@ bool speakerPlayPcm(const uint8_t *data, size_t length, uint32_t sampleRate) {
     offset += written;
   }
 
-  const uint32_t playbackMs = (uint32_t)((length * 1000ULL) / (sampleRate * sizeof(int16_t)));
-  delay(playbackMs + 100);
+  // i2s_write() above already blocks while the DMA consumes this PCM buffer.
+  // Waiting for the full clip duration again kept the microphone suppressed for
+  // roughly another 2.5 seconds after the acknowledgement had finished.
+  delay(100);
   i2s_zero_dma_buffer(I2S_NUM_1);
   i2s_set_clk(I2S_NUM_1, AUDIO_SAMPLE_RATE, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_MONO);
   audioSetSuppressed(false);
@@ -322,6 +328,7 @@ bool speakerPlayAcknowledgement() {
 
 void speakerStop() {
   if (!speakerReady) return;
+  speakerStopRequested = true;
   i2s_zero_dma_buffer(I2S_NUM_1);
   Serial.println("[SPEAKER] 출력 중지");
 }

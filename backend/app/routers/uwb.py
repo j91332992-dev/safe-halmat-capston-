@@ -43,18 +43,21 @@ async def upload_distances(payload: UwbDistancesIn, db: Session = Depends(get_db
         create_event(db, "LOCATION_FAILED", str(exc), "warning", payload.worker_id, payload.device_id)
         db.commit()
         raise HTTPException(422, str(exc)) from exc
-    x, y = filter_location(payload.worker_id, raw_x, raw_y, (worker.x, worker.y))
+    previous_position = (worker.x, worker.y)
+    x, y = filter_location(payload.worker_id, raw_x, raw_y, previous_position)
+    position_changed = abs(x - previous_position[0]) > 0.001 or abs(y - previous_position[1]) > 0.001
     layout = db.get(SiteLayout, settings.site_id)
     worker.x, worker.y = clamp_position(x, y, layout.width if layout else None, layout.height if layout else None)
     worker.confidence = confidence
-    location = Location(
-        worker_id=payload.worker_id,
-        x=worker.x,
-        y=worker.y,
-        confidence=confidence,
-        distances_json=json.dumps(measurements),
-    )
-    db.add(location)
+    if position_changed:
+        location = Location(
+            worker_id=payload.worker_id,
+            x=worker.x,
+            y=worker.y,
+            confidence=confidence,
+            distances_json=json.dumps(measurements),
+        )
+        db.add(location)
     zone_event = None
     for zone in db.query(Zone).filter(Zone.active.is_(True)).all():
         allowed_worker_ids = json.loads(zone.allowed_worker_ids_json)
@@ -87,8 +90,9 @@ async def upload_distances(payload: UwbDistancesIn, db: Session = Depends(get_db
     db.commit()
     incident = current_incident(db)
     route = calculate_route(db, worker, incident) if incident else None
-    result = {"location": {"x": worker.x, "y": worker.y, "confidence": confidence, "raw_x": raw_x, "raw_y": raw_y}, "worker": worker_to_dict(worker), "event": event_to_dict(zone_event) if zone_event else None, "evacuation_route": route}
-    await manager.broadcast("location", result)
+    result = {"location": {"x": worker.x, "y": worker.y, "confidence": confidence, "raw_x": raw_x, "raw_y": raw_y, "changed": position_changed}, "worker": worker_to_dict(worker), "event": event_to_dict(zone_event) if zone_event else None, "evacuation_route": route}
+    if position_changed or zone_event:
+        await manager.broadcast("location", result)
     return result
 
 

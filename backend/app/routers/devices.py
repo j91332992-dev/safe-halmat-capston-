@@ -3,11 +3,11 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from ..database import get_db
+from ..database import get_db, utcnow
 from ..models.entities import Device
-from ..schemas.api import DeviceCommandIn, DeviceRegister, Heartbeat
+from ..schemas.api import ComponentResultIn, DeviceCommandIn, DeviceRegister, Heartbeat
 from ..services.command_service import queue_command
-from ..services.device_service import register_device, update_heartbeat
+from ..services.device_service import mark_device_seen, register_device, update_heartbeat
 from ..services.serializers import device_to_dict
 from ..websocket import manager
 
@@ -30,6 +30,22 @@ async def heartbeat(payload: Heartbeat, db: Session = Depends(get_db)):
     result = device_to_dict(device)
     await manager.broadcast("heartbeat", result)
     return {"ok": True, "server_mode": __import__("app.config", fromlist=["settings"]).settings.operation_mode, "device": result}
+
+
+@router.post("/{device_id}/component-result")
+async def component_result(device_id: str, payload: ComponentResultIn, db: Session = Depends(get_db)):
+    device = db.get(Device, device_id)
+    if not device:
+        raise HTTPException(404, "장치를 찾을 수 없습니다.")
+    if payload.component == "speaker":
+        device.last_speaker_at = utcnow()
+        device.last_speaker_status = f"{payload.status}: {payload.command_id or '-'}"
+    mark_device_seen(device)
+    device.last_error = payload.detail if payload.status == "error" else None
+    db.commit()
+    result = device_to_dict(device)
+    await manager.broadcast("component_result", result)
+    return {"ok": payload.status == "ok", "device": result}
 
 
 @router.post("/{device_id}/command")

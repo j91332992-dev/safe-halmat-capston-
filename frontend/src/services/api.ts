@@ -57,6 +57,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({command_type: "play_alert", payload: {message: "관리자 경고"}})
     }),
+  speakerTest: (deviceId: string) =>
+    request<{ok: boolean}>(`/api/diagnostics/${encodeURIComponent(deviceId)}/speaker-test`, {method: "POST"}),
   sendTextCommand: (text: string, workerId = "worker-001", deviceId = "helmet-001-av") =>
     request<VoiceResponse>("/api/audio/command", {
       method: "POST",
