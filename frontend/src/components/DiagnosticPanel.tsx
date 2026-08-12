@@ -58,6 +58,7 @@ export function DiagnosticPanel({devices, anchors, mode, onRefresh}: Props) {
           const cameraActive = device.online && recent(device.last_camera_at, 20);
           const micActive = device.online && recent(device.last_audio_at, 300);
           const speakerActive = device.online && recent(device.last_speaker_at, 300) && device.last_speaker_status?.startsWith("ok:");
+          const speakerInitialized = device.online && device.component_status?.speaker === "ready";
           return <article className="diag-card" key={device.device_id}>
             <header>
               <div><span className="eyebrow">{isAv ? "AV CONTROLLER" : "POSITION TAG"}</span><h3>{device.device_id}</h3></div>
@@ -70,9 +71,11 @@ export function DiagnosticPanel({devices, anchors, mode, onRefresh}: Props) {
             </div>
             {isAv && <>
               <div className="component-list verified-components">
+                <span>READY는 ESP32 I2S 출력 초기화 기준이며 실제 소리는 재생 테스트로 확인</span>
                 <div><span>CAMERA</span><StatusPill active={cameraActive} activeText="프레임 수신 중" inactiveText={device.online ? "신호 없음" : "확인 불가"} /></div>
                 <div><span>MIC</span><StatusPill active={micActive} activeText="음성 수신 확인" inactiveText={device.online ? "검증 필요" : "확인 불가"} /></div>
-                <div><span>SPEAKER</span><StatusPill active={Boolean(speakerActive)} activeText="재생 확인" inactiveText={device.online ? "테스트 필요" : "확인 불가"} /></div>
+                <div><span>SPEAKER I2S</span><StatusPill active={speakerInitialized} activeText="READY · 출력 초기화" inactiveText={device.online ? "초기화 오류" : "확인 불가"} /></div>
+                <div><span>SPEAKER TEST</span><StatusPill active={Boolean(speakerActive)} activeText="재생 명령 정상" inactiveText={device.online ? "실청 테스트 필요" : "확인 불가"} /></div>
               </div>
               <button className="speaker-test-button" disabled={!device.online || testing === device.device_id} onClick={() => void speakerTest(device.device_id)}>
                 {testing === device.device_id ? "재생 결과 확인 중…" : "스피커 실제 재생 테스트"}

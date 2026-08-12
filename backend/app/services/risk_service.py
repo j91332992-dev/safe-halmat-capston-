@@ -104,7 +104,7 @@ def evaluate_risk(db: Session, worker: WorkerState) -> dict:
     if loss_seconds is not None and loss_seconds >= 60:
         return _decision(3, "UWB_SIGNAL_LOSS", "통신 두절 경고", 60, "통신 연결이 불안정합니다. 안전구역으로 이동하세요.", "RETURN_TO_COVERAGE", loss_seconds=round(loss_seconds))
 
-    if category not in {"safe", "rest"}:
+    if category not in {"safe", "rest"} and hazards.get("ppe_subject_scope") != "observed_person":
         if ppe.get("helmet") is False:
             return _decision(4, "PPE_HELMET", "안전모 미착용", 40, "전방 작업자에게 안전모 착용을 지시하세요.", "CORRECT_PPE")
         if ppe.get("vest") is False:

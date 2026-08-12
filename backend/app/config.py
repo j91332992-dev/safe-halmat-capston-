@@ -52,12 +52,19 @@ class Settings(BaseSettings):
     # Match backend/test_webcam.py: Ultralytics default confidence and 320px input.
     yolo_confidence: float = 0.25
     yolo_image_size: int = 320
+    # Keep full-frame detection at 320 (empirically best for this model), then
+    # inspect the tracked person ROI at the model's native 640 training size.
+    yolo_ppe_detail_image_size: int = 640
+    yolo_ppe_detail_interval_seconds: float = 0.30
+    yolo_person_track_seconds: float = 2.0
     yolo_person_confidence: float = 0.35
     # Camera upload and inference can skip frames.  Six seconds keeps the
     # three-frame PPE decision stable without treating an old sighting as live.
     yolo_ppe_window_seconds: float = 6.0
     yolo_ppe_worn_frames: int = 2
     yolo_ppe_person_frames: int = 3
+    # Missing PPE is confirmed only after three consecutive person frames.
+    yolo_ppe_missing_consecutive_frames: int = 3
     yolo_ppe_confidence: float = 0.45
     yolo_glove_confidence: float = 0.40
     yolo_vest_confidence: float = 0.40

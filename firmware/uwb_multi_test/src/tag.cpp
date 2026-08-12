@@ -87,7 +87,7 @@ static uint32_t last_wifi_post_ms = 0;
 
 #define WIFI_RETRY_INTERVAL_MS 10000
 #define WIFI_POST_RETRY_MS     100
-#define WIFI_HTTP_TIMEOUT_MS   900
+#define WIFI_HTTP_TIMEOUT_MS   3000
 
 extern dwt_txconfig_t txconfig_options;
 

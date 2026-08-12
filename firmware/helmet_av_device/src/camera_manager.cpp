@@ -18,8 +18,10 @@ bool cameraBegin() {
   c.pin_d7 = CAMERA_PIN_D7; c.pin_d6 = CAMERA_PIN_D6; c.pin_d5 = CAMERA_PIN_D5; c.pin_d4 = CAMERA_PIN_D4;
   c.pin_d3 = CAMERA_PIN_D3; c.pin_d2 = CAMERA_PIN_D2; c.pin_d1 = CAMERA_PIN_D1; c.pin_d0 = CAMERA_PIN_D0;
   c.pin_vsync = CAMERA_PIN_VSYNC; c.pin_href = CAMERA_PIN_HREF; c.pin_pclk = CAMERA_PIN_PCLK;
-  c.xclk_freq_hz = 10000000; c.ledc_timer = LEDC_TIMER_0; c.ledc_channel = LEDC_CHANNEL_0;
-  // OV5640 + ESP32-S3 PSRAM 기준: VGA(640x480), 고화질 JPEG, 목표 3fps.
+  // OV5640 normally uses a 20 MHz XCLK.  The previous 10 MHz clock lengthened
+  // exposure/readout and softened moving PPE edges.
+  c.xclk_freq_hz = 20000000; c.ledc_timer = LEDC_TIMER_0; c.ledc_channel = LEDC_CHANNEL_0;
+  // OV5640 + ESP32-S3 PSRAM 기준: VGA(640x480), 고화질 JPEG, 목표 8fps.
   // esp_camera의 JPEG 품질 값은 낮을수록 화질이 높다. 10은 전송량과 화질의 안정적인 상한이다.
   c.pixel_format = PIXFORMAT_JPEG; c.frame_size = FRAMESIZE_VGA; c.jpeg_quality = CAMERA_JPEG_QUALITY;
   if (psramFound()) {
@@ -32,6 +34,27 @@ bool cameraBegin() {
     c.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
   }
   cameraReady = esp_camera_init(&c) == ESP_OK;
+  if (cameraReady) {
+    // Preserve natural model input colors and add a small amount of sensor-side
+    // edge detail. This adds no ESP32 frame post-processing or audio latency.
+    sensor_t *sensor = esp_camera_sensor_get();
+    if (sensor) {
+      sensor->set_framesize(sensor, FRAMESIZE_VGA);
+      sensor->set_quality(sensor, CAMERA_JPEG_QUALITY);
+      sensor->set_brightness(sensor, 0);
+      sensor->set_contrast(sensor, 1);
+      sensor->set_saturation(sensor, 0);
+      sensor->set_sharpness(sensor, 1);
+      sensor->set_whitebal(sensor, 1);
+      sensor->set_awb_gain(sensor, 1);
+      sensor->set_exposure_ctrl(sensor, 1);
+      sensor->set_gain_ctrl(sensor, 1);
+      sensor->set_aec2(sensor, 1);
+      sensor->set_dcw(sensor, 1);
+      sensor->set_bpc(sensor, 1);
+      sensor->set_wpc(sensor, 1);
+    }
+  }
 #else
   cameraReady = false;
   Serial.println("[CAMERA][CONFIG] 실제 보드 핀맵 입력 후 ENABLE_CAMERA_HARDWARE=true로 변경하세요.");
@@ -42,7 +65,7 @@ bool cameraBegin() {
 
 bool cameraUploadIfDue() {
 #if ENABLE_CAMERA_HARDWARE
-  // Keep the normal 6 FPS stream for ambient speech and the initial wake clip.
+  // Keep the normal 8 FPS stream for ambient speech and the initial wake clip.
   // During a call, retain exactly the low-rate source needed for 1 FPS YOLO.
   // The call WebSocket runs in its own priority-4 task, while this synchronous
   // camera request remains in the low-priority main loop and fails quickly.
@@ -55,7 +78,7 @@ bool cameraUploadIfDue() {
   if (WiFi.status() != WL_CONNECTED) return false;
 
   // PSRAM에서는 CAMERA_GRAB_LATEST가 최신 프레임을 제공하므로 추가 캡처/폐기를 하지 않는다.
-  // 이 호출 수를 한 번으로 유지해야 333ms 주기를 안정적으로 맞출 수 있다.
+  // 이 호출 수를 한 번으로 유지해야 최신 프레임 주기를 안정적으로 맞출 수 있다.
   camera_fb_t *fb = esp_camera_fb_get();
   if (!fb) {
     Serial.println("[CAMERA] 캡처 실패");

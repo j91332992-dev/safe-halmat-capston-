@@ -15,7 +15,7 @@ export interface Worker {
   risk_reasons: {reason: string; points: number; priority?: number; code?: string; voice_message?: string; action?: string}[];
   decision: {reason: string; points: number; priority: number; code: string; voice_message: string; action: string} | null;
   ppe: {vest?: boolean | null; glove?: boolean | null; helmet?: boolean | null};
-  hazards: {fire?: boolean; smoke?: boolean; fire_candidate_confidence?: number; fire_confirm_frames?: number; smoke_candidate_confidence?: number; smoke_confirm_frames?: number};
+  hazards: {fire?: boolean; smoke?: boolean; fire_candidate_confidence?: number; fire_confirm_frames?: number; smoke_candidate_confidence?: number; smoke_confirm_frames?: number; ppe_subject_scope?: "observed_person"; observed_person_seen?: boolean; observed_person_ppe?: {vest?: boolean | null; glove?: boolean | null; helmet?: boolean | null}; observed_person_missing_ppe?: string[]};
   emergency: boolean;
   updated_at: string;
 }
@@ -187,6 +187,9 @@ export interface CameraLatest {
       person_frames_required: number;
       ppe_frames: Record<string, number>;
       ppe_frames_required: number;
+      missing_consecutive_frames: Record<string, number>;
+      missing_frames_required: number;
+      subject_scope: "observed_person";
       window_seconds: number;
     };
   };

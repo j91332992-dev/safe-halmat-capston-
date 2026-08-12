@@ -78,6 +78,7 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<NavigationGroupId, boolean>>({location: false, media: false, safety: false, system: false});
+  const [sosCameraVersion, setSosCameraVersion] = useState(Date.now());
   const worker = useMemo(() => data?.workers.find(item => item.worker_id === selectedId) ?? data?.workers[0], [data, selectedId]);
   const evacuationIncident = data?.evacuation?.incident ?? null;
   const emergencyWorker = data?.workers.find(item => item.emergency) ?? null;
@@ -101,6 +102,9 @@ function App() {
   const callDevice = data?.devices.find(device =>
     device.worker_id === activeCallWorker?.worker_id && device.device_type === "assistant_device"
   ) ?? null;
+  const emergencyCameraDevice = data?.devices.find(device =>
+    device.worker_id === emergencyWorker?.worker_id && device.device_type === "assistant_device"
+  ) ?? null;
   const unresolvedAlerts = data?.events.filter(event =>
     ["danger", "emergency"].includes(event.severity) && event.status !== "resolved"
   ) ?? [];
@@ -117,6 +121,14 @@ function App() {
     const currentGroup = navigationGroups.find(group => group.pages.includes(page));
     if (currentGroup) setOpenGroups(current => ({...current, [currentGroup.id]: true}));
   }, [page]);
+
+  useEffect(() => {
+    if (!emergencyWorker || !emergencyCameraDevice?.device_id) return;
+    const timer = window.setInterval(() => {
+      setSosCameraVersion(Date.now());
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [emergencyWorker, emergencyCameraDevice?.device_id]);
 
   const action = async (callback: () => Promise<unknown>) => {
     setBusy(true);
@@ -376,6 +388,14 @@ function App() {
             <span className="sos-pulse">SOS</span>
             <div><small>WORKER EMERGENCY</small><h2 id="sos-modal-title">긴급 도움 요청이 발생했습니다</h2></div>
             <dl><div><dt>작업자</dt><dd>{emergencyWorker.worker_name}</dd></div><div><dt>현재 위치</dt><dd>X {emergencyWorker.x.toFixed(1)}m · Y {emergencyWorker.y.toFixed(1)}m</dd></div></dl>
+            <div className="sos-camera-evidence">
+              <b>안전모 실시간 카메라</b>
+              {emergencyCameraDevice?.last_camera_at ? (
+                <img src={api.cameraImageUrl(emergencyCameraDevice.device_id, sosCameraVersion)} alt={emergencyWorker.worker_name + " 긴급상황 카메라"} />
+              ) : (
+                <span>카메라 프레임 수신 대기 중</span>
+              )}
+            </div>
             <p>작업자의 안전을 확인하고 즉시 대응하세요.</p>
             <div className="sos-modal-actions"><button disabled={busy} onClick={() => void action(() => api.acknowledge(emergencyEvent.event_id))}>신고 확인</button><button className="resolve" disabled={busy} onClick={() => void action(() => api.resolve(emergencyEvent.event_id))}>상황 종료</button></div>
           </section>

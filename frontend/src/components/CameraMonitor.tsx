@@ -26,7 +26,7 @@ export function CameraMonitor({workers, devices}: Props) {
     const timer = window.setInterval(() => {
       setImageError(false);
       setImageVersion(Date.now());
-    }, 1000 / 6);
+    }, 1000 / 8);
     return () => window.clearInterval(timer);
   }, [selected?.device_id]);
   useEffect(() => {
@@ -40,13 +40,14 @@ export function CameraMonitor({workers, devices}: Props) {
     return () => { active = false; window.clearInterval(timer); };
   }, [selected?.device_id]);
   const judgement = latest?.analysis?.ppe_judgement;
+  const observedPpe = latest?.analysis?.ppe ?? worker?.hazards.observed_person_ppe ?? {};
   const ppeLabel = (item: "helmet" | "vest" | "glove") => {
     if (!judgement || !judgement.active) return "판정 보류";
-    if (worker?.ppe[item] === false) return "미착용";
-    if (worker?.ppe[item] === true) return "착용";
+    if (observedPpe[item] === false) return "미착용";
+    if (observedPpe[item] === true) return "착용";
     return "판정 중";
   };
-  const ppeClass = (item: "helmet" | "vest" | "glove") => worker?.ppe[item] === false && judgement?.active ? "bad" : "good";
+  const ppeClass = (item: "helmet" | "vest" | "glove") => observedPpe[item] === false && judgement?.active ? "bad" : "good";
 
   return (
     <section className="page-panel camera-page">
@@ -72,16 +73,16 @@ export function CameraMonitor({workers, devices}: Props) {
           </article>
           <article className="camera-analysis-card">
             <span className="eyebrow">WORKER DETECTION</span>
-            <h3>{worker?.worker_name ?? selected.worker_id}</h3>
+            <h3>안전모 착용자가 바라보는 전방 작업자</h3>
             <div className="detection-list">
-              <div><span>PPE 판정</span><b className={judgement?.active ? "good" : ""}>{judgement?.active ? `사람 확인 프레임 ${judgement.person_frames}/${judgement.person_frames_required}` : `판정 보류 · 사람 확인 프레임 ${judgement?.person_frames ?? 0}/${judgement?.person_frames_required ?? 3}`}</b></div>
+              <div><span>PPE 판정</span><b className={judgement?.active ? "good" : ""}>{judgement?.active ? "전방 사람 추적 중" : "전방 사람 없음 · 판정 보류"}</b></div>
               <div><span>안전모</span><b className={ppeClass("helmet")}>{ppeLabel("helmet")}</b></div>
               <div><span>안전조끼</span><b className={ppeClass("vest")}>{ppeLabel("vest")}</b></div>
               <div><span>장갑</span><b className={ppeClass("glove")}>{ppeLabel("glove")}</b></div>
               <div><span>화재</span><b className={worker?.hazards.fire ? "bad" : "good"}>{worker?.hazards.fire ? "감지 · 관리자 경고" : `확인 중 ${Number(worker?.hazards.fire_confirm_frames ?? 0)}/3`}</b></div>
               <div><span>연기</span><b className={worker?.hazards.smoke ? "bad" : "good"}>{worker?.hazards.smoke ? "감지" : "없음"}</b></div>
             </div>
-            <small>기준: 최근 {judgement?.window_seconds ?? 6}초 내 사람 {judgement?.person_frames_required ?? 3}프레임 확인 후 PPE 판정 · PPE {judgement?.ppe_frames_required ?? 2}프레임 이상이면 착용 · PPE confidence 45% 이상</small>
+            <small>기준: 실제 YOLO 처리 프레임에서 사람이 검출되고 같은 장비가 {judgement?.missing_frames_required ?? 3}프레임 연속 보이지 않을 때 전방 작업자 미착용 확정 · PPE confidence 45% 이상</small>
             <div className={`camera-risk level-${worker?.risk_level ?? "정상"}`}><span>통합 위험도</span><strong>{worker?.risk_score ?? 0}점 · {worker?.risk_level ?? "정상"}</strong></div>
           </article>
         </div>

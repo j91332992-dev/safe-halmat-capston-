@@ -57,8 +57,8 @@ _alert_refresh_seconds = 5.0
 _last_inference_ms = 0.0
 _analysis_completed = 0
 _last_analysis_started_at = 0.0
-_normal_inference_interval_seconds = 1.0 / 3.0
-_voice_inference_interval_seconds = 1.0 / 3.0
+_normal_inference_interval_seconds = 1.0 / 4.0
+_voice_inference_interval_seconds = 1.0
 
 
 def _initialize_inference_worker() -> None:
@@ -130,6 +130,7 @@ def _upsert_camera_event(
     device_id: str,
     severity: str,
     details: dict,
+    message: str,
 ) -> Event:
     """Keep one rolling camera event per device instead of flooding the event log."""
     rows = (
@@ -145,7 +146,7 @@ def _upsert_camera_event(
         return create_event(
             db,
             "CAMERA_FRAME",
-            "카메라 프레임 분석 결과를 수신했습니다.",
+            message,
             severity,
             worker_id=worker_id,
             device_id=device_id,
@@ -154,7 +155,7 @@ def _upsert_camera_event(
     event.worker_id = worker_id
     event.severity = severity
     event.status = "open"
-    event.message = "카메라 프레임 분석 결과를 수신했습니다."
+    event.message = message
     event.details_json = json.dumps(details, ensure_ascii=False)
     event.created_at = utcnow()
     return event
@@ -163,11 +164,14 @@ def _upsert_camera_event(
 def _merge_detection(worker: WorkerState, analysis: dict) -> None:
     if analysis.get("mode") != "real":
         return
-    current_ppe = json.loads(worker.ppe_json or "{}")
     current_hazards = json.loads(worker.hazard_json or "{}")
-    current_ppe.update(analysis.get("ppe") or {})
     current_hazards.update(analysis.get("hazards") or {})
-    worker.ppe_json = json.dumps(current_ppe, ensure_ascii=False)
+    observed_ppe = analysis.get("ppe") or {}
+    current_hazards["ppe_subject_scope"] = "observed_person"
+    current_hazards["observed_person_seen"] = bool(analysis.get("person_seen"))
+    current_hazards["observed_person_ppe"] = observed_ppe
+    current_hazards["observed_person_missing_ppe"] = [name for name, worn in observed_ppe.items() if worn is False]
+    current_hazards["observed_person_ppe_judgement"] = analysis.get("ppe_judgement") or {}
     worker.hazard_json = json.dumps(current_hazards, ensure_ascii=False)
 
 
@@ -177,8 +181,11 @@ async def _process_camera_job(job: CameraJob) -> None:
         raise RuntimeError("YOLO inference executor is not running")
     _last_analysis_started_at = time.monotonic()
     inference_started = time.perf_counter()
+    # Voice/STT always wins CPU time. Keep a lightweight full-frame pass at
+    # 1 FPS during speech and disable the extra 640px person-crop inference.
+    detail_enabled = voice_requests_active() == 0
     analysis = await asyncio.get_running_loop().run_in_executor(
-        _inference_executor, analyze_frame, job.filename
+        _inference_executor, analyze_frame, job.filename, detail_enabled
     )
     _last_inference_ms = (time.perf_counter() - inference_started) * 1000.0
     _analysis_completed += 1
@@ -254,11 +261,18 @@ async def _process_camera_job(job: CameraJob) -> None:
             else:
                 raw_evidence_name = job.filename
             severity = "danger" if any(hazard_signature) else "warning"
+            ppe_labels = {"helmet": "안전모", "vest": "안전조끼", "glove": "안전장갑"}
+            message = (
+                "전방 작업자 안전장비 미착용 감지: " + ", ".join(ppe_labels.get(name, name) for name in missing)
+                if missing and not any(hazard_signature)
+                else "카메라 위험상황 분석 결과를 수신했습니다."
+            )
             event = _upsert_camera_event(
                 db,
                 worker_id=job.worker_id,
                 device_id=job.device_id,
                 severity=severity,
+                message=message,
                 details={
                     "filename": evidence_name,
                     "raw_filename": raw_evidence_name,
@@ -266,6 +280,9 @@ async def _process_camera_job(job: CameraJob) -> None:
                     "analysis": analysis,
                     "helmet_id": job.helmet_id,
                     "evacuation_created": evacuation_created,
+                    "subject_scope": "observed_person",
+                    "subject_label": "안전모 착용자가 바라보는 전방 작업자",
+                    "missing_ppe": list(missing),
                 },
             )
         db.commit()
@@ -306,7 +323,7 @@ async def _camera_worker() -> None:
     while True:
         job = await queue.get()
         try:
-            # Pace normal analysis at 3 FPS and all server-side voice work at
+            # Pace normal analysis at 4 FPS and all server-side voice work at
             # 1 FPS. While waiting, continuously replace this job with the
             # newest frame so YOLO never analyzes a stale backlog.
             while True:
