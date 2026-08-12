@@ -10,7 +10,7 @@ export function WorkerDetail({worker, devices, onRefresh}: Props) {
   const [cameraVersion, setCameraVersion] = useState(Date.now());
   useEffect(() => {
     if (!av?.device_id) return;
-    const timer = window.setInterval(() => setCameraVersion(Date.now()), 1000 / 3);
+    const timer = window.setInterval(() => setCameraVersion(Date.now()), 1000 / 6);
     return () => window.clearInterval(timer);
   }, [av?.device_id]);
   const uwb = devices.find(device => device.device_type === "position_device");

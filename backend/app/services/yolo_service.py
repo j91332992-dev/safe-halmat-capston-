@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 _model: Any = None
 _model_attempted = False
 _vision_state: dict[str, dict] = {}
+_ppe_crop_last_at: dict[str, float] = {}
 
 
 def analyze_frame_dummy(filename: str) -> dict:
@@ -72,6 +73,14 @@ def _category(name: str) -> tuple[str | None, bool]:
     return None, True
 
 
+def _ppe_threshold(category: str) -> float:
+    if category == "glove":
+        return float(settings.yolo_glove_confidence)
+    if category == "vest":
+        return float(settings.yolo_vest_confidence)
+    return float(settings.yolo_ppe_confidence)
+
+
 def _update_fire_confirmation(state: dict, max_confidence: float) -> tuple[bool, int]:
     required = max(1, int(settings.yolo_fire_confirm_frames))
     if max_confidence >= float(settings.yolo_fire_confidence):
@@ -125,6 +134,7 @@ def analyze_frame(filename: str) -> dict:
         ppe: dict[str, bool] = {}
         hazards = {"fire": False, "smoke": False}
         person_seen = False
+        person_boxes: list[tuple[float, list[float]]] = []
         ppe_seen = {"helmet": False, "vest": False, "glove": False}
         max_fire_area_ratio = 0.0
         max_fire_confidence = 0.0
@@ -148,7 +158,7 @@ def analyze_frame(filename: str) -> dict:
                     continue
                 confidence = round(float(box.conf[0].item()), 3)
                 xyxy = [float(value) for value in box.xyxy[0].tolist()]
-                if category in {"helmet", "vest", "glove"} and confidence < float(settings.yolo_ppe_confidence):
+                if category in {"helmet", "vest", "glove"} and confidence < _ppe_threshold(category):
                     continue
                 box_width = max(0.0, xyxy[2] - xyxy[0])
                 box_height = max(0.0, xyxy[3] - xyxy[1])
@@ -168,6 +178,7 @@ def analyze_frame(filename: str) -> dict:
                     # PPE 판정은 흐린 사람 후보가 아니라 35% 이상 사람 검출에서만 시작한다.
                     if confidence >= float(settings.yolo_person_confidence):
                         person_seen = True
+                        person_boxes.append((confidence, xyxy))
                         horizontal_person = horizontal_person or aspect_ratio >= 1.5
                 elif category == "fallen":
                     hazards["fallen"] = hazards.get("fallen", False) or positive
@@ -188,8 +199,83 @@ def analyze_frame(filename: str) -> dict:
                     end = (int(xyxy[2]), int(xyxy[3]))
                     cv2.rectangle(image, start, end, color, 2)
                     cv2.putText(image, f"{class_name} {confidence:.2f}", (start[0], max(18, start[1] - 7)), cv2.FONT_HERSHEY_SIMPLEX, 0.48, color, 2)
-        now = time.monotonic()
+
+        # PPE is often only a few pixels wide after the full 640x480 ESP frame
+        # is reduced to 320. Re-run the largest visible person crop at 320 so
+        # gloves and vests occupy substantially more model input pixels. This
+        # is one extra inference in the same low-priority YOLO process, not a
+        # second camera upload or a competing worker.
+        ppe_crop_used = False
+        ppe_crop_attempted = False
         state_key = filepath.name.split("_", 1)[0]
+        crop_now = time.monotonic()
+        crop_due = crop_now - _ppe_crop_last_at.get(state_key, 0.0) >= 1.0
+        if image is not None and person_boxes and crop_due:
+            _ppe_crop_last_at[state_key] = crop_now
+            ppe_crop_attempted = True
+            crop_source = cv2.imread(str(filepath))
+            if crop_source is not None:
+                _, person_xyxy = max(person_boxes, key=lambda item: item[0])
+                height, width = crop_source.shape[:2]
+                person_width = max(1.0, person_xyxy[2] - person_xyxy[0])
+                person_height = max(1.0, person_xyxy[3] - person_xyxy[1])
+                pad_x = person_width * 0.08
+                pad_y = person_height * 0.05
+                crop_x1 = max(0, int(person_xyxy[0] - pad_x))
+                crop_y1 = max(0, int(person_xyxy[1] - pad_y))
+                crop_x2 = min(width, int(person_xyxy[2] + pad_x))
+                crop_y2 = min(height, int(person_xyxy[3] + pad_y))
+                crop = crop_source[crop_y1:crop_y2, crop_x1:crop_x2]
+                if crop.size:
+                    crop_result = model(
+                        crop,
+                        verbose=False,
+                        imgsz=settings.yolo_image_size,
+                        conf=min(
+                            float(settings.yolo_confidence),
+                            float(settings.yolo_glove_confidence),
+                            float(settings.yolo_vest_confidence),
+                        ),
+                    )[0]
+                    crop_names = crop_result.names
+                    if crop_result.boxes is not None:
+                        for box in crop_result.boxes:
+                            class_id = int(box.cls[0].item())
+                            class_name = str(crop_names.get(class_id, f"class_{class_id}"))
+                            category, positive = _category(class_name)
+                            if category not in {"helmet", "vest", "glove"} or not positive:
+                                continue
+                            confidence = round(float(box.conf[0].item()), 3)
+                            if confidence < _ppe_threshold(category):
+                                continue
+                            local_xyxy = [float(value) for value in box.xyxy[0].tolist()]
+                            xyxy = [
+                                local_xyxy[0] + crop_x1,
+                                local_xyxy[1] + crop_y1,
+                                local_xyxy[2] + crop_x1,
+                                local_xyxy[3] + crop_y1,
+                            ]
+                            ppe_seen[category] = True
+                            ppe_crop_used = True
+                            box_width = max(0.0, xyxy[2] - xyxy[0])
+                            box_height = max(0.0, xyxy[3] - xyxy[1])
+                            frame_area = float(height * width)
+                            detections.append({
+                                "class": class_name,
+                                "category": category,
+                                "positive": True,
+                                "confidence": confidence,
+                                "area_ratio": round((box_width * box_height) / frame_area, 4),
+                                "aspect_ratio": round(box_width / max(box_height, 1.0), 3),
+                                "box": {"x1": xyxy[0], "y1": xyxy[1], "x2": xyxy[2], "y2": xyxy[3]},
+                                "source": "person_crop",
+                            })
+                            color = colors[category]
+                            start = (int(xyxy[0]), int(xyxy[1]))
+                            end = (int(xyxy[2]), int(xyxy[3]))
+                            cv2.rectangle(image, start, end, color, 2)
+                            cv2.putText(image, f"{category} {confidence:.2f} crop", (start[0], max(18, start[1] - 7)), cv2.FONT_HERSHEY_SIMPLEX, 0.48, color, 2)
+        now = time.monotonic()
         state = _vision_state.setdefault(state_key, {})
         previous_area = float(state.get("fire_area_ratio") or 0.0)
         previous_at = float(state.get("fire_at") or now)
@@ -241,14 +327,16 @@ def analyze_frame(filename: str) -> dict:
         if person_seen:
             for item in ("helmet", "vest", "glove"):
                 ppe.setdefault(item, False)
-        annotated_name = f"{filepath.stem}_annotated.jpg"
+        annotated_jpeg: bytes | None = None
         if image is not None:
             x = 15
             for letter, key in (("H", "helmet"), ("V", "vest"), ("G", "glove"), ("F", "fire")):
                 if (key in ppe and ppe[key]) or (key in hazards and hazards[key]):
                     cv2.putText(image, letter, (x, 35), cv2.FONT_HERSHEY_SIMPLEX, 1.1, colors[key], 3)
                     x += 38
-            cv2.imwrite(str(CAPTURE_DIR / annotated_name), image)
+            encoded, jpeg = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 88])
+            if encoded:
+                annotated_jpeg = jpeg.tobytes()
         return {
             "mode": "real",
             "model": Path(settings.yolo_model_path).name,
@@ -265,8 +353,14 @@ def analyze_frame(filename: str) -> dict:
             },
             "hazards": hazards,
             "person_seen": person_seen,
+            "ppe_crop_used": ppe_crop_used,
+            "ppe_crop_attempted": ppe_crop_attempted,
             "source": filename,
-            "annotated_source": annotated_name,
+            # The normal fast path keeps the latest annotated frame in memory.
+            # The router writes evidence to disk only when a safety state
+            # actually needs a durable event record.
+            "annotated_source": None,
+            "_annotated_jpeg": annotated_jpeg,
         }
     except Exception as exc:
         logger.exception("YOLO 프레임 분석 실패: %s", exc)

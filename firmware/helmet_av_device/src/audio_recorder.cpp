@@ -26,6 +26,10 @@ static uint8_t *pendingBuffer = nullptr;
 static uint8_t *preRollBuffer = nullptr;
 static size_t captureBytes = 0;
 static volatile size_t pendingBytes = 0;
+// Camera scheduling metadata only. These flags do not change VAD, STT,
+// audio upload, or assistant response behavior.
+static volatile bool captureIsAssistantFollowup = false;
+static volatile bool pendingIsAssistantFollowup = false;
 static size_t preRollWrite = 0;
 static size_t preRollCount = 0;
 static TaskHandle_t vadTaskHandle = nullptr;
@@ -95,6 +99,7 @@ static void discardCapture(const char *reason) {
   if (captureActive) Serial.printf("[VAD] 녹음 취소: %s\n", reason);
   captureActive = false;
   captureBytes = 0;
+  captureIsAssistantFollowup = false;
 }
 
 static void finishCapture() {
@@ -106,6 +111,7 @@ static void finishCapture() {
   if (durationMs < 350) {
     Serial.printf("[VAD] 너무 짧은 음성 폐기 duration=%lums\n", (unsigned long)durationMs);
     captureBytes = 0;
+    captureIsAssistantFollowup = false;
     return;
   }
 
@@ -116,8 +122,10 @@ static void finishCapture() {
     pendingBuffer = captureBuffer;
     captureBuffer = oldPending;
     pendingBytes = captureBytes;
+    pendingIsAssistantFollowup = captureIsAssistantFollowup;
     queued = true;
   }
+  captureIsAssistantFollowup = false;
   portEXIT_CRITICAL(&audioMux);
 
   if (queued) {
@@ -133,6 +141,7 @@ static void startCaptureFromPreRoll(uint32_t level, uint32_t threshold, bool for
   copyPreRollToCapture();
   captureActive = true;
   portENTER_CRITICAL(&audioMux);
+  captureIsAssistantFollowup = followupAwaitingSpeech;
   followupAwaitingSpeech = false;
   followupDeadline = 0;
   portEXIT_CRITICAL(&audioMux);
@@ -352,7 +361,7 @@ bool audioBegin() {
   }
 
   const BaseType_t uploadCreated = xTaskCreatePinnedToCore(
-      audioUploadTask, "audio-upload", 6144, nullptr, 1, &uploadTaskHandle, 0);
+      audioUploadTask, "audio-upload", 6144, nullptr, 3, &uploadTaskHandle, 0);
   if (uploadCreated != pdPASS) {
     audioReady = false;
     vTaskDelete(vadTaskHandle);
@@ -455,7 +464,10 @@ bool audioUpload() {
   free(upload);
 
   portENTER_CRITICAL(&audioMux);
-  if (pendingBuffer == data && pendingBytes == dataBytes) pendingBytes = 0;
+  if (pendingBuffer == data && pendingBytes == dataBytes) {
+    pendingBytes = 0;
+    pendingIsAssistantFollowup = false;
+  }
   portEXIT_CRITICAL(&audioMux);
   return code >= 200 && code < 300;
 }
@@ -517,6 +529,28 @@ bool audioIsBusy() {
   return busy;
 }
 
+bool audioShouldSuspendCamera() {
+  // Calls keep a low-rate camera stream so server-side YOLO can maintain the
+  // requested minimum 1 FPS. The dedicated priority-4 call task still wins.
+  return false;
+}
+
+bool audioShouldThrottleCamera() {
+  bool throttle = false;
+  portENTER_CRITICAL(&audioMux);
+  throttle = pendingBytes > 0 && pendingIsAssistantFollowup;
+  portEXIT_CRITICAL(&audioMux);
+  return throttle;
+}
+
+bool audioIsCallMode() {
+  bool active = false;
+  portENTER_CRITICAL(&audioMux);
+  active = callMode;
+  portEXIT_CRITICAL(&audioMux);
+  return active;
+}
+
 bool audioIsReady() {
   return audioReady;
 }
@@ -530,6 +564,7 @@ void audioSetCallMode(bool enabled) {
     portEXIT_CRITICAL(&audioMux);
     discardCapture("실시간 통화 시작");
     pendingBytes = 0;
+    pendingIsAssistantFollowup = false;
     resetPreRoll();
     Serial.println("[CALL] 마이크 실시간 스트리밍 시작");
   } else {

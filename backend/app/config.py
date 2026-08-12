@@ -59,6 +59,8 @@ class Settings(BaseSettings):
     yolo_ppe_worn_frames: int = 2
     yolo_ppe_person_frames: int = 3
     yolo_ppe_confidence: float = 0.45
+    yolo_glove_confidence: float = 0.40
+    yolo_vest_confidence: float = 0.40
     # Require a strong detection in three consecutive analyzed frames before
     # raising a fire incident. This favors avoiding false alarms.
     yolo_fire_confidence: float = 0.75

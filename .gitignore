@@ -21,3 +21,4 @@ backend/tts_output/*
 firmware/helmet_av_device/include/device_secrets.h
 *.log
 backend/safety.db-*
+backend/test_result*.jpg

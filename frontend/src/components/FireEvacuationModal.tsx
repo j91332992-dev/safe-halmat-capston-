@@ -39,7 +39,7 @@ export function FireEvacuationModal({incident, site, obstacles, workers, devices
 
   useEffect(() => {
     if (!cameraDevice?.device_id) return;
-    const timer = window.setInterval(() => setCameraVersion(Date.now()), 500);
+    const timer = window.setInterval(() => setCameraVersion(Date.now()), 1000 / 6);
     return () => window.clearInterval(timer);
   }, [cameraDevice?.device_id]);
 

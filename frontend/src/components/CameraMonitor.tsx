@@ -26,7 +26,7 @@ export function CameraMonitor({workers, devices}: Props) {
     const timer = window.setInterval(() => {
       setImageError(false);
       setImageVersion(Date.now());
-    }, 1000 / 3);
+    }, 1000 / 6);
     return () => window.clearInterval(timer);
   }, [selected?.device_id]);
   useEffect(() => {
