@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     yolo_vest_confidence: float = 0.40
     # Require a strong detection in three consecutive analyzed frames before
     # raising a fire incident. This favors avoiding false alarms.
-    yolo_fire_confidence: float = 0.75
+    yolo_fire_confidence: float = 0.50
     yolo_fire_confirm_frames: int = 3
     yolo_smoke_confidence: float = 0.45
     yolo_smoke_confirm_frames: int = 2

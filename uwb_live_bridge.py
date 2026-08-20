@@ -135,9 +135,11 @@ class BackendClient:
             try:
                 response = self.session.get(f"{self.base_url}/api/health", timeout=2)
                 if response.ok:
-                    self.session.post(
+                    # Operation mode is selected when the hardware backend
+                    # starts. The current system endpoint is read-only, so
+                    # verify it instead of issuing the obsolete HTTP POST.
+                    self.session.get(
                         f"{self.base_url}/api/system/mode",
-                        json={"mode": "hardware"},
                         timeout=2,
                     ).raise_for_status()
                     print("[서버] 연결 완료, hardware 모드로 전환했습니다.")
@@ -199,6 +201,12 @@ def run_bridge(args: argparse.Namespace) -> None:
                 print(f"[시리얼] {args.port} 연결 완료")
                 while True:
                     raw = port.readline()
+                    # Serial connectivity is itself a valid hardware signal.
+                    # Position updates below still require three anchors.
+                    try:
+                        backend.heartbeat_if_due()
+                    except requests.RequestException as exc:
+                        print(f"[server error] {exc}")
                     if not raw:
                         continue
                     line = raw.decode("utf-8", errors="replace").strip()

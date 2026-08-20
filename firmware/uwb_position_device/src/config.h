@@ -2,7 +2,7 @@
 
 #define WIFI_SSID "YOUR_WIFI_SSID"
 #define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
-#define SERVER_BASE_URL "http://192.168.0.10:8000"
+#define SERVER_BASE_URL "http://192.168.0.49:8000"
 
 #define ORGANIZATION_ID "org-001"
 #define SITE_ID "site-001"

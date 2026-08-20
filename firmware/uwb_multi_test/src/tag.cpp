@@ -84,10 +84,12 @@ static bool     is_slot_completed = false;
 static bool     wifi_report_pending = false;
 static uint32_t last_wifi_attempt_ms = 0;
 static uint32_t last_wifi_post_ms = 0;
+static uint32_t last_wifi_heartbeat_ms = 0;
 
 #define WIFI_RETRY_INTERVAL_MS 10000
 #define WIFI_POST_RETRY_MS     100
 #define WIFI_HTTP_TIMEOUT_MS   3000
+#define WIFI_HEARTBEAT_INTERVAL_MS 10000
 
 extern dwt_txconfig_t txconfig_options;
 
@@ -99,6 +101,7 @@ static void send_report(void);
 static bool wifi_is_configured(void);
 static void begin_wifi(void);
 static void service_wifi(void);
+static void send_wifi_heartbeat(uint32_t now_ms);
 
 static inline int get_anchor_index(uint16_t anchor_id)
 {
@@ -163,6 +166,11 @@ static void service_wifi()
         return;
     }
 
+    // The tag is online as soon as it has Wi-Fi, even before A0 and the
+    // other anchors produce a solvable position.  This lets the dashboard
+    // distinguish an alive tag with missing anchors from an offline tag.
+    send_wifi_heartbeat(now_ms);
+
     if (!wifi_report_pending || now_ms - last_wifi_post_ms < WIFI_POST_RETRY_MS)
     {
         return;
@@ -220,6 +228,49 @@ static void service_wifi()
     {
         Serial.print("[WIFI] POST failed: ");
         Serial.println(status_code);
+    }
+}
+
+static void send_wifi_heartbeat(uint32_t now_ms)
+{
+    if (now_ms - last_wifi_heartbeat_ms < WIFI_HEARTBEAT_INTERVAL_MS)
+    {
+        return;
+    }
+
+    String endpoint = HANMIR_SERVER_URL;
+    int api_index = endpoint.indexOf("/api/");
+    if (api_index < 0)
+    {
+        Serial.println("[WIFI] invalid server URL for heartbeat");
+        return;
+    }
+    endpoint = endpoint.substring(0, api_index) + "/api/devices/heartbeat";
+
+    String payload = "{\"organization_id\":\"org-001\",\"site_id\":\"site-001\",";
+    payload += "\"worker_id\":\"worker-001\",\"helmet_id\":\"helmet-001\",";
+    payload += "\"device_id\":\"helmet-001-uwb\",\"rssi\":";
+    payload += String(WiFi.RSSI());
+    payload += ",\"component_status\":{\"uwb\":\"ready\",\"wifi\":\"ready\"}}";
+
+    WiFiClient client;
+    HTTPClient http;
+    http.setTimeout(WIFI_HTTP_TIMEOUT_MS);
+    if (!http.begin(client, endpoint))
+    {
+        return;
+    }
+    http.addHeader("Content-Type", "application/json");
+    int status_code = http.POST(payload);
+    http.end();
+    if (status_code >= 200 && status_code < 300)
+    {
+        last_wifi_heartbeat_ms = now_ms;
+        Serial.println("[WIFI] heartbeat OK");
+    }
+    else
+    {
+        Serial.printf("[WIFI] heartbeat failed: %d\n", status_code);
     }
 }
 void setup()
@@ -328,6 +379,10 @@ static void listen_for_beacon(uint16_t timeout_ms)
 // Before synchronization, only listen for Beacon; after synchronization, use the Beacon epoch to divide TDMA slots.
 void loop()
 {
+    // Keep Wi-Fi and the server-presence signal alive whether or not A0 is
+    // currently visible.  Ranging itself remains synchronized to A0 below.
+    service_wifi();
+
     if (!is_time_synced)
     {
         listen_for_beacon(200);
