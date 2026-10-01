@@ -1,0 +1,14 @@
+{
+  "reference": {
+    "description": "2026-07-31 테스트 공간 중앙(2.90m, 4.10m) 1차 보정",
+    "expected_distance_m": 5.02,
+    "site_width_m": 5.8,
+    "site_height_m": 8.2
+  },
+  "offset_m": {
+    "anchor-001": 0.48,
+    "anchor-002": -0.11,
+    "anchor-003": -0.69,
+    "anchor-004": 0.33
+  }
+}

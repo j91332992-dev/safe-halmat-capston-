@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">한미르 안전관제</string>
+    <string name="title_activity_main">한미르 안전관제</string>
+    <string name="package_name">com.hanmir.safesmarthelmet</string>
+    <string name="custom_url_scheme">com.hanmir.safesmarthelmet</string>
+</resources>

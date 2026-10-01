@@ -1,0 +1,72 @@
+from fastapi.testclient import TestClient
+
+from app.main import app
+from app.models.entities import WorkerState
+from app.routers.camera import _merge_detection
+from app.services.yolo_service import _update_fire_confirmation, _update_observed_person_ppe
+
+
+def test_real_camera_analysis_updates_worker_state():
+    worker = WorkerState(
+        worker_id="worker-camera-test",
+        worker_name="테스트 작업자",
+        helmet_id="helmet-camera-test",
+        ppe_json="{}",
+        hazard_json="{}",
+    )
+    _merge_detection(
+        worker,
+        {"mode": "real", "ppe": {"helmet": False, "vest": True}, "hazards": {"fire": False, "smoke": False}},
+    )
+    assert worker.ppe_json == "{}"
+    assert '"ppe_subject_scope": "observed_person"' in worker.hazard_json
+    assert '"observed_person_missing_ppe": ["helmet"]' in worker.hazard_json
+    assert '"fire": false' in worker.hazard_json
+
+
+def test_observed_person_ppe_requires_three_consecutive_missing_frames():
+    state = {}
+    seen = {"helmet": False, "vest": True, "glove": True}
+    first, first_counts = _update_observed_person_ppe(state, person_seen=True, ppe_seen=seen, missing_required=3)
+    assert first["helmet"] is None and first_counts["helmet"] == 1
+    second, second_counts = _update_observed_person_ppe(state, person_seen=True, ppe_seen=seen, missing_required=3)
+    assert second["helmet"] is None and second_counts["helmet"] == 2
+    third, third_counts = _update_observed_person_ppe(state, person_seen=True, ppe_seen=seen, missing_required=3)
+    assert third["helmet"] is False and third_counts["helmet"] == 3
+    reset, reset_counts = _update_observed_person_ppe(state, person_seen=False, ppe_seen=seen, missing_required=3)
+    assert reset["helmet"] is None and reset_counts["helmet"] == 0
+
+
+def test_yolo_fire_requires_high_confidence_consecutive_frames(monkeypatch):
+    monkeypatch.setattr("app.services.yolo_service.settings.yolo_fire_confidence", 0.60)
+    monkeypatch.setattr("app.services.yolo_service.settings.yolo_fire_confirm_frames", 3)
+    state = {}
+    assert _update_fire_confirmation(state, 0.30) == (False, 0)
+    assert _update_fire_confirmation(state, 0.75) == (False, 1)
+    assert _update_fire_confirmation(state, 0.75) == (False, 2)
+    assert _update_fire_confirmation(state, 0.75) == (True, 3)
+
+def test_operator_text_command_works_without_mock_endpoint(monkeypatch):
+    async def no_tts(_message):
+        return None
+    monkeypatch.setattr("app.routers.audio.generate_tts", no_tts)
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/audio/command",
+            json={"worker_id": "worker-001", "device_id": "helmet-001-av", "text": "현재 위험도 알려줘"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["intent"] == "risk_query"
+        assert data["response"]
+        assert "audio_url" in data
+
+
+def test_camera_mock_endpoint_updates_simulated_helmet_state():
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/camera/mock-detection",
+            json={"worker_id": "worker-001", "device_id": "helmet-001-av", "vest": True, "glove": False, "fire": False, "smoke": False},
+        )
+        assert response.status_code == 200
+        assert response.json()["worker"]["ppe"]["glove"] is False

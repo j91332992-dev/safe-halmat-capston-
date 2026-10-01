@@ -1,0 +1,51 @@
+#pragma once
+#include <Arduino.h>
+
+void identityBegin();
+String identityJson();
+bool wifiBeginAndWait();
+void wifiMaintain();
+bool cameraBegin();
+bool cameraUploadIfDue();
+bool cameraIsReady();
+bool audioBegin();
+void audioLoop();
+bool audioIsReady();
+bool audioStartRecording();
+void audioStopRecording();
+bool audioUpload();
+void audioSetSuppressed(bool suppressed);
+void audioArmFollowup(uint32_t timeoutMs);
+bool audioConsumeFollowupTimeout();
+bool audioIsListening();
+bool audioIsBusy();
+bool audioShouldSuspendCamera();
+bool audioShouldThrottleCamera();
+bool audioIsCallMode();
+void audioSetCallMode(bool enabled);
+bool audioReadCallFrame(uint8_t *data, size_t capacity);
+bool speakerBegin();
+bool speakerIsReady();
+void speakerPlayAlert(uint8_t repeats = 3);
+bool speakerPlayTone(uint16_t frequency = 1200, uint16_t durationMs = 300);
+bool speakerPlayAudioUrl(const String &audioUrl);
+bool speakerPlayPcm(const uint8_t *data, size_t length, uint32_t sampleRate);
+bool speakerPlayAcknowledgement();
+void speakerStop();
+void speakerSetCallMode(bool enabled);
+bool speakerQueueCallPcm(const uint8_t *data, size_t length);
+void buttonBegin();
+void buttonLoop();
+float batteryPercent();
+bool serverRegister();
+bool serverHeartbeat();
+bool serverReportComponent(const String &component, const String &status, const String &commandId, const String &detail = "");
+bool serverSendButtonEvent(const String &eventType);
+void websocketBegin();
+void websocketLoop();
+void callBegin();
+void callLoop();
+bool callIsActive();
+void callStartRinging();
+void callStopRinging();
+
