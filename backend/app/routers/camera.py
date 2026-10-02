@@ -7,18 +7,21 @@ import json
 import logging
 import multiprocessing
 import os
+import secrets
+import struct
 from pathlib import Path
 from threading import Lock
 import time
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal, get_db, utcnow
 from ..models.entities import Device, Event, WorkerState
-from ..services.camera_service import CAPTURE_DIR, save_frame
+from ..config import settings
+from ..services.camera_service import CAPTURE_DIR, latest_raw_frame, remember_raw_frame, save_frame, save_frame_bytes
 from ..services.event_service import create_event, event_to_dict
 from ..services.device_service import mark_device_seen
 from ..services.evacuation_service import evacuation_snapshot, trigger_fire
@@ -39,6 +42,7 @@ class CameraJob:
     device_id: str
     worker_id: str
     helmet_id: str
+    frame_id: int | None = None
 
 
 class MockDetectionIn(BaseModel):
@@ -66,6 +70,7 @@ _checkpoint_interval_seconds = 1.0
 _alert_refresh_seconds = 5.0
 _last_inference_ms = 0.0
 _analysis_completed = 0
+_received_frames = 0
 _last_analysis_started_at = 0.0
 _normal_inference_interval_seconds = 1.0 / 4.0
 _voice_inference_interval_seconds = 1.0
@@ -211,6 +216,7 @@ async def _process_camera_job(job: CameraJob) -> None:
         "url": f"/api/camera/{job.device_id}/latest/image",
         "analysis": analysis,
         "helmet_id": job.helmet_id,
+        "frame_id": job.frame_id,
         "analyzed_at": utcnow().isoformat() + "Z",
     }
     if annotated_jpeg:
@@ -394,6 +400,7 @@ async def upload_frame(
     device_id: str = Form(...),
     worker_id: str = Form(...),
     helmet_id: str = Form("helmet-001"),
+    frame_id: int | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     device = db.get(Device, device_id)
@@ -403,13 +410,16 @@ async def upload_frame(
     if not worker:
         raise HTTPException(404, "작업자를 찾을 수 없습니다.")
     path = await save_frame(file, device_id)
+    remember_raw_frame(device_id, path.read_bytes(), frame_id)
+    global _received_frames
+    _received_frames += 1
     now = time.monotonic()
     if now - _last_device_seen_commit.get(device_id, 0.0) >= 1.0:
         mark_device_seen(device, "camera")
         db.commit()
         _last_device_seen_commit[device_id] = now
     relative_name = path.relative_to(CAPTURE_DIR).as_posix()
-    dropped_stale = enqueue_camera_job(CameraJob(relative_name, device_id, worker_id, helmet_id))
+    dropped_stale = enqueue_camera_job(CameraJob(relative_name, device_id, worker_id, helmet_id, frame_id))
     return {
         "accepted": True,
         "device_id": device_id,
@@ -417,7 +427,68 @@ async def upload_frame(
         "processing": "queued",
         "queue_depth": _camera_queue.qsize() if _camera_queue is not None else 0,
         "dropped_stale": dropped_stale,
+        "frame_id": frame_id,
     }
+
+
+@router.websocket("/stream/{device_id}")
+async def stream_frames(websocket: WebSocket, device_id: str, worker_id: str, helmet_id: str = "helmet-001"):
+    """P4 v1: one binary message = 16-byte header + complete JPEG.
+
+    Header: ASCII HMR2, uint64 frame ID, uint16 width, uint16 height,
+    all integers big-endian. The secret is required; S3 multipart is unchanged.
+    """
+    token = websocket.headers.get("x-hanmir-camera-token", "")
+    if not settings.camera_ingest_token or not secrets.compare_digest(token, settings.camera_ingest_token):
+        await websocket.close(code=1008, reason="camera token required")
+        return
+    with SessionLocal() as db:
+        device = db.get(Device, device_id)
+        worker = db.get(WorkerState, worker_id)
+        if device is None or worker is None or device.worker_id != worker_id:
+            await websocket.close(code=1008, reason="unknown device or worker")
+            return
+    await websocket.accept()
+    last_frame_id = -1
+    accepted = 0
+    try:
+        while True:
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                break
+            packet = message.get("bytes")
+            if packet is None:
+                await websocket.close(code=1003, reason="binary frames only")
+                break
+            if len(packet) < 20 or len(packet) > settings.camera_max_frame_bytes + 16:
+                await websocket.close(code=1009, reason="invalid frame length")
+                break
+            magic, frame_id, width, height = struct.unpack(">4sQHH", packet[:16])
+            jpeg = packet[16:]
+            if (magic != b"HMR2" or frame_id <= last_frame_id or not 0 < width <= 4096
+                    or not 0 < height <= 4096 or not jpeg.startswith(b"\xff\xd8")
+                    or not jpeg.endswith(b"\xff\xd9")):
+                await websocket.close(code=1003, reason="invalid JPEG or frame header")
+                break
+            last_frame_id = frame_id
+            path = await asyncio.to_thread(save_frame_bytes, jpeg, device_id)
+            remember_raw_frame(device_id, jpeg, frame_id)
+            relative_name = path.relative_to(CAPTURE_DIR).as_posix()
+            dropped = enqueue_camera_job(CameraJob(relative_name, device_id, worker_id, helmet_id, frame_id))
+            global _received_frames
+            _received_frames += 1
+            accepted += 1
+            if accepted == 1 or accepted % 8 == 0:
+                with SessionLocal() as db:
+                    current = db.get(Device, device_id)
+                    if current is not None:
+                        mark_device_seen(current, "camera")
+                        db.commit()
+                await websocket.send_json({"type": "frame_ack", "frame_id": frame_id,
+                                           "queue_depth": _camera_queue.qsize() if _camera_queue else 0,
+                                           "dropped_stale": dropped})
+    except WebSocketDisconnect:
+        pass
 
 
 @router.get("/processor/status")
@@ -430,9 +501,30 @@ def processor_status():
         "voice_requests_active": voice_requests_active(),
         "last_inference_ms": round(_last_inference_ms, 1),
         "analysis_completed": _analysis_completed,
-        "target_inference_fps": 3,
+        "target_inference_fps": 1.0 / _normal_inference_interval_seconds,
+        "received_frames": _received_frames,
         "inference_process_isolated": _inference_executor is not None,
     }
+
+
+@router.get("/{device_id}/live")
+def latest_raw_status(device_id: str):
+    raw = latest_raw_frame(device_id)
+    if raw is None:
+        return {"device_id": device_id, "received": False}
+    _, metadata = raw
+    return {"device_id": device_id, "received": True,
+            "frame_id": metadata["frame_id"],
+            "age_ms": round((time.monotonic() - metadata["received_monotonic"]) * 1000)}
+
+
+@router.get("/{device_id}/live/image")
+def latest_raw_image(device_id: str):
+    raw = latest_raw_frame(device_id)
+    if raw is None:
+        raise HTTPException(404, "수신된 원본 카메라 프레임이 없습니다.")
+    return Response(content=raw[0], media_type="image/jpeg",
+                    headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
 @router.get("/{device_id}/latest")

@@ -81,11 +81,13 @@ export const api = {
       body: JSON.stringify({worker_id: workerId, device_id: deviceId, text})
     }),
   latestCamera: (deviceId: string) => request<CameraLatest>(`/api/camera/${encodeURIComponent(deviceId)}/latest`),
+  liveCamera: (deviceId: string) => request<{device_id: string; received: boolean; frame_id?: number; age_ms?: number}>(`/api/camera/${encodeURIComponent(deviceId)}/live`),
+  liveCameraImageUrl: (deviceId: string, version: string | number = Date.now()) =>
+    `${getServerBaseUrl()}/api/camera/${encodeURIComponent(deviceId)}/live/image?v=${encodeURIComponent(String(version))}`,
   cameraImageUrl: (deviceId: string, version: string | number = Date.now()) =>
     `${getServerBaseUrl()}/api/camera/${encodeURIComponent(deviceId)}/latest/image?v=${encodeURIComponent(String(version))}`,
   assetUrl: (path: string) => `${getServerBaseUrl()}${path}`,
   acknowledge: (eventId: string) => request(`/api/events/${eventId}/acknowledge`, {method: "POST"}),
   resolve: (eventId: string) => request(`/api/events/${eventId}/resolve`, {method: "POST"})
 };
-
 

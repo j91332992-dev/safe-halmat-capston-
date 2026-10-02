@@ -420,6 +420,7 @@ nav button.group-item i {width:19px}.nav-group-items button.active {background:#
 /* ==========================================================================
    Mobile PWA & Capacitor Cross-Platform UI/UX (iOS & Android)
    ========================================================================== */
+.camera-monitor-grid > .camera-live-card:first-child{grid-column:1/-1}
 
 /* Mobile-first administrator dashboard: quick, one-handed safety decisions. */
 .mobile-page { display: none; }

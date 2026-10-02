@@ -20,6 +20,15 @@ firmware/uwb_multi_test/include/wifi_secrets.h
 backend/tts_output/*
 !backend/tts_output/.gitkeep
 firmware/helmet_av_device/include/device_secrets.h
+firmware/helmet_p4/sdkconfig
+firmware/helmet_p4/sdkconfig.old
+firmware/helmet_p4/build/
+firmware/helmet_p4/managed_components/
+firmware/helmet_p4_voice_lab/sdkconfig
+firmware/helmet_p4_voice_lab/sdkconfig.old
+firmware/helmet_p4_voice_lab/build/
+firmware/helmet_p4_voice_lab/managed_components/
+recordings/
 *.log
 backend/safety.db-*
 backend/test_result*.jpg

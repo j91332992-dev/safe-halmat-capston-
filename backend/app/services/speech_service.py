@@ -12,7 +12,7 @@ COMMANDS = {
     "risk_query": ["위험도", "현재위험도알려줘"],
     "help": ["도와줘", "도와주세요", "도움요청", "도움이필요해요", "구해줘", "구해주세요"],
     "emergency": ["비상상황", "비상상황입니다", "살려줘", "살려주세요", "긴급상황", "응급상황"],
-    "fire_report": ["화재발생", "화재가발생", "화제발생", "불이났어요", "불이났습니다", "불났어요", "불났습니다"],
+    "fire_report": ["화재발생", "화재가발생", "화제발생", "불이야", "불이났어", "불이났어요", "불이났습니다", "불났어", "불났어요", "불났습니다"],
     "repeat_warning": ["경고다시말해줘"],
     "evacuation_route": ["대피경로", "어디로대피", "비상구알려줘"],
 }
@@ -93,7 +93,6 @@ def resolve_intent(text: str) -> tuple[str, float]:
         return best if best[1] >= 0.55 else ("unknown", best[1])
     except ImportError:
         return "unknown", 0.0
-
 
 
 

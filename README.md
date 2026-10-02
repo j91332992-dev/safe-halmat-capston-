@@ -1,5 +1,11 @@
 # 🦺 HANMIR — 산업용 AI 스마트 안전모
 
+> **2026-10-02 업데이트 · HANMIR 2.0 P4 / 음성 / 영상 통신 준비**
+>
+> 이 브랜치(`feature/mobile-safety-app-20261001`)는 모바일 관제 앱에 P4 통합 펌웨어 준비 코드, STT·긴급어 보완, 바이너리 영상 수신과 원본 미리보기를 추가합니다. **P4 빌드·실물 검증 전이며 OV5647 캡처·P4 통화·BNO085 낙상은 미완료입니다.**
+>
+> [오늘 전체 작업·파일별 변경·검증 결과](docs/HANMIR_2_DAILY_REPORT_2026-10-02.md) · [P4 통합 펌웨어](firmware/helmet_p4/README.md) · [통신 개편 계획](docs/HANMIR_2_P4_COMMUNICATION_PLAN_2026-10-02.md) · [음성 준비 상태](docs/HANMIR_2_VOICE_PREP_2026-10-02.md)
+
 <div align="center">
 
 ![ESP32-S3](https://img.shields.io/badge/ESP32--S3-Embedded_HW-E7352C?style=for-the-badge&logo=espressif&logoColor=white)

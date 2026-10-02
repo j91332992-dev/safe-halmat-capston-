@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     stt_model: str = "gpt-4o-mini-transcribe"
     stt_language: str = "ko"
     stt_prompt: str = "한국어 산업 안전 현장 대화입니다. 호출어 투투스와 작업자의 짧은 명령을 정확히 받아쓰고, 들리지 않는 내용은 추측하지 마세요."
+    stt_command_prompt: str = "한국어 산업 안전 현장 대화입니다. 작업자의 짧은 명령을 정확히 받아쓰고, 들리지 않는 내용은 추측하지 마세요."
+    stt_timeout_seconds: float = 10.0
     # 짧은 호출어는 STT에서 받침/띄어쓰기 차이가 자주 난다. 자주 쓰는
     # 전사 변형을 명시하고, 단어 전체가 아닌 일상 대화에 오작동하지 않는
     # 수준으로 유사도 임계값을 조금 완화한다.
@@ -42,11 +44,15 @@ class Settings(BaseSettings):
     wake_followup_seconds: float = 20.0
     voice_command_cooldown_seconds: float = 3.0
     use_gpt_response: bool = True
-    gpt_model: str = "gpt-5.6-sol"
+    gpt_model: str = "gpt-6-luna"
     gpt_max_output_tokens: int = 80
+    gpt_timeout_seconds: float = 5.0
     use_edge_tts: bool = True
     tts_voice: str = "ko-KR-SunHiNeural"
     call_device_token: str = ""
+    # Separate credential for P4 video ingestion. Existing S3 POST remains unchanged.
+    camera_ingest_token: str = ""
+    camera_max_frame_bytes: int = 524288
     call_answer_timeout_seconds: float = 30.0
     # Initial administrator account: TUTUS / the password supplied during setup.
     # The password itself is never stored in source; this is a PBKDF2-SHA256 hash.
@@ -93,5 +99,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-

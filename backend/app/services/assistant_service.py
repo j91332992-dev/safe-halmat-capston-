@@ -52,13 +52,20 @@ async def build_response_smart(intent: str, worker: dict, user_text: str = "") -
             f"보호구: {ppe}\n감지 위험: {hazards}\n"
             "위 정보만 사용해 작업자에게 바로 말할 응답을 작성하세요."
         )
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
-        response = await client.responses.create(
+        client = AsyncOpenAI(
+            api_key=settings.openai_api_key,
+            timeout=settings.gpt_timeout_seconds,
+            max_retries=0,
+        )
+        request = dict(
             model=settings.gpt_model,
             instructions=SYSTEM_PROMPT,
             input=context,
             max_output_tokens=settings.gpt_max_output_tokens,
         )
+        if settings.gpt_model == "gpt-6-luna":
+            request["reasoning"] = {"effort": "none"}
+        response = await client.responses.create(**request)
         message = (response.output_text or "").strip()
         if not message:
             return fallback
@@ -68,6 +75,5 @@ async def build_response_smart(intent: str, worker: dict, user_text: str = "") -
     except Exception as exc:
         logger.warning("OpenAI 응답 생성 실패, 고정 응답 사용: %s", exc)
         return fallback
-
 
 

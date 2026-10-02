@@ -1,4 +1,6 @@
 import json
+import logging
+from time import perf_counter
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -19,11 +21,12 @@ from ..services.serializers import worker_to_dict
 from ..services.speech_service import normalize, resolve_intent
 from ..services.tts_generator_service import generate_tts
 from ..services.voice_execution_gate import voice_execution_gate
-from ..services.wake_word_service import wake_word_gate
+from ..services.wake_word_service import WakeDecision, wake_word_gate
 from ..services.inference_priority import voice_priority
 from ..websocket import call_manager, manager
 
 router = APIRouter(prefix="/api/audio", tags=["audio"])
+logger = logging.getLogger(__name__)
 
 
 async def process_text(
@@ -38,8 +41,8 @@ async def process_text(
     if not worker:
         raise HTTPException(404, "작업자를 찾을 수 없습니다.")
     intent, confidence = resolve_intent(text)
-    if intent in ("emergency", "help", "fire_report") and sound_db is not None and sound_db < 80:
-        intent, confidence = "unknown", 0.0
+    # A quiet emergency must still be accepted. sound_db is diagnostic input,
+    # not a condition for discarding an explicit SOS or fire report.
     command = VoiceCommand(
         worker_id=worker_id,
         device_id=device_id,
@@ -92,11 +95,14 @@ async def process_text(
 
     complex_request = intent == "unknown" and len(normalize(text)) >= 6
     terminal_unknown = intent == "unknown" and not allow_retry and not complex_request
+    response_started = perf_counter()
     if terminal_unknown or intent in {"stop_speaking", "hang_up"}:
         message, speaker_command = "", None
     else:
         message, speaker_command = await build_response_smart(intent, worker_data, text)
+    response_done = perf_counter()
     audio_path = await generate_tts(message) if message else None
+    tts_done = perf_counter()
     audio_url = f"/tts/{audio_path.name}" if audio_path else None
     if audio_url and speaker_command:
         speaker_command = "play_audio"
@@ -169,6 +175,10 @@ async def process_text(
         "worker": worker_to_dict(worker),
         "safety_agent": agent_plan,
         "evacuation": evacuation_snapshot(db) if current_incident(db) else {"incident": None, "routes": {}},
+        "timings_ms": {
+            "response": round((response_done - response_started) * 1000, 1),
+            "tts": round((tts_done - response_done) * 1000, 1),
+        },
     }
 
 
@@ -178,21 +188,31 @@ async def upload_audio(
     device_id: str = Form(...),
     worker_id: str = Form(...),
     sound_db: float | None = Form(None),
+    wake_detected: bool = Form(False),
     db: Session = Depends(get_db),
     _voice_priority: None = Depends(voice_priority),
 ):
+    received_at = perf_counter()
     device = db.get(Device, device_id)
     if not device:
         raise HTTPException(404, "먼저 장치를 등록하세요.")
     path = await save_audio(file, device_id)
+    saved_at = perf_counter()
     mark_device_seen(device, "audio")
-    transcript = await stt(path)
+    transcript = await stt(path, command_only=wake_detected)
+    stt_done = perf_counter()
     try:
         path.unlink(missing_ok=True)
     except OSError:
         pass
 
-    decision = wake_word_gate.evaluate(device_id, transcript)
+    if wake_detected:
+        decision = (
+            WakeDecision("command", transcript, transcript, "device_wake")
+            if transcript else WakeDecision("ignored", transcript, reason="stt_empty_after_device_wake")
+        )
+    else:
+        decision = wake_word_gate.evaluate(device_id, transcript)
     if decision.status != "command":
         acknowledgement = None
         audio_url = None
@@ -220,7 +240,7 @@ async def upload_audio(
             record.status = "delivered" if delivered else "queued"
 
         db.commit()
-        return {
+        result = {
             "status": decision.status,
             "text": decision.transcript,
             "reason": decision.reason,
@@ -231,6 +251,13 @@ async def upload_audio(
             "device_command_id": device_command_id,
             "delivered_connections": delivered,
         }
+        result["timings_ms"] = {
+            "save": round((saved_at - received_at) * 1000, 1),
+            "stt": round((stt_done - saved_at) * 1000, 1),
+            "total_server": round((perf_counter() - received_at) * 1000, 1),
+        }
+        logger.info("voice_pipeline status=%s reason=%s timings_ms=%s", decision.status, decision.reason, result["timings_ms"])
+        return result
 
     allowed, execution_reason = voice_execution_gate.allow(device_id, decision.command_text)
     if not allowed:
@@ -256,6 +283,12 @@ async def upload_audio(
     result["status"] = "command"
     result["transcript"] = decision.transcript
     result["wake_reason"] = decision.reason
+    result["timings_ms"].update({
+        "save": round((saved_at - received_at) * 1000, 1),
+        "stt": round((stt_done - saved_at) * 1000, 1),
+        "total_server": round((perf_counter() - received_at) * 1000, 1),
+    })
+    logger.info("voice_pipeline status=command reason=%s timings_ms=%s", decision.reason, result["timings_ms"])
     db.commit()
     await manager.broadcast("voice_command", result)
     return result
@@ -290,7 +323,6 @@ def list_commands(limit: int = 50, db: Session = Depends(get_db)):
         }
         for row in rows
     ]
-
 
 
 

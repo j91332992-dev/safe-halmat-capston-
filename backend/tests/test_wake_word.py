@@ -49,7 +49,7 @@ def test_life_critical_phrase_bypasses_wake_word():
 
 def test_fire_phrase_variants_bypass_wake_word():
     gate = WakeWordGate()
-    for phrase in ("화재 발생", "화재가 발생했습니다", "화제 발생", "불이 났습니다"):
+    for phrase in ("화재 발생", "화재가 발생했습니다", "화제 발생", "불이 났습니다", "불이야", "불났어"):
         decision = gate.evaluate("helmet-fire", phrase)
         assert decision.status == "command"
         assert decision.reason == "life_critical_bypass"
