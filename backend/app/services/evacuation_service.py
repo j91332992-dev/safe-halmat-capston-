@@ -33,10 +33,12 @@ def incident_to_dict(item: EvacuationIncident | None) -> dict | None:
     }
 
 
-def current_incident(db: Session) -> EvacuationIncident | None:
+def current_incident(db: Session, site_id: str | None = None) -> EvacuationIncident | None:
+    query = db.query(EvacuationIncident).filter(EvacuationIncident.status.in_(ACTIVE_STATUSES))
+    if site_id:
+        query = query.filter(EvacuationIncident.site_id == site_id)
     return (
-        db.query(EvacuationIncident)
-        .filter(EvacuationIncident.status.in_(ACTIVE_STATUSES))
+        query
         .order_by(EvacuationIncident.created_at.desc())
         .first()
     )
@@ -256,11 +258,14 @@ def calculate_route(db: Session, worker: WorkerState, incident: EvacuationIncide
     return result
 
 
-def evacuation_snapshot(db: Session) -> dict:
-    incident = current_incident(db)
+def evacuation_snapshot(db: Session, site_id: str | None = None) -> dict:
+    incident = current_incident(db, site_id)
     if not incident:
         return {"incident": None, "routes": {}}
-    routes = {worker.worker_id: calculate_route(db, worker, incident) for worker in db.query(WorkerState).all()}
+    workers = db.query(WorkerState)
+    if site_id:
+        workers = workers.filter(WorkerState.site_id == site_id)
+    routes = {worker.worker_id: calculate_route(db, worker, incident) for worker in workers.all()}
     return {"incident": incident_to_dict(incident), "routes": routes}
 
 

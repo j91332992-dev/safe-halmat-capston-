@@ -3,8 +3,9 @@ import {getServerBaseUrl} from "./config";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const baseUrl = getServerBaseUrl();
+  const token = sessionStorage.getItem(ADMIN_TOKEN_KEY);
   const response = await fetch(`${baseUrl}${path}`, {
-    headers: {"Content-Type": "application/json", ...options?.headers},
+    headers: {"Content-Type": "application/json", ...(token ? {Authorization: `Bearer ${token}`} : {}), ...options?.headers},
     ...options
   });
   if (!response.ok) {
@@ -20,11 +21,11 @@ const ADMIN_TOKEN_KEY = "hanmir_admin_session";
 export const auth = {
   hasSession: () => Boolean(sessionStorage.getItem(ADMIN_TOKEN_KEY)),
   login: async (username: string, password: string) => {
-    const response = await request<{token: string; username: string; role: string}>("/api/auth/login", {method: "POST", body: JSON.stringify({username, password})});
+    const response = await request<{token: string; username: string; role: string; site_id: string}>("/api/auth/login", {method: "POST", body: JSON.stringify({username, password})});
     sessionStorage.setItem(ADMIN_TOKEN_KEY, response.token);
     return response;
   },
-  session: () => request<{username: string; role: string}>("/api/auth/session", {headers: {Authorization: `Bearer ${sessionStorage.getItem(ADMIN_TOKEN_KEY) ?? ""}`}}),
+  session: () => request<{username: string; role: string; site_id: string}>("/api/auth/session", {headers: {Authorization: `Bearer ${sessionStorage.getItem(ADMIN_TOKEN_KEY) ?? ""}`}}),
   logout: async () => {
     await request("/api/auth/logout", {method: "POST", headers: {Authorization: `Bearer ${sessionStorage.getItem(ADMIN_TOKEN_KEY) ?? ""}`}}).catch(() => {});
     sessionStorage.removeItem(ADMIN_TOKEN_KEY);
@@ -85,7 +86,8 @@ export const api = {
     `${getServerBaseUrl()}/api/camera/${encodeURIComponent(deviceId)}/latest/image?v=${encodeURIComponent(String(version))}`,
   assetUrl: (path: string) => `${getServerBaseUrl()}${path}`,
   acknowledge: (eventId: string) => request(`/api/events/${eventId}/acknowledge`, {method: "POST"}),
-  resolve: (eventId: string) => request(`/api/events/${eventId}/resolve`, {method: "POST"})
+  resolve: (eventId: string) => request(`/api/events/${eventId}/resolve`, {method: "POST"}),
+  resolveAllEvents: () => request<{resolved_count: number}>("/api/events/resolve-all", {method: "POST"})
 };
 
 

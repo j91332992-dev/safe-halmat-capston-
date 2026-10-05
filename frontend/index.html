@@ -2,8 +2,19 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- This is an operational control app: keep the fixed mobile layout from
+         being enlarged into a horizontally scrollable canvas. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <!-- Installed PWA mode hides the browser's address / share controls on iOS and Android. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="한미르 관제" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#06101a" />
+    <meta name="theme-color" media="(max-width: 900px)" content="#ffffff" />
+    <meta name="theme-color" media="(min-width: 901px) and (max-width: 1280px) and (hover: none) and (pointer: coarse)" content="#ffffff" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
     <title>한미르 안전관제</title>
   </head>
   <body>

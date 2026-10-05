@@ -2,6 +2,7 @@ import {useEffect, useMemo, useState} from "react";
 import {api} from "../services/api";
 import type {Device, Worker} from "../types";
 import {StatusPill} from "./StatusPill";
+import {elapsedTime} from "../utils/elapsedTime";
 
 interface Props {workers: Worker[]; devices: Device[]}
 
@@ -78,7 +79,7 @@ export function CameraMonitor({workers, devices}: Props) {
             ) : (
               <div className="camera-placeholder"><strong>NO FRAME</strong><span>ESP32 안전모 카메라에서 실제 프레임을 수신하면 표시됩니다.</span></div>
             )}
-            <small>마지막 수신: {selected.last_camera_at ? new Date(selected.last_camera_at).toLocaleString("ko-KR") : "없음"}</small>
+            <small>마지막 수신: {elapsedTime(selected.last_camera_at)}</small>
           </article>
           <article className="camera-analysis-card">
             <span className="eyebrow">WORKER DETECTION</span>

@@ -1,0 +1,355 @@
+/* All new surfaces are opt-in on phone/tablet. Desktop keeps its original UI. */
+.ops-home, .ops-notification-strip, .ops-alert-overlay { display: none; }
+@media (max-width: 900px), (min-width: 901px) and (max-width: 1366px) and (hover: none) and (pointer: coarse) {
+  .app-frame { display: block; }
+  .sidebar, .topbar, .desktop-dashboard, .active-sos-banner, .active-call-request-banner, .missed-call-banner { display: none !important; }
+  .main-area[data-page="dashboard"] > .anchor-status-banner { display: none; }
+  .main-area { padding: 16px max(16px, env(safe-area-inset-right)) calc(96px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); background: #f6f9fe; }
+  .mobile-header.ops-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; height: auto; gap: 12px 8px; padding: calc(12px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left)); position: relative; background: white; }
+  .mobile-header-titles h1 { font-size: 16px; color: #182b45; }
+  .mobile-site-name { font-size: 12px; color: #586b82; }
+  .mobile-header-brand, .mobile-header-titles { min-width: 0; }
+  .mobile-header-brand .brand-mark { width: 32px; height: 36px; flex-shrink: 0; }
+  .mobile-header-actions { gap: 4px; }
+  .mobile-header-btn { width: 44px; height: 44px; box-shadow: none; }
+  .mobile-status-badge { display: none; }
+  .ops-notification-strip { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 8px; align-items: center; min-height: 44px; padding: 10px 14px; border: 0; border-radius: 12px; background: #eaf2ff; color: #174b98; font-size: 13px; text-align: left; }
+  .ops-notification-strip.has-danger { background: #fff0ef; color: #b4232d; }
+  .ops-home { display: grid; gap: 16px; color: #182b45; font-family: inherit; }
+  .ops-home *, .ops-alert-sheet * { min-width: 0; box-sizing: border-box; }
+  /* Keep Korean words intact throughout the touch UI.  Long data such as IDs
+     and URLs still has its own wrapping rules where it is displayed. */
+  .main-area :is(h1, h2, h3, h4, h5, h6, label, .page-intro, .zone-grid p, .diag-card footer) { word-break: keep-all; overflow-wrap: normal; }
+  .main-area :is(.panel, .page-panel, .camera-page, .replay-page, .worker-management, .layout-editor) > header { align-items: flex-start; gap: 10px; }
+  .main-area :is(.panel, .page-panel, .camera-page, .replay-page, .worker-management, .layout-editor) > header > div { min-width: 0; flex: 1 1 auto; }
+  .main-area :is(.panel, .page-panel, .camera-page, .replay-page, .worker-management, .layout-editor) > header h2 { line-height: 1.35; }
+  .main-area .camera-card-head, .main-area .diag-card header { gap: 10px; }
+  .main-area .camera-card-head > *, .main-area .diag-card header > * { min-width: 0; }
+  .safety-icon { width: 24px; height: 24px; flex: 0 0 24px; vertical-align: middle; }
+  .ops-heading, .ops-card > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .ops-heading small { color: #3563a0; font-size: 12px; }
+  .ops-heading h2 { margin: 4px 0 0; font-size: 23px; letter-spacing: -.6px; }
+  .ops-heading > span { color: #53647a; font-size: 12px; flex-shrink: 0; }
+  .ops-home .tone-danger { background: #fff0ef; color: #b4232d; border-color: #f0b8bb; }
+  .ops-home .tone-warning { background: #fff7df; color: #875200; border-color: #ebcf84; }
+  .ops-home .tone-safe { background: #eaf8ef; color: #076644; border-color: #a6d8bb; }
+  .ops-home .tone-unknown { background: #f0f3f7; color: #48566c; border-color: #cbd4df; }
+  .ops-condition { display: flex; align-items: center; gap: 14px; width: 100%; padding: 22px 18px; border: 1px solid; border-radius: 20px; text-align: left; }
+  .ops-condition > .safety-icon { width: 38px; height: 38px; flex-basis: 38px; }
+  .ops-condition > span { flex: 1; display: grid; gap: 6px; }
+  .ops-condition strong { font-size: 23px; letter-spacing: -.6px; }
+  .ops-condition small, .ops-condition span span { font-size: 12px; line-height: 1.6; }
+  .ops-condition > b { font-size: 26px; }
+  .ops-stale { margin: -8px 0 0; color: #b4232d; font-size: 13px; }
+  .ops-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .ops-counts button { display: grid; justify-items: center; gap: 7px; padding: 14px 8px; border: 1px solid; border-radius: 16px; font-size: 13px; }
+  .ops-counts strong { font-size: 29px; font-variant-numeric: tabular-nums; }
+  .ops-counts strong small { font-size: 12px; margin-left: 4px; font-weight: 500; }
+  .ops-card { background: white; border: 1px solid #dce5f1; border-radius: 18px; padding: 16px; box-shadow: 0 3px 10px #20375705; }
+  .ops-card > header { margin-bottom: 12px; }
+  /* Korean interface labels are short names, not arbitrary identifiers.
+     Keep each label together and let the flexible title use the available
+     header space before it would ever split one Korean character per line. */
+  .ops-card > header > h3 { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px; line-height: 1.35; white-space: nowrap; word-break: keep-all; overflow-wrap: normal; }
+  .ops-card h3 .safety-icon { color: #2463ba; width: 21px; height: 21px; }
+  .ops-card > header > button { border: 0; background: transparent; color: #1f5aab; min-height: 44px; font-size: 12px; flex-shrink: 0; }
+  .ops-tag { border: 1px solid transparent; border-radius: 8px; padding: 5px 8px; font-size: 12px; white-space: nowrap; }
+  .priority-0, .priority-1 { background: #fff0ef; color: #b4232d; }
+  .priority-2 { background: #fff7df; color: #875200; }
+  .priority-3 { background: #edf2f8; color: #48566c; }
+  .ops-event { width: 100%; display: flex; align-items: center; gap: 10px; padding: 14px 0; background: white; border: 0; border-top: 1px solid #edf1f7; text-align: left; color: #182b45; }
+  .ops-event > span:nth-child(2) { flex: 1; }
+  .ops-event b { font-size: 14px; line-height: 1.5; word-break: keep-all; overflow-wrap: break-word; }
+  .ops-event small, .ops-location small, .ops-battery small, .ops-offline small { display: block; margin-top: 5px; font-size: 12px; color: #586b82; line-height: 1.5; }
+  .ops-empty { margin: 0; padding: 18px 0; text-align: center; font-size: 14px; color: #586b82; }
+  .ops-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+  .ops-device-count { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .ops-device-count strong { font-size: 30px; color: #1d59a7; }
+  .ops-device-count small { font-size: 16px; color: #63748b; }
+  .ops-device-count > span { font-size: 12px; color: #53647a; }
+  .ops-offline { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; border: 0; border-top: 1px solid #edf1f7; background: white; color: #875200; text-align: left; padding: 12px 0; margin-top: 10px; }
+  .ops-offline b { font-size: 13px; word-break: keep-all; overflow-wrap: break-word; }
+  .ops-battery { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; font-size: 14px; }
+  .ops-battery > span { word-break: keep-all; overflow-wrap: break-word; }
+  .ops-battery b { color: #1d59a7; font-size: 23px; white-space: nowrap; }
+  .ops-battery .ops-low { color: #b4232d; }
+  .ops-location { display: flex; gap: 12px; background: #f5f8fd; padding: 14px; border-radius: 12px; font-size: 15px; }
+  .ops-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+  .ops-actions button { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 48px; border-radius: 12px; border: 1px solid #c8daf3; background: #edf4ff; color: #1c57a7; font-size: 14px; }
+  .ops-actions button:first-child { background: #205ec0; border-color: #205ec0; color: white; }
+  .ops-actions button:disabled { opacity: .5; }
+  .mobile-bottom-nav { display: grid; height: calc(72px + env(safe-area-inset-bottom)); z-index: 1000; }
+  .bottom-tab > span:last-child { display: block; font-size: 11px !important; }
+  .bottom-tab > span:last-child::after { content: none !important; }
+  .bottom-tab { min-height: 48px; }
+  .ops-menu-group { border: 1px solid #dce5f1; border-radius: 14px; margin: 12px 0; padding: 0 12px; }
+  .ops-menu-group summary { display: flex; align-items: center; gap: 10px; min-height: 58px; cursor: pointer; color: #214f91; font-weight: 700; list-style: none; }
+  .ops-menu-group summary::-webkit-details-marker { display: none; }
+  .ops-menu-group summary span { margin-left: auto; }
+  .ops-menu-group[open] summary span { transform: rotate(45deg); }
+  .ops-menu-group .mobile-drawer-grid { grid-template-columns: minmax(0, 1fr); padding-bottom: 12px; }
+  .mobile-drawer-card { max-height: 85dvh; overflow-y: auto; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+  .ops-alert-overlay { position: fixed; inset: 0; z-index: 2100; display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); background: #10233b88; }
+  .ops-alert-sheet { width: 100%; max-width: 720px; max-height: 85dvh; overflow-y: auto; background: white; border-radius: 20px; padding: 18px; color: #182b45; }
+  .ops-alert-sheet > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .ops-alert-sheet h2 { font-size: 20px; margin: 0; }
+  .ops-alert-sheet header p { font-size: 12px; color: #53647a; }
+  .ops-alert-sheet button { min-height: 44px; color: #1d59a7; background: #edf4ff; border: 1px solid #c8daf3; border-radius: 8px; }
+  .ops-alert-sheet .event-head { display: none; }
+  .ops-alert-sheet .event-row { display: flex; flex-wrap: wrap; gap: 10px; padding: 16px 0; width: auto; }
+  .ops-alert-sheet .event-row > span { display: block; font-size: 13px; word-break: keep-all; overflow-wrap: break-word; white-space: normal; }
+  .ops-alert-sheet .event-row > span:nth-child(3) { flex: 1 1 100%; }
+  .ops-alert-sheet .event-row > span:nth-child(4) { flex: 1 1 100%; }
+  .ops-alert-sheet .event-row .event-actions { display: flex; margin-left: auto; }
+  .ops-home button:focus-visible, .ops-menu-group summary:focus-visible { outline: 3px solid #2463ba; outline-offset: 3px; }
+  .ops-home button:active { filter: brightness(.96); }
+  @media (min-width: 700px) { .ops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ops-home { max-width: 1100px; margin: 0 auto; } }
+  @media (max-width: 360px) {
+    .ops-card > header > h3 { font-size: 16px; gap: 6px; }
+    .ops-card { padding: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .mobile-header *, .mobile-bottom-nav * { animation: none !important; } }
+}
+
+/* HANMIR mobile application dark theme.  This block is intentionally limited
+   to touch screens so the existing PC control room remains unchanged. */
+@media (max-width: 900px), (min-width: 901px) and (max-width: 1366px) and (hover: none) and (pointer: coarse) {
+  :root {
+    color: #f7f9fc;
+    background: #0c0e12;
+    --bg: #0c0e12;
+    --panel: #181b23;
+    --panel-2: #20242e;
+    --line: #303746;
+    --muted: #a6aebd;
+    --teal: #32d296;
+    --cyan: #5ea1ff;
+    --yellow: #ffb347;
+    --orange: #ff8747;
+    --red: #ff475a;
+  }
+
+  html, body, #root, .app-frame, .main-area { background: #0c0e12; color: #f7f9fc; }
+  .main-area { padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
+  .mobile-header.ops-header { background: rgba(12,14,18,.96); border-bottom: 1px solid #272d39; box-shadow: none; }
+  .mobile-header-titles h1 { color: #f7f9fc; }
+  .mobile-site-name { color: #a6aebd; }
+  .brand-mark.small { background: linear-gradient(145deg, #4d97ff, #2863ca); }
+  .mobile-header-btn { background: #20242e; border-color: #343c4b; color: #dce7f5; border-radius: 14px; }
+  .mobile-header-btn.is-emergency { background: rgba(255,71,90,.12); border-color: #ff475a; color: #ff6474; }
+  .mobile-status-badge { background: #181b23; border-color: #343c4b; }
+  .state-connected { background: rgba(50,210,150,.10); border-color: rgba(50,210,150,.42); color: #66e7b8; }
+  .state-connecting, .state-reconnecting { background: rgba(255,179,71,.10); color: #ffd18a; }
+  .state-offline, .state-error { background: rgba(255,71,90,.11); color: #ffadb7; }
+  .ops-notification-strip { background: #181b23; border: 1px solid #303746; color: #dce7f5; border-radius: 14px; }
+  .ops-notification-strip.has-danger { background: rgba(255,71,90,.12); border-color: rgba(255,71,90,.6); color: #ffd9de; }
+
+  .ops-home { gap: 14px; color: #f7f9fc; }
+  .ops-heading small { color: #75aaff; }
+  .ops-heading h2 { color: #fff; }
+  .ops-heading > span { color: #a6aebd; }
+
+  .ops-condition { overflow: hidden; border: 1px solid #303746; border-radius: 24px; background: #20242e; box-shadow: 0 12px 28px rgba(0,0,0,.22); }
+  .ops-condition-main { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; width: 100%; min-width: 0; align-items: center; gap: 14px; padding: 18px; border: 0; background: transparent; color: inherit; text-align: left; }
+  .ops-condition-main > .safety-icon, .ops-sos-mark { display: grid; width: 46px; height: 46px; flex: 0 0 46px; place-items: center; border-radius: 50%; background: #2b3340; color: #8bb8ff; }
+  .ops-sos-mark { background: #ef334d; color: #fff; font: 800 12px/1 "IBM Plex Mono", monospace; letter-spacing: .05em; }
+  .ops-condition-main > .ops-condition-copy { min-width: 0; flex: 1; display: grid; gap: 4px; }
+  .ops-condition-main small { color: #a6aebd; font: 700 10px/1.35 "IBM Plex Mono", monospace; letter-spacing: .05em; }
+  .ops-condition-main strong { color: #fff; font-size: 21px; line-height: 1.3; letter-spacing: -.5px; word-break: keep-all; overflow-wrap: break-word; }
+  .ops-condition-copy > em { color: #c3cad5; font-size: 12px; font-style: normal; line-height: 1.55; word-break: keep-all; overflow-wrap: break-word; }
+  .ops-condition-main > b { align-self: center; color: #a6aebd; font-size: 12px; font-weight: 800; line-height: 1.2; white-space: nowrap; }
+  .ops-condition.tone-danger { border-color: rgba(255,71,90,.7); background: linear-gradient(135deg, #291b23, #20242e); color: #fff; }
+  .ops-condition.tone-danger .ops-condition-main small { color: #ffabb5; }
+  .ops-condition.tone-danger .ops-condition-main > b { color: #ffabb5; }
+  .ops-condition.tone-warning { border-color: rgba(255,179,71,.55); background: linear-gradient(135deg, #28231c, #20242e); }
+  .ops-condition.tone-safe { border-color: rgba(50,210,150,.5); background: linear-gradient(135deg, #152722, #20242e); }
+  .ops-condition.tone-unknown { background: #20242e; border-color: #596273; }
+  .ops-condition-actions { display: none; }
+
+  .ops-home .tone-danger { background: rgba(255,71,90,.13); color: #ffb1ba; border-color: rgba(255,71,90,.58); }
+  .ops-home .tone-warning { background: rgba(255,179,71,.12); color: #ffd28d; border-color: rgba(255,179,71,.52); }
+  .ops-home .tone-safe { background: rgba(50,210,150,.12); color: #81efc8; border-color: rgba(50,210,150,.46); }
+  .ops-home .tone-unknown { background: #242a35; color: #d0d7e2; border-color: #4a5568; }
+  .ops-counts { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .ops-counts button { min-width: 0; background: #181b23; border-color: #303746; padding: 12px 4px; }
+  .ops-counts .safety-icon { width: 20px; height: 20px; }
+  .ops-counts span { font-size: 11px; white-space: nowrap; }
+  .ops-counts strong { font-size: 24px; }
+  .ops-counts strong { color: #fff; }
+
+  .ops-card { background: #181b23; border-color: #303746; box-shadow: 0 10px 24px rgba(0,0,0,.16); }
+  .ops-card > header > h3 { color: #f7f9fc; white-space: normal; word-break: keep-all; overflow-wrap: break-word; }
+  .ops-card h3 .safety-icon { color: #75aaff; }
+  .ops-card > header > button { color: #8bb8ff; }
+  .ops-event, .ops-offline { background: transparent; border-color: #2b313d; color: #f7f9fc; }
+  .ops-event > span:nth-child(2), .ops-offline > span { min-width: 0; }
+  .ops-event b, .ops-offline b, .ops-battery > span { color: #f2f5fa; white-space: normal; word-break: keep-all; overflow-wrap: break-word; }
+  .ops-event small, .ops-location small, .ops-battery small, .ops-offline small { color: #a6aebd; white-space: normal; word-break: keep-all; overflow-wrap: break-word; }
+  .ops-empty { color: #a6aebd; }
+  .ops-device-count strong, .ops-battery b { color: #8bb8ff; }
+  .ops-device-count small, .ops-device-count > span { color: #a6aebd; }
+  .ops-battery .ops-low { color: #ff7887; }
+  .ops-location { background: #20242e; color: #f7f9fc; }
+  .ops-actions button { border-color: #3b4658; background: #20242e; color: #e8effa; }
+  .ops-actions button:first-child { border-color: #3e83ed; background: #2f72dd; }
+  .ops-tag { white-space: nowrap; }
+  .priority-0, .priority-1 { background: rgba(255,71,90,.14); color: #ffabb5; }
+  .priority-2 { background: rgba(255,179,71,.13); color: #ffd28d; }
+  .priority-3 { background: #242a35; color: #c1cad7; }
+
+  .mobile-bottom-nav { left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: stretch; height: 72px; padding: 5px; border: 1px solid #343c4b; border-radius: 24px; background: rgba(24,27,35,.96); box-shadow: 0 14px 32px rgba(0,0,0,.42); }
+  .bottom-tab { display: flex; min-width: 0; min-height: 0; height: 100%; margin: 0 !important; padding: 5px 0; align-items: center; justify-content: center; gap: 4px; color: #a6aebd; border-radius: 16px; }
+  .bottom-tab.is-active { margin: 0 !important; background: rgba(72,141,250,.2); color: #8bb8ff; }
+  .bottom-tab.is-active svg { stroke: #8bb8ff; }
+
+  .ops-alert-overlay { background: rgba(4,6,10,.76); }
+  .ops-alert-sheet { background: #181b23; border: 1px solid #343c4b; color: #f7f9fc; box-shadow: 0 24px 60px rgba(0,0,0,.5); }
+  .ops-alert-sheet h2 { color: #fff; }
+  .ops-alert-sheet header p { color: #a6aebd; }
+  .ops-alert-sheet button { background: #20242e; border-color: #3a4353; color: #dbe8fb; }
+  .ops-menu-group { background: #181b23; border-color: #343c4b; }
+  .ops-menu-group summary { color: #dce7f5; }
+  .mobile-drawer-card, .mobile-modal-card { background: #181b23; border-color: #343c4b; color: #f7f9fc; }
+  .mobile-drawer-header h3, .mobile-modal-header h3, .mobile-mode-card strong, .drawer-item-text strong { color: #fff; }
+  .mobile-drawer-section h4, .mobile-version-tag, .mobile-mode-card p, .drawer-item-text small, .mobile-drawer-sub { color: #a6aebd; }
+  .mobile-mode-card, .drawer-nav-item { background: #20242e; border-color: #343c4b; color: #dce7f5; }
+  .drawer-item-arrow { color: #8bb8ff; }
+  .btn-drawer-action, .btn-quick-ip { background: rgba(72,141,250,.16); border-color: #4d89e6; color: #a9c8ff; }
+  .btn-drawer-logout { background: rgba(255,71,90,.11); border-color: #9d4150; color: #ffb2bb; }
+
+  /* Korean words keep together.  Labels wrap at spaces; only long IDs and
+     URLs may break inside the token, preventing one-character vertical text. */
+  .ops-home :is(h1,h2,h3,h4,p,span,b,small,button),
+  .mobile-drawer-card :is(h1,h2,h3,h4,p,span,b,small,button),
+  .main-area[data-page] :is(.page-panel h2,.page-panel p,.worker-management label,.worker-management h2) {
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+  .ops-home :is(code,.device-id,.ops-event small),
+  .main-area[data-page] :is(.device-row strong,.event-row small) { overflow-wrap: anywhere; }
+
+  @media (max-width: 390px) {
+    .ops-condition-actions { padding-left: 18px; }
+    .ops-condition-main strong { font-size: 19px; }
+  }
+}
+
+@media (max-width: 900px), (min-width: 901px) and (max-width: 1366px) and (hover: none) and (pointer: coarse) {
+  .ops-alert-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+  .ops-alert-sheet .ops-alert-resolve-all { border-color: rgba(255,71,90,.75); background: #ef334d; color: #fff; }
+  .ops-alert-sheet .ops-alert-resolve-all:disabled { opacity: .45; }
+}
+
+/* The mobile app is one dark product, including the login and every detail
+   view.  These rules deliberately come last so they override the legacy
+   light, responsive web styles without changing the desktop control room. */
+@media (max-width: 900px), (min-width: 901px) and (max-width: 1366px) and (hover: none) and (pointer: coarse) {
+  .main-area[data-page] { background: #0c0e12; color: #f7f9fc; }
+  .main-area[data-page] :is(.topbar, .map-shell, .worker-detail, .panel, .page-panel, .camera-live-card, .camera-analysis-card, .diag-card, .layout-editor, .replay-page, .worker-manage-list > article, .zone-grid > article, .kpi-row > article) {
+    background: #181b23;
+    border-color: #303746;
+    color: #f7f9fc;
+    box-shadow: 0 10px 24px rgba(0,0,0,.16);
+  }
+  .main-area[data-page] :is(h1, h2, h3, h4, strong, b, label, .page-intro, .detail-head) { color: #f7f9fc; }
+  .main-area[data-page] :is(p, small, time, .page-panel > header > span, .detail-grid span, .kpi-row small, .worker-management > .page-intro) { color: #a6aebd; }
+  .main-area[data-page] :is(.map-toolbar, .detail-head, .panel > header, .page-panel > header, .worker-manage-list > article, .worker-live-summary, .worker-profile-form, .diag-card header) { border-color: #303746; }
+  .main-area[data-page] :is(input, select, textarea) { background: #20242e; border-color: #3a4353; color: #f7f9fc; }
+  .main-area[data-page] :is(input, select, textarea)::placeholder { color: #7f8a9b; }
+  .main-area[data-page] :is(button, .button-link) { border-color: #3a4353; }
+  .main-area[data-page] .page-panel > header button,
+  .main-area[data-page] .panel > header button { color: #8bb8ff; }
+  .main-area[data-page] .worker-hardware-note,
+  .main-area[data-page] .worker-live-summary,
+  .main-area[data-page] .worker-profile-form,
+  .main-area[data-page] .detail-grid > div,
+  .main-area[data-page] .map-toolbar { background: #20242e; color: #dce7f5; }
+  .main-area[data-page] :is(.device-row, .event-row, .worker-card-head, .worker-live-summary, .worker-profile-form label) { border-color: #303746; color: #dce7f5; }
+  .main-area[data-page] :is(.device-row strong, .event-row strong, .worker-card-head strong) { color: #f7f9fc; }
+  .main-area[data-page] .worker-count-badge { background: #242a35; border-color: #3a4353; color: #dce7f5; }
+
+  /* Legacy management and camera widgets used white inner tiles even after
+     their parent became dark.  Give every data tile a readable dark surface. */
+  .main-area[data-page] :is(.worker-overview article, .management-overview article, .worker-live-summary span, .detail-grid div, .diag-metrics div, .reason-list > div, .device-mini > div, .component-list > div, .detection-list > div, .camera-placeholder) {
+    background: #20242e !important;
+    border-color: #3a4353 !important;
+    color: #dce7f5 !important;
+  }
+  .main-area[data-page] :is(.worker-overview small, .worker-overview span, .management-overview small, .worker-live-summary span, .detail-grid span, .diag-metrics span, .detection-list span, .camera-placeholder span) { color: #aeb8c8 !important; }
+  .main-area[data-page] :is(.worker-overview strong, .management-overview strong, .worker-live-summary b, .detail-grid strong, .diag-metrics strong, .detection-list b, .camera-placeholder strong) { color: #f7f9fc !important; }
+  .main-area[data-page] .management-overview article i { background: #273c5d; color: #8bb8ff; }
+  .main-area[data-page] .management-overview article i.warning { background: rgba(255,179,71,.14); color: #ffd28d; }
+  .main-area[data-page] .management-overview article i.success { background: rgba(50,210,150,.14); color: #81efc8; }
+
+  /* Full touch-screen audit: legacy web views below must never fall back to
+     the old white cards, inputs, tables or modal surfaces. */
+  .main-area[data-page] :is(
+    .assistant-command-card, .assistant-response-card, .anchor-diagnostic-summary,
+    .anchor-status-grid article, .layout-editor-head, .draft-status, .version-panel,
+    .replay-head, .replay-controls, .site-size-form, .property-panel, .property-form,
+    .worker-permission, .version-list article, .event-empty-state, .fire-zone-form,
+    .fire-zone-picker, .system-overview-grid button
+  ) {
+    background: #181b23 !important;
+    border-color: #303746 !important;
+    color: #dce7f5 !important;
+  }
+  .main-area[data-page] :is(
+    .assistant-command-card select, .assistant-command-card textarea, .camera-toolbar select,
+    .replay-filters select, .site-size-form input, .property-form input, .version-create input,
+    .fire-zone-form input
+  ) {
+    background: #20242e !important;
+    border-color: #3a4353 !important;
+    color: #f7f9fc !important;
+  }
+  .main-area[data-page] :is(.assistant-suggestions button, .editor-actions button, .site-size-form button, .version-create button, .version-list button, .replay-controls button, .event-actions button, .scenario-buttons button, .quick-actions button, .map-toolbar-actions button) {
+    background: #242a35;
+    border-color: #3a4353;
+    color: #dce7f5;
+  }
+  .main-area[data-page] :is(.worker-zone-access b, .worker-hardware-note span, .assistant-command-card label, .assistant-response-card dt, .assistant-agent-plan span, .event-empty-state p, .anchor-status-grid article span, .anchor-status-grid article small, .site-size-form, .property-form label, .version-list small) { color: #aeb8c8 !important; }
+  .main-area[data-page] :is(.worker-zone-access em, .worker-zone-access span) { background: #242a35; border-color: #3a4353; color: #cdd6e5; }
+  .main-area[data-page] .worker-hardware-note { background: #20242e; border-color: #3a4353; }
+  .main-area[data-page] .worker-save:disabled { background: #242a35; border-color: #3a4353; color: #7f8a9b; }
+  .main-area[data-page] .camera-live-card img, .main-area[data-page] .worker-camera-mini img { background: #090b0f; border-color: #3a4353; }
+  .main-area[data-page] .anchor-status-banner { background: #20242e; border-color: #3a4353; }
+  .main-area[data-page] .anchor-status-chips span { background: #242a35; color: #cdd6e5; }
+
+  .alerts-modal, .sos-modal, .fire-modal { background: #181b23; border-color: #3a4353; color: #f7f9fc; }
+  .alerts-modal :is(h2, h3, b, strong), .sos-modal :is(h2, h3, b, strong), .fire-modal :is(h2, h3, b, strong) { color: #f7f9fc; }
+  .alerts-modal :is(p, small, span), .sos-modal :is(p, small, span), .fire-modal :is(p, small, span) { color: #aeb8c8; }
+  .alerts-modal > header > button, .sos-modal-actions button.resolve, .fire-zone-form button { background: #242a35; border-color: #3a4353; color: #dce7f5; }
+
+  .mobile-drawer-card, .mobile-modal-card { background: #181b23 !important; border-color: #343c4b !important; color: #f7f9fc; }
+  .mobile-mode-card, .drawer-nav-item, .mobile-input, .btn-test-conn { background: #20242e !important; border-color: #3a4353 !important; color: #dce7f5 !important; }
+  .mobile-drawer-card :is(h1, h2, h3, h4, strong), .mobile-modal-card :is(h1, h2, h3, h4, strong) { color: #f7f9fc !important; }
+  .mobile-drawer-card :is(p, small, span), .mobile-modal-card :is(p, small, span, label) { color: #aeb8c8; }
+
+  /* Retained fallback mobile components are kept dark too, even if an older
+     route or cached app build renders one of them. */
+  :is(.mobile-safe-card, .mobile-overview-card, .mobile-worker-focus, .mobile-events-preview, .mobile-battery-card, .mobile-shortcuts button, .m-kpi-card, .m-worker-card, .m-event-row, .m-anchor-chip) { background: #181b23 !important; border-color: #303746 !important; color: #f7f9fc !important; }
+  :is(.mobile-worker-location, .mobile-empty-events, .mobile-last-contact, .mobile-worker-metrics span) { background: #20242e !important; border-color: #3a4353 !important; color: #dce7f5 !important; }
+  :is(.mobile-safe-card b, .mobile-overview-title b, .mobile-worker-focus h3, .mobile-events-preview h3, .mobile-shortcuts b, .m-section-title, .m-worker-info strong, .m-worker-stats strong, .m-event-body strong) { color: #f7f9fc !important; }
+  :is(.mobile-safe-card small, .mobile-shortcuts small, .mobile-battery-copy small, .mobile-battery-copy em, .mobile-worker-location small, .mobile-worker-metrics small, .mobile-event-item small, .mobile-event-item i, .m-kpi-label, .m-worker-info span, .m-worker-stats span, .m-event-body span, .m-event-row time) { color: #aeb8c8 !important; }
+
+  html:has(.admin-login-screen), body:has(.admin-login-screen), #root:has(.admin-login-screen) { height: 100%; overflow: hidden; overscroll-behavior: none; }
+  .admin-login-screen { min-height: 100svh; height: 100svh; overflow: hidden; box-sizing: border-box; padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); background: radial-gradient(circle at 22% 0%, #1c2533 0, #0c0e12 48%, #07080b 100%); color: #f7f9fc; }
+  .admin-login-card, .admin-login-check { max-height: calc(100svh - 40px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow: auto; background: #181b23; border-color: #303746; color: #f7f9fc; box-shadow: 0 24px 60px rgba(0,0,0,.38); }
+  .admin-login-mark { background: #2f72dd; color: #fff; box-shadow: 0 0 0 6px rgba(72,141,250,.15); }
+  .admin-login-eyebrow { color: #8bb8ff; }
+  .admin-login-card h1 { color: #fff; }
+  .admin-login-card > p, .admin-login-card > small { color: #a6aebd; }
+  .admin-login-card label { color: #dce7f5; }
+  .admin-login-card input { background: #20242e; border-color: #3a4353; color: #fff; }
+  .admin-login-card input::placeholder { color: #7f8a9b; }
+  .admin-login-card form button { background: #2f72dd; color: #fff; }
+  .admin-login-error { background: rgba(255,71,90,.13); border-color: rgba(255,71,90,.55); color: #ffb1ba; }
+
+  @media (max-width: 390px) {
+    .ops-condition-main { grid-template-columns: 42px minmax(0, 1fr); gap: 11px; padding: 16px; }
+    .ops-condition-main > .safety-icon, .ops-sos-mark { width: 42px; height: 42px; flex-basis: 42px; }
+    .ops-condition-main > b { grid-column: 2; justify-self: start; }
+    .ops-condition-main strong { font-size: 19px; }
+  }
+}

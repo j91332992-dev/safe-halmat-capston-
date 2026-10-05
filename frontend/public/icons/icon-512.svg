@@ -1,20 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <linearGradient id="bgGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0d1f30" />
-      <stop offset="100%" stop-color="#040b12" />
-    </linearGradient>
-    <linearGradient id="shieldGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#20d2a0" />
-      <stop offset="100%" stop-color="#1f86a7" />
-    </linearGradient>
-    <filter id="glow512" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="16" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-    </filter>
-  </defs>
-  <rect width="512" height="512" rx="100" fill="url(#bgGrad512)" />
-  <circle cx="256" cy="256" r="200" stroke="#173247" stroke-width="6" fill="none" opacity="0.6" />
-  <polygon points="256,64 432,154 432,358 256,448 80,358 80,154" fill="url(#shieldGrad512)" filter="url(#glow512)" />
-  <path d="M192,186 L192,326 M320,186 L320,326 M192,256 L320,256" stroke="#04131b" stroke-width="42" stroke-linecap="round" stroke-linejoin="round" />
+  <rect width="512" height="512" fill="#ffffff"/>
+  <!-- Shell, rear rim, and front brim give the small icon a recognisable helmet silhouette. -->
+  <path d="M117 302c0-92 57-160 139-160s139 68 139 160v24H117v-24Z" fill="#ffcc24" stroke="#183b67" stroke-width="16" stroke-linejoin="round"/>
+  <path d="M156 301v-34c0-58 38-105 100-105s100 47 100 105v34" fill="none" stroke="#e6a900" stroke-width="15" stroke-linecap="round"/>
+  <path d="M256 125v123" fill="none" stroke="#183b67" stroke-width="23" stroke-linecap="round"/>
+  <path d="M256 125v123" fill="none" stroke="#ffe675" stroke-width="10" stroke-linecap="round"/>
+  <path d="M92 306c27-18 77-29 164-29s137 11 164 29v45c-32 24-89 37-164 37S124 375 92 351v-45Z" fill="#ffdc43" stroke="#183b67" stroke-width="16" stroke-linejoin="round"/>
+  <path d="M115 326c37 12 84 18 141 18s104-6 141-18" fill="none" stroke="#e6a900" stroke-width="12" stroke-linecap="round"/>
+  <!-- Green medical/safety mark, centred where it remains visible at home-screen size. -->
+  <circle cx="256" cy="252" r="34" fill="#ffffff" stroke="#183b67" stroke-width="9"/>
+  <path d="M246 228h20v14h14v20h-14v14h-20v-14h-14v-20h14v-14Z" fill="#07875a"/>
 </svg>

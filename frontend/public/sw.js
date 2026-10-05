@@ -1,11 +1,12 @@
 // Service Worker for Hanmir Smart Helmet PWA
-const CACHE_NAME = "hanmir-safety-v1";
+const CACHE_NAME = "hanmir-safety-v2";
 const STATIC_ASSETS = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
-  "/icons/icon-192.svg",
-  "/icons/icon-512.svg"
+  "/icons/icon-180.png",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png"
 ];
 
 self.addEventListener("install", event => {

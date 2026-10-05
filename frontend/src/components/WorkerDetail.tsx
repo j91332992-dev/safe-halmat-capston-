@@ -2,17 +2,9 @@ import {useEffect, useState} from "react";
 import {api} from "../services/api";
 import type {Device, Worker} from "../types";
 import {StatusPill} from "./StatusPill";
+import {elapsedTime} from "../utils/elapsedTime";
 
 interface Props {worker: Worker; devices: Device[]; onRefresh: () => void}
-
-function lastContactLabel(timestamp: string | null | undefined): string {
-  if (!timestamp) return "수신 기록 없음";
-  const seconds = Math.max(0, Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000));
-  if (!Number.isFinite(seconds)) return "수신 기록 없음";
-  if (seconds < 60) return `${seconds}초 전`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}분 ${seconds % 60}초 전`;
-  return `${Math.floor(seconds / 3600)}시간 ${Math.floor((seconds % 3600) / 60)}분 전`;
-}
 
 export function WorkerDetail({worker, devices, onRefresh}: Props) {
   const av = devices.find(device => device.device_type === "assistant_device");
@@ -42,7 +34,7 @@ export function WorkerDetail({worker, devices, onRefresh}: Props) {
         <span>{locationOffline ? "📡" : "✓"}</span>
         <div>
           <b>{locationOffline ? "안전모 위치 통신 끊김" : "안전모 위치 통신 정상"}</b>
-          <small>{locationOffline ? `마지막 통신 ${lastContactLabel(lastContact)} · 마지막 위치 ${worker.current_zone ?? `X ${worker.x.toFixed(1)} · Y ${worker.y.toFixed(1)}m`}` : `최근 수신 ${lastContactLabel(lastContact)} · ${worker.current_zone ?? `X ${worker.x.toFixed(1)} · Y ${worker.y.toFixed(1)}m`}`}</small>
+          <small>{locationOffline ? `마지막 통신 ${elapsedTime(lastContact)} · 마지막 위치 ${worker.current_zone ?? `X ${worker.x.toFixed(1)} · Y ${worker.y.toFixed(1)}m`}` : `최근 수신 ${elapsedTime(lastContact)} · ${worker.current_zone ?? `X ${worker.x.toFixed(1)} · Y ${worker.y.toFixed(1)}m`}`}</small>
         </div>
       </section>
       {av?.last_camera_at && <section className="worker-camera-mini"><div className="section-title"><h3>안전모 카메라</h3><span>{new Date(av.last_camera_at).toLocaleTimeString("ko-KR")}</span></div><img src={api.cameraImageUrl(av.device_id, cameraVersion)} alt={`${worker.worker_name} 최신 카메라 프레임`} /></section>}

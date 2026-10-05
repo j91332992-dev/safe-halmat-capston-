@@ -1194,7 +1194,185 @@ html, body {
   .mobile-drawer-card {width:min(760px,100%);margin:0 auto;border:1px solid var(--line);border-bottom:0;border-radius:20px 20px 0 0}
 }
 
+/* Touch devices use the same natural document width as the browser viewport.
+   Individual screens define their own responsive grids below. */
+@media (max-width: 900px), (min-width: 901px) and (max-width: 1280px) and (hover: none) and (pointer: coarse) {
+  .main-area img,
+  .main-area svg,
+  .main-area video,
+  .main-area canvas {
+    max-width: 100%;
+  }
+}
+
+/* The header was the remaining width source on narrow phones: its text and
+   three controls could not shrink together.  Keep the accessible label, but
+   reduce the visual server state to a dot on phone-width viewports. */
+@media (max-width: 600px) {
+  .mobile-header {
+    gap: 6px;
+    padding-right: calc(var(--sar) + 10px);
+    padding-left: calc(var(--sal) + 10px);
+  }
+
+  .mobile-header-brand {
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 8px;
+  }
+
+  .mobile-header-titles {
+    min-width: 0;
+  }
+
+  .mobile-header-titles h1,
+  .mobile-site-name {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-header-actions {
+    flex: 0 0 auto;
+    gap: 5px;
+  }
+
+  .mobile-status-badge {
+    width: 30px;
+    height: 34px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .mobile-status-badge .badge-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .mobile-header-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .mobile-header-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+@media (max-width: 900px) {
+  .active-sos-banner,
+  .active-call-request-banner,
+  .missed-call-banner {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .active-sos-banner > div,
+  .active-call-request-banner > div,
+  .missed-call-banner > div,
+  .sos-banner-actions,
+  .call-request-actions {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .active-sos-banner b,
+  .active-sos-banner span,
+  .active-call-request-banner b,
+  .active-call-request-banner span,
+  .missed-call-banner b,
+  .missed-call-banner span {
+    overflow-wrap: anywhere;
+  }
+
+  .worker-management,
+  .management-page { min-width: 0; }
+}
+
 .admin-login-screen{display:grid;min-height:100vh;place-items:center;padding:24px;background:radial-gradient(circle at 20% 0%,#164359 0,#07131d 43%,#030a10 100%);color:#effbff}.admin-login-card{width:min(390px,100%);padding:30px 24px 24px;border:1px solid #265168;border-radius:24px;background:rgba(9,29,43,.94);box-shadow:0 24px 70px rgba(0,0,0,.42);text-align:center}.admin-login-mark{display:grid;width:54px;height:54px;margin:0 auto 15px;place-items:center;border-radius:18px;background:#32bd93;color:#042019;font:900 25px "IBM Plex Mono",monospace;box-shadow:0 0 0 6px rgba(50,189,147,.12)}.admin-login-eyebrow{color:#77b7d2;font:700 9px "IBM Plex Mono",monospace;letter-spacing:.15em}.admin-login-card h1{margin:9px 0 7px;color:#fff;font-size:25px;letter-spacing:-.8px}.admin-login-card>p{margin:0 0 22px;color:#9eb8c7;font-size:12px;line-height:1.55}.admin-login-card form{display:grid;gap:13px;text-align:left}.admin-login-card label{display:grid;gap:7px;color:#cce1eb;font-size:11px;font-weight:700}.admin-login-card input{width:100%;padding:13px;border:1px solid #29526a;border-radius:11px;background:#061521;color:#fff;font-size:15px}.admin-login-card input:focus{outline:2px solid #3ed2a5;outline-offset:1px}.admin-login-card form button{min-height:48px;margin-top:5px;border:0;border-radius:12px;background:#38c698;color:#06201b;font-size:14px;font-weight:900}.admin-login-card form button:disabled{opacity:.55}.admin-login-error{padding:10px;border:1px solid #9e4453;border-radius:9px;background:#351b24;color:#ffb8c2;font-size:11px}.admin-login-card>small{display:block;margin-top:17px;color:#688897;font-size:10px}.admin-login-check{padding:17px 22px;border:1px solid #29516a;border-radius:14px;background:#0a1e2d;color:#b9dbe9;font-size:13px}
+
+/* Every touch-device overlay uses the visible viewport rather than the old
+   layout viewport. This keeps modal cards clear of Safari's browser controls. */
+@media (max-width: 900px), (min-width: 901px) and (max-width: 1280px) and (hover: none) and (pointer: coarse) {
+  .alerts-modal-backdrop,
+  .sos-modal-backdrop,
+  .fire-modal-backdrop,
+  .photo-modal,
+  .mobile-modal-overlay {
+    box-sizing: border-box;
+    min-height: 100vh;
+    height: 100dvh;
+    align-items: center;
+    justify-content: center;
+    padding: calc(var(--sat) + 12px) calc(var(--sar) + 12px) calc(var(--sab) + 12px) calc(var(--sal) + 12px);
+  }
+
+  .alerts-modal,
+  .sos-modal,
+  .fire-modal,
+  .mobile-modal-card {
+    box-sizing: border-box;
+    width: min(100%, calc(100vw - var(--sal) - var(--sar) - 24px));
+    max-width: calc(100vw - var(--sal) - var(--sar) - 24px);
+    max-height: calc(100dvh - var(--sat) - var(--sab) - 24px);
+    margin: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .alerts-modal { padding: 16px; }
+
+  .alerts-modal > header,
+  .fire-modal > header,
+  .mobile-modal-header { min-width: 0; gap: 10px; }
+
+  .alerts-modal > header > div,
+  .fire-modal > header > div,
+  .mobile-modal-header > *:first-child { min-width: 0; }
+
+  .alerts-modal h2,
+  .fire-modal h2,
+  .mobile-modal-header h3,
+  .alerts-modal p,
+  .fire-modal p { overflow-wrap: anywhere; }
+
+  .photo-modal > div {
+    box-sizing: border-box;
+    max-width: calc(100vw - var(--sal) - var(--sar) - 24px);
+    max-height: calc(100dvh - var(--sat) - var(--sab) - 24px);
+  }
+
+  .photo-modal img {
+    max-width: 100%;
+    max-height: calc(100dvh - var(--sat) - var(--sab) - 48px);
+  }
+
+  .mobile-drawer-overlay {
+    box-sizing: border-box;
+    padding-right: var(--sar);
+    padding-left: var(--sal);
+  }
+
+  .mobile-drawer-card {
+    width: 100%;
+    max-width: calc(100vw - var(--sal) - var(--sar));
+    max-height: calc(100dvh - var(--sat) - var(--sab) - 12px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
 
 /* Native-style mobile safety home */
 .safety-mobile-home { display: none; }

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import get_db
 from ..models.entities import Anchor, Device, Event, Obstacle, SiteLayout, WorkerState, Zone
+from .auth import require_site
 from ..services.event_service import event_to_dict
 from ..services.serializers import device_to_dict, worker_to_dict
 from ..services.presence_service import refresh_presence
@@ -15,29 +16,29 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
 @router.get("/snapshot")
-def snapshot(db: Session = Depends(get_db)):
+def snapshot(site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     refresh_presence(db)
-    anchors = db.query(Anchor).order_by(Anchor.anchor_id).all()
-    workers = db.query(WorkerState).all()
-    layout = db.get(SiteLayout, settings.site_id)
-    zones = db.query(Zone).all()
-    recent_events = db.query(Event).order_by(Event.created_at.desc()).limit(50).all()
-    unresolved_events = db.query(Event).filter(Event.status != "resolved").order_by(Event.created_at.desc()).all()
+    anchors = db.query(Anchor).filter(Anchor.site_id == site_id).order_by(Anchor.anchor_id).all()
+    workers = db.query(WorkerState).filter(WorkerState.site_id == site_id).all()
+    layout = db.get(SiteLayout, site_id)
+    zones = db.query(Zone).filter(Zone.site_id == site_id).all()
+    recent_events = db.query(Event).filter(Event.site_id == site_id).order_by(Event.created_at.desc()).limit(50).all()
+    unresolved_events = db.query(Event).filter(Event.site_id == site_id, Event.status != "resolved").order_by(Event.created_at.desc()).all()
     events_by_id = {row.event_id: row for row in [*unresolved_events, *recent_events]}
     events = sorted(events_by_id.values(), key=lambda row: row.created_at, reverse=True)
     return {
         "mode": settings.operation_mode,
         "site": {
-            "site_id": settings.site_id,
+            "site_id": site_id,
             "map_id": "map-001",
-            "name": layout.name if layout else settings.site_name,
-            "width": layout.width if layout else settings.site_width_m,
-            "height": layout.height if layout else settings.site_height_m,
+            "name": layout.name if layout else site_id,
+            "width": layout.width if layout else 1,
+            "height": layout.height if layout else 1,
         },
         "workers": [worker_to_dict(row) for row in workers],
-        "devices": [device_to_dict(row) for row in db.query(Device).all()],
+        "devices": [device_to_dict(row) for row in db.query(Device).filter(Device.site_id == site_id).all()],
         "anchors": [{"anchor_id": a.anchor_id, "name": a.name, "x": a.x, "y": a.y, "z": a.z, "online": a.online, "last_seen": a.last_seen.isoformat() + "Z"} for a in anchors],
-        "obstacles": [{"obstacle_id": o.obstacle_id, "name": o.name, "x": o.x, "y": o.y, "width": o.width, "height": o.height} for o in db.query(Obstacle).filter(Obstacle.site_id == settings.site_id).all()],
+        "obstacles": [{"obstacle_id": o.obstacle_id, "name": o.name, "x": o.x, "y": o.y, "width": o.width, "height": o.height} for o in db.query(Obstacle).filter(Obstacle.site_id == site_id).all()],
         "zones": [
             {
                 "zone_id": z.zone_id,
@@ -54,7 +55,7 @@ def snapshot(db: Session = Depends(get_db)):
             for z in zones
         ],
         "events": [event_to_dict(row) for row in events],
-        "evacuation": evacuation_snapshot(db),
+        "evacuation": evacuation_snapshot(db, site_id),
     }
 
 

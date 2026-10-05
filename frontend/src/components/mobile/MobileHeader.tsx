@@ -40,7 +40,7 @@ export function MobileHeader({
   const statusClass = serverReachable && connectionState !== "connected" ? "connected" : connectionState;
 
   return (
-    <header className="mobile-header">
+    <header className="mobile-header ops-header">
       <div className="mobile-header-brand">
         <div className="brand-mark small">
           <span>H</span>
@@ -53,7 +53,7 @@ export function MobileHeader({
 
       <div className="mobile-header-actions">
         {/* Connection status pill */}
-        <div className={`mobile-status-badge state-${statusClass}`}>
+        <div className={`mobile-status-badge state-${statusClass}`} aria-label={`관제 서버 ${statusLabel}`} title={`관제 서버 ${statusLabel}`}>
           <span className="badge-dot" />
           <span className="badge-text">{statusLabel}</span>
         </div>
@@ -86,6 +86,9 @@ export function MobileHeader({
           </svg>
         </button>
       </div>
+      <button className={`ops-notification-strip ${hasEmergency ? "has-danger" : ""}`} onClick={handleAlertClick}>
+        <span>{hasEmergency ? "긴급 상황 · 우선 확인" : "현장 알림"}</span><b>{unresolvedCount ? `${unresolvedCount}건 확인하기` : "미처리 알림 없음"} <span aria-hidden="true">›</span></b>
+      </button>
     </header>
   );
 }

@@ -15,13 +15,15 @@ import {VoiceAssistant} from "./components/VoiceAssistant";
 import {WorkerManagement} from "./components/WorkerManagement";
 import {MobileHeader} from "./components/mobile/MobileHeader";
 import {MobileBottomNav} from "./components/mobile/MobileBottomNav";
-import {MobileDashboard} from "./components/mobile/MobileDashboard";
+import {MobileDashboard} from "./components/mobile/SafetyDashboard";
+import {pendingEvents} from "./components/mobile/safetyPresentation";
 import {LoginScreen} from "./components/mobile/LoginScreen";
 import {MobileMenuDrawer} from "./components/mobile/MobileMenuDrawer";
 import {NetworkStatusBar} from "./components/mobile/NetworkStatusBar";
 import {ServerSettingsModal} from "./components/mobile/ServerSettingsModal";
 import {useSafetyData} from "./hooks/useSafetyData";
 import {api, auth} from "./services/api";
+import {elapsedTime} from "./utils/elapsedTime";
 
 type Page = "dashboard" | "map" | "camera" | "assistant" | "layout" | "history" | "workers" | "devices" | "events" | "zones" | "diagnostics";
 
@@ -86,6 +88,23 @@ function App() {
   const [selectedId, setSelectedId] = useState("worker-001");
   const [busy, setBusy] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [mobileAlertsOpen, setMobileAlertsOpen] = useState(false);
+  useEffect(() => {
+    if (!mobileAlertsOpen) return;
+    const priorFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileAlertsOpen(false);
+      if (event.key !== "Tab") return;
+      const controls = Array.from(document.querySelectorAll<HTMLElement>('.ops-alert-sheet button:not(:disabled), .ops-alert-sheet a[href], .ops-alert-sheet input:not(:disabled)'));
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener("keydown", onKey); priorFocus?.focus(); };
+  }, [mobileAlertsOpen]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isHardwareMode, setIsHardwareMode] = useState(true);
@@ -131,6 +150,8 @@ function App() {
         setSettingsOpen(false);
       } else if (menuOpen) {
         setMenuOpen(false);
+      } else if (mobileAlertsOpen) {
+        setMobileAlertsOpen(false);
       } else if (alertsOpen) {
         setAlertsOpen(false);
       } else if (location.pathname !== "/dashboard") {
@@ -145,7 +166,7 @@ function App() {
     return () => {
       if (backHandle) void backHandle.remove();
     };
-  }, [settingsOpen, menuOpen, alertsOpen, location.pathname, navigate]);
+  }, [settingsOpen, menuOpen, alertsOpen, mobileAlertsOpen, location.pathname, navigate]);
 
   useEffect(() => {
     if (data?.workers[0] && !selectedId) setSelectedId(data.workers[0].worker_id);
@@ -266,9 +287,9 @@ function App() {
         siteName={data.site.name}
         connectionState={connectionState}
         serverReachable={serverReachable}
-        unresolvedCount={critical}
-        hasEmergency={!!emergencyWorker}
-        onOpenAlerts={() => setAlertsOpen(true)}
+        unresolvedCount={pendingEvents(data.events).length}
+        hasEmergency={!!emergencyWorker || critical > 0}
+        onOpenAlerts={() => setMobileAlertsOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
@@ -318,7 +339,7 @@ function App() {
         <footer><span>v1.0.0-integrated</span><span>site-001</span></footer>
       </aside>
 
-      <main className="main-area">
+      <main className="main-area" data-page={page}>
         <header className="topbar">
           <div>
             <span className="eyebrow">ESP32 SMART HELMET · REALTIME CONTROL</span>
@@ -390,16 +411,19 @@ function App() {
           </div>
         )}
 
-        {page === "dashboard" && worker && (
-          <>
+        {page === "dashboard" && (
             <MobileDashboard
               data={data}
               selectedWorker={worker}
               critical={critical}
-              onAlerts={() => setAlertsOpen(true)}
+              onAlerts={() => setMobileAlertsOpen(true)}
+              serverReachable={serverReachable}
               busy={busy}
               onAction={action}
             />
+        )}
+        {page === "dashboard" && worker && (
+          <>
             <div className="desktop-dashboard">
             <section className="kpi-row">
               <article><span className="kpi-icon teal"><KpiIcon type="workers" /></span><div><small>실시간 작업자</small><strong>{data.workers.length}<em>명</em></strong></div><StatusPill active /></article>
@@ -474,7 +498,7 @@ function App() {
               {data.devices.map(device => (
                 <div className="device-row" key={device.device_id}>
                   <strong>{device.device_id}</strong><span>{device.device_type}</span><StatusPill active={device.online} activeText="온라인" inactiveText="오프라인" />
-                  <span>{device.ip ?? "-"} / {device.rssi ?? "-"} dBm</span><span>{new Date(device.last_seen).toLocaleString("ko-KR")}</span>
+                  <span>{device.ip ?? "-"} / {device.rssi ?? "-"} dBm</span><span>{elapsedTime(device.last_seen)}</span>
                 </div>
               ))}
             </div>
@@ -544,6 +568,12 @@ function App() {
         </div>
       )}
 
+      {mobileAlertsOpen && <div className="ops-alert-overlay" role="dialog" aria-modal="true" aria-labelledby="ops-alert-title" onClick={() => setMobileAlertsOpen(false)}>
+        <section className="ops-alert-sheet" onClick={event => event.stopPropagation()}>
+          <header><div><h2 id="ops-alert-title">현장 알림 {pendingEvents(data.events).length}건</h2><p>긴급 → 위험 → 주의 → 안내</p></div><div className="ops-alert-actions"><button className="ops-alert-resolve-all" disabled={busy || pendingEvents(data.events).length === 0} onClick={() => void action(() => api.resolveAllEvents())}>전체 처리</button><button autoFocus onClick={() => setMobileAlertsOpen(false)}>닫기</button></div></header>
+          <EventLog events={pendingEvents(data.events)} onRefresh={refresh} expanded />
+        </section>
+      </div>}
       {/* Mobile Navigation & Drawers */}
       <MobileBottomNav
         unresolvedCount={critical}

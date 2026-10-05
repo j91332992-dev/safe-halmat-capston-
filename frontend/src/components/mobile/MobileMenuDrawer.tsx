@@ -1,5 +1,6 @@
 import {useNavigate} from "react-router-dom";
 import {Haptics, ImpactStyle} from "@capacitor/haptics";
+import {SafetyIcon, type SafetyIconName} from "./SafetyIcon";
 
 interface MobileMenuDrawerProps {
   isOpen: boolean;
@@ -70,15 +71,21 @@ export function MobileMenuDrawer({
           </div>
         </div>
 
-        <div className="mobile-drawer-grid">
-          {extraMenuItems.map(item => (
+        {[
+          {label: "안전·기록", paths: ["/event", "/danger", "/history"], icon: "shield"},
+          {label: "현장·장치", paths: ["/layout", "/device", "/hardware"], icon: "settings"},
+          {label: "음성·AI", paths: ["/assistant"], icon: "voice"}
+        ].map(group => <details className="ops-menu-group" key={group.label}>
+          <summary><SafetyIcon name={group.icon as SafetyIconName}/>{group.label}<span>+</span></summary>
+          <div className="mobile-drawer-grid">
+          {extraMenuItems.filter(item => group.paths.includes(item.path)).map(item => (
             <button
               key={item.path}
               type="button"
               className="drawer-nav-item"
               onClick={() => handleItemClick(item.path)}
             >
-              <span className="drawer-item-icon">{item.icon}</span>
+              <span className="drawer-item-icon"><SafetyIcon name={group.icon as SafetyIconName}/></span>
               <div className="drawer-item-text">
                 <strong>{item.label}</strong>
                 <small>{item.desc}</small>
@@ -86,7 +93,7 @@ export function MobileMenuDrawer({
               <span className="drawer-item-arrow">›</span>
             </button>
           ))}
-        </div>
+        </div></details>)}
 
         <footer className="mobile-drawer-footer">
           <button
@@ -97,13 +104,9 @@ export function MobileMenuDrawer({
               onOpenSettings();
             }}
           >
-            ⚙️ 관제 서버 IP 주소 설정
+            연결 설정
           </button>
           <button type="button" className="btn-drawer-logout" onClick={onLogout}>↪ 관리자 로그아웃</button>
-          <div className="mobile-version-tag">
-            <span>HANMIR Mobile v1.0.0</span>
-            <span>PWA / Capacitor Cross-Platform</span>
-          </div>
         </footer>
       </div>
     </div>
