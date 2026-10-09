@@ -13,9 +13,28 @@ SYSTEM_PROMPT = """당신은 스마트 안전모의 한국어 안전 AI '투투�
 
 
 FAST_INTENTS = {"call_manager", "status_report", "location_query", "risk_query", "help", "emergency", "fire_report", "evacuation_route", "repeat_warning"}
+FAST_INTENTS.update({"battery_query", "ppe_query", "device_query", "heading_query"})
 
 
 def build_response(intent: str, worker: dict) -> tuple[str, str | None]:
+    freshness = worker.get("data_freshness")
+    if freshness is not None:
+        if intent == "location_query" and not freshness.get("location"):
+            return "현재 위치는 확인 불가입니다. UWB 연결을 확인해 주세요.", "play_tone"
+        if intent in {"ppe_query", "risk_query", "status_report"} and not freshness.get("vision") and not worker.get("emergency"):
+            return "최신 센서 정보가 없어 현재 상태는 확인 불가입니다.", "play_tone"
+    if intent == "battery_query":
+        battery = worker.get("battery")
+        return (f"현재 배터리는 {battery:.0f}퍼센트입니다." if battery is not None else "현재 배터리는 확인 불가입니다."), "play_tone"
+    if intent == "device_query":
+        return ("장치가 연결되어 있습니다." if freshness and freshness.get("device") else "장치 연결은 확인 불가입니다."), "play_tone"
+    if intent == "heading_query":
+        return "현재 방향은 확인 불가입니다. 방향 센서 검증이 필요합니다.", "play_tone"
+    if intent == "ppe_query":
+        ppe = worker.get("ppe") or {}
+        labels = {"helmet": "안전모", "vest": "조끼", "glove": "장갑", "gloves": "장갑"}
+        parts = [f"{label} {'착용' if ppe[key] else '미착용'}" for key, label in labels.items() if isinstance(ppe.get(key), bool)]
+        return ("현재 " + ", ".join(parts) + "입니다." if parts else "보호구 상태는 확인 불가입니다."), "play_tone"
     decision = worker.get("decision") or {}
     current_warning = decision.get("voice_message") or "현재 확인된 경고가 없습니다."
     evacuation = worker.get("evacuation") or {}
@@ -38,6 +57,9 @@ async def build_response_smart(intent: str, worker: dict, user_text: str = "") -
     fallback = build_response(intent, worker)
     if intent in FAST_INTENTS:
         return fallback
+    freshness = worker.get("data_freshness")
+    if freshness is not None and not freshness.get("vision") and not freshness.get("location"):
+        return "최신 센서 정보가 없어 현재 상황은 확인 불가입니다. 현장 상태를 직접 확인해 주세요.", "play_tone"
     if not settings.use_gpt_response or not settings.openai_api_key:
         return fallback
     try:
@@ -45,10 +67,17 @@ async def build_response_smart(intent: str, worker: dict, user_text: str = "") -
 
         ppe = worker.get("ppe", {})
         hazards = worker.get("hazards", {})
+        location = f"X {worker.get('x', 0):.1f}, Y {worker.get('y', 0):.1f} m"
+        risk = f"{worker.get('risk_score', 0)}점 / {worker.get('risk_level', '알 수 없음')}"
+        if freshness is not None:
+            if not freshness.get("location"):
+                location = "확인 불가"
+            if not freshness.get("vision"):
+                ppe, hazards, risk = "확인 불가", "확인 불가", "확인 불가"
         context = (
             f"작업자 요청: {user_text}\n의도: {intent}\n"
-            f"위치: X {worker.get('x', 0):.1f}, Y {worker.get('y', 0):.1f} m\n"
-            f"위험도: {worker.get('risk_score', 0)}점 / {worker.get('risk_level', '알 수 없음')}\n"
+            f"위치: {location}\n"
+            f"위험도: {risk}\n"
             f"보호구: {ppe}\n감지 위험: {hazards}\n"
             "위 정보만 사용해 작업자에게 바로 말할 응답을 작성하세요."
         )
@@ -75,5 +104,3 @@ async def build_response_smart(intent: str, worker: dict, user_text: str = "") -
     except Exception as exc:
         logger.warning("OpenAI 응답 생성 실패, 고정 응답 사용: %s", exc)
         return fallback
-
-

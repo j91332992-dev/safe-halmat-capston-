@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import timedelta
 from time import perf_counter
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -62,6 +63,16 @@ async def process_text(
         worker.emergency = True
     recalculate_risk(db, worker)
     worker_data = worker_to_dict(worker)
+    devices = db.query(Device).filter(Device.worker_id == worker_id).all()
+    cutoff = utcnow() - timedelta(seconds=settings.device_offline_seconds)
+    live = [device for device in devices if device.online and device.last_seen and device.last_seen >= cutoff]
+    worker_data["data_freshness"] = {
+        "location": any(device.last_uwb_at and device.last_uwb_at >= cutoff for device in live),
+        "vision": any(device.last_camera_at and device.last_camera_at >= cutoff for device in live),
+        "device": bool(live),
+    }
+    av = next((device for device in live if device.device_id == device_id), None)
+    worker_data["battery"] = av.battery if av else None
     incident = current_incident(db)
     if incident:
         worker_data["evacuation"] = calculate_route(db, worker, incident)
@@ -323,7 +334,6 @@ def list_commands(limit: int = 50, db: Session = Depends(get_db)):
         }
         for row in rows
     ]
-
 
 
 

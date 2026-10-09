@@ -238,17 +238,21 @@ export function useSafetyData() {
 
     return () => {
       disposedRef.current = true;
+      isConnectingRef.current = false;
       window.clearInterval(pollTimerRef.current);
       window.clearTimeout(reconnectTimerRef.current);
       window.clearInterval(heartbeatTimerRef.current);
       if (socketRef.current) {
         try {
+          socketRef.current.onopen = null;
+          socketRef.current.onmessage = null;
           socketRef.current.onclose = null;
           socketRef.current.onerror = null;
           socketRef.current.close();
         } catch {
           // ignore
         }
+        socketRef.current = null;
       }
       if (appStateHandle) void appStateHandle.remove();
       if (networkHandle) void networkHandle.remove();

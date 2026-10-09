@@ -1,4 +1,21 @@
 menu "HANMIR P4 integration"
+    config HANMIR_ENABLE_CAMERA
+        bool "Enable OV5647 MIPI CSI capture"
+        default n
+    config HANMIR_CAMERA_SDA_GPIO
+        int "DFR1172 camera SCCB SDA"
+        default 7
+    config HANMIR_CAMERA_SCL_GPIO
+        int "DFR1172 camera SCCB SCL"
+        default 8
+    config HANMIR_CAMERA_JPEG_QUALITY
+        int "JPEG quality"
+        range 20 95
+        default 75
+    config HANMIR_CAMERA_TARGET_FPS
+        int "Maximum camera encoding FPS"
+        range 1 30
+        default 10
     config HANMIR_WIFI_SSID
         string "2.4 GHz Wi-Fi SSID"
         default ""

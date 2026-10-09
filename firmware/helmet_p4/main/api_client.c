@@ -75,7 +75,7 @@ void hanmir_api_task(void *arg)
         cJSON *body = common_body();
         if (!registered) {
             cJSON_AddStringToObject(body, "device_type", "assistant_device");
-            cJSON_AddStringToObject(body, "firmware_version", "2.0.0-p4-prehw");
+            cJSON_AddStringToObject(body, "firmware_version", "2.0.0-p4-hw-bringup-20261009");
             registered = post_json("/api/devices/register", body);
             cJSON_Delete(body);
             vTaskDelay(pdMS_TO_TICKS(registered ? 100 : 5000));
@@ -83,13 +83,18 @@ void hanmir_api_task(void *arg)
         }
         cJSON_AddNumberToObject(body, "rssi", hanmir_network_rssi());
         float battery = 0;
-        if (hanmir_battery_percent(&battery)) cJSON_AddNumberToObject(body, "battery", battery);
+        bool battery_ready = hanmir_battery_percent(&battery);
+        if (battery_ready) cJSON_AddNumberToObject(body, "battery", battery);
         cJSON *components = cJSON_AddObjectToObject(body, "component_status");
         cJSON_AddStringToObject(components, "network", "ready");
-        cJSON_AddStringToObject(components, "camera", "capture_unverified");
+        cJSON_AddStringToObject(components, "camera", hanmir_camera_source_ready() ? "capturing" : "unavailable");
+        cJSON_AddStringToObject(components, "battery", battery_ready ? "ready" : "unavailable");
+        cJSON_AddStringToObject(components, "imu", hanmir_imu_ready() ? "ready" : "unverified");
+        cJSON_AddStringToObject(components, "speaker", hanmir_speaker_ready() ? "initialized" : "unavailable");
         cJSON_AddStringToObject(components, "video_transport", hanmir_camera_connected() ? "connected" : "disconnected");
 #if CONFIG_HANMIR_ENABLE_VOICE
-        cJSON_AddStringToObject(components, "mic", "configured");
+        cJSON_AddStringToObject(components, "mic", hanmir_voice_ready() ? "initialized" : "unavailable");
+        cJSON_AddStringToObject(components, "noise_suppression", hanmir_voice_ns_ready() ? "ready" : "unavailable");
 #else
         cJSON_AddStringToObject(components, "mic", "disabled");
 #endif

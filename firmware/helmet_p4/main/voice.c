@@ -10,6 +10,7 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_wn_iface.h"
+#include "esp_ns.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -34,6 +35,9 @@ static const esp_afe_sr_iface_t *afe;
 static esp_afe_sr_data_t *afe_data;
 static QueueHandle_t upload_queue;
 static volatile bool playback_active;
+static volatile bool voice_ready, ns_ready;
+bool hanmir_voice_ready(void) { return voice_ready; }
+bool hanmir_voice_ns_ready(void) { return ns_ready; }
 
 void hanmir_voice_set_playback(bool playing) { playback_active = playing; }
 
@@ -58,12 +62,46 @@ static void feed_task(void *arg)
     int32_t *raw = heap_caps_malloc(samples * 4, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     int16_t *pcm = heap_caps_malloc(samples * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!raw || !pcm) { ESP_LOGE(TAG, "feed allocation failed"); vTaskDelete(NULL); }
+    ns_handle_t ns = NULL;
+    int16_t ns_input[160], ns_output[160];
+    int ns_fill = 0, afe_fill = 0;
+    int peak = 0;
+    TickType_t last_level = xTaskGetTickCount();
+    if (CONFIG_HANMIR_ENABLE_NS) {
+        ns = ns_pro_create(10, 0, SAMPLE_RATE);
+        ns_ready = ns != NULL;
+        ESP_LOGI(TAG, "external WebRTC NS %s; frame=%d samples", ns ? "ready" : "unavailable", samples);
+    }
     for (;;) {
         size_t read = 0;
         if (i2s_channel_read(mic, raw, samples * 4, &read, pdMS_TO_TICKS(1000)) == ESP_OK &&
             read == samples * 4) {
-            for (int i = 0; i < samples; ++i) pcm[i] = (int16_t)(raw[i] >> 16);
-            afe->feed(afe_data, pcm);
+            for (int i = 0; i < samples; ++i) {
+                int value = (int16_t)(raw[i] >> 16);
+                if (value < 0) value = -value;
+                if (value > peak) peak = value;
+            }
+            if (xTaskGetTickCount() - last_level >= pdMS_TO_TICKS(5000)) {
+                ESP_LOGI(TAG, "mic PCM peak=%d/32768", peak);
+                peak = 0;
+                last_level = xTaskGetTickCount();
+            }
+            if (!ns) {
+                for (int i = 0; i < samples; ++i) pcm[i] = (int16_t)(raw[i] >> 16);
+                afe->feed(afe_data, pcm);
+                continue;
+            }
+            // WebRTC NS requires 10 ms frames; AFE chunk sizes need not be a multiple of 160.
+            for (int i = 0; i < samples; ++i) {
+                ns_input[ns_fill++] = (int16_t)(raw[i] >> 16);
+                if (ns_fill != 160) continue;
+                ns_process(ns, ns_input, ns_output);
+                ns_fill = 0;
+                for (int j = 0; j < 160; ++j) {
+                    pcm[afe_fill++] = ns_output[j];
+                    if (afe_fill == samples) { afe->feed(afe_data, pcm); afe_fill = 0; }
+                }
+            }
         }
     }
 }
@@ -183,11 +221,8 @@ esp_err_t hanmir_voice_start(void)
     config->aec_init = false; // Requires a real MAX98357A PCM playback reference.
     config->vad_init = true;
     config->vad_model_name = NULL;
-    config->ns_init = CONFIG_HANMIR_ENABLE_NS;
-    if (CONFIG_HANMIR_ENABLE_NS) {
-        config->afe_ns_mode = AFE_NS_MODE_WEBRTC;
-        config->ns_model_name = "WEBRTC";
-    }
+    // Use the standalone WebRTC frontend: this AFE build rejects the "WEBRTC" model name.
+    config->ns_init = false;
     config->wakenet_init = CONFIG_HANMIR_ENABLE_WAKENET;
 #if CONFIG_HANMIR_ENABLE_WAKENET
     if (!config->wakenet_model_name) { afe_config_free(config); return ESP_ERR_NOT_FOUND; }
@@ -201,6 +236,7 @@ esp_err_t hanmir_voice_start(void)
     if (xTaskCreatePinnedToCore(feed_task, "mic_feed", 6144, NULL, 5, NULL, 0) != pdPASS ||
         xTaskCreatePinnedToCore(fetch_task, "voice_vad", 8192, NULL, 5, NULL, 1) != pdPASS ||
         xTaskCreate(upload_task, "voice_upload", 6144, NULL, 4, NULL) != pdPASS) return ESP_ERR_NO_MEM;
-    ESP_LOGI(TAG, "INMP441 + AFE NS/VAD ready; emergency phrase detection stays server-side until model validation");
+    ESP_LOGI(TAG, "INMP441 + AFE VAD ready; external NS readiness is logged by mic_feed");
+    voice_ready = true;
     return ESP_OK;
 }

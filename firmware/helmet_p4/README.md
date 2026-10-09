@@ -1,6 +1,6 @@
-# HANMIR 2.0 ESP32-P4 통합 펌웨어 — 실물 연결 전 상태
+# HANMIR 2.0 ESP32-P4 통합 펌웨어 — 실물 초기 구동
 
-작성일: 2026-10-02. **ESP32-P4/DFR1172에서 빌드·플래시·동작을 검증하지 않은 준비 코드**다. 기존 `firmware/helmet_av_device`(S3)와 `firmware/helmet_p4_voice_lab`은 유지한다. P4가 오면 이 프로젝트를 통합 시작점으로 사용한다.
+갱신일: 2026-10-09. DFR1172 ESP32-P4 rev 1.3에서 ESP-IDF 5.5.5 빌드·플래시, 내장 C6 SDIO Wi-Fi, 서버 등록, OV5647 800×640 JPEG 영상의 웹 수신, MAX17048 SOC 읽기를 확인했다. 기존 S3와 음성 실험 프로젝트는 유지한다. 마이크 인식률·청취 품질, BNO085, 양방향 통화는 별도 실물 검증이 필요하다.
 
 ## 구현된 경로
 
@@ -18,7 +18,7 @@
 
 ## 아직 하드웨어 검증 없이는 완료할 수 없는 경로
 
-- `camera_source.c`의 OV5647 **MIPI CSI → ISP → JPEG** 초기화는 의도적으로 꺼져 있다. DFR1172의 실제 FPC·센서 PID, esp_video 버전, 센서 모드·ISP 색/노출, JPEG 코덱 경로를 보드에서 확인해야 한다. 이 파일의 `hanmir_camera_submit_jpeg()` 호출 지점에 검증된 캡처 코드를 연결한다. 영상 WebSocket이 연결되어도 이 단계 전에는 실제 영상이 전송되지 않는다.
+- `camera_source.c`에 OV5647 **MIPI CSI → ISP RGB565 → 하드웨어 JPEG** 캡처가 구현됐다. 기본 설정은 카메라 비활성이며 `sdkconfig.dfr1172.example`에 실제 연결한 보드용 활성화 설정을 제공한다. 초기 목표는 800×640, JPEG 품질 75, 최대 10 FPS이다. 실효 수신 FPS와 YOLO 정확도는 장면·네트워크·CPU 추론에 따라 별도로 측정한다.
 - `투투스` 맞춤 WakeNet 모델과 비상어 모델은 아직 확보·평가하지 않았다. 따라서 현재 음성은 **VAD 구간을 서버에 보내 기존 STT 호출어/긴급어 게이트가 판정**한다. WakeNet 히트를 긴급 신고로 취급하지 않는다. 기본 설정에서 음성은 꺼져 있고 실물 핀 확인 뒤 켠다.
 - 통화의 양방향 PCM, 버튼, BNO085 SHTP 낙상 판정, microSD 로그, AEC playback reference는 연결 전 실제 드라이버·지연 시험이 필요하다. 서버가 보낸 해당 명령을 현재 펌웨어가 수행한다고 가정하면 안 된다.
 - 일반 음성 클립은 메모리 큐 3개와 3회 업로드 시도만 있다. 전원 차단 시 오프라인 영속성이 없으므로 긴급 신고 전달 보장을 주장하지 않는다.
@@ -29,7 +29,7 @@
 1. Espressif ESP-IDF **5.5 이상**과 컴포넌트 관리자 환경을 준비한다. ESP-Hosted MCU 최신 Wi-Fi 예제는 P4에서 `esp_wifi_remote` 경로를 사용한다. DFR1172 내장 C6의 출고 펌웨어와 ESP-Hosted 호스트 버전이 맞는지 확인하고, 제조사 절차 없이 C6를 임의로 재플래시하지 않는다.
 2. `idf.py set-target esp32p4`, `idf.py menuconfig`를 실행한다. **HANMIR P4 integration** 메뉴의 SSID, Wi-Fi 비밀번호, 서버 PC LAN IP/포트, ID, 카메라 토큰을 입력한다. 토큰은 서버 `backend/.env`의 `CAMERA_INGEST_TOKEN`과 같게 한다. 토큰은 URL이 아닌 WebSocket 헤더로 전송된다.
 3. MAX17048는 실물 확인 뒤 SDA=33, SCL=32를 메뉴에 입력한다. INMP441은 BCLK=31, WS=34, DATA=36, MAX98357A는 BCLK=20, WS=21, DIN=22가 최종 배선표의 **단위시험 후보**다. 기본 `-1`은 비활성이다. 확인 전 숫자를 넣지 않는다.
-4. P4의 플래시 크기와 파티션(`factory` 4 MiB, `model` 6 MiB), PSRAM, C6 내부 SDIO 배선, 외부 GPIO 충돌을 보드로 재확인한다. 설정에는 C6 핀을 임의로 재배치하지 않았다.
+4. 이번 보드는 rev 1.3이므로 `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y`가 필요하다. 16MB Flash·32MB PSRAM을 부팅 로그로 확인했다. C6 SDIO 핀은 제조사 자료의 CLK18/CMD19/D0–D3=14–17/RESET54이며 기본 설정에 반영했다. 비밀번호·카메라 토큰이 들어가는 로컬 `sdkconfig`와 빌드 바이너리는 공유하지 않는다.
 5. 서버는 기존 `backend`로 시작한다. `/api/devices/register`, `/api/devices/heartbeat`, `/ws/device/{id}`, `/api/audio/upload`는 기존 경로다. `HANMIR_CAMERA_HTTP_BASELINE`을 켜면 S3와 같은 `/api/camera/frame`으로 기준선을 얻는다. 끄면 새 영상 `/api/camera/stream/{device_id}`를 사용한다.
 
 ## 권장 실물 시험 순서
@@ -38,7 +38,7 @@
 2. MAX17048 I2C1 `0x36`을 카메라 SCCB `0x36`과 **별도 버스**에서 확인. 배터리 SOC 값이 heartbeat에 나타나는지 확인.
 3. INMP441 단독 I2S → NS/VAD → 서버 WAV 수신·STT. 조용한 현장과 소음 현장에서 `투투스`, 긴급 문구의 미탐·오탐·지연 측정.
 4. MAX98357A 단독 톤과 TTS WAV. 스피커 음성이 마이크로 재인식되지 않는지 확인. 이후 AEC 기준 PCM 연결을 평가.
-5. [Espressif capture_stream](https://github.com/espressif/esp-video-components/tree/master/esp_video/examples/capture_stream) 및 [OV5647 센서 설정](https://github.com/espressif/esp-video-components/tree/master/esp_cam_sensor/sensors/ov5647)으로 카메라 원본·ISP·JPEG를 단독 확인. DFR1172의 SCCB GPIO7/8과 CSI FPC 설정을 실제 보드에서 검증하고 `camera_source.c`에 연결.
+5. 카메라 원본·ISP·JPEG는 초기 연결 확인을 마쳤다. 사람을 향한 장면에서 노출·색상·초점·움직임 품질을 확인한 뒤 YOLO 임계값과 해상도를 조정한다. 센서 ID 오류가 나면 전원을 끄고 CSI FPC 삽입 방향·잠금을 먼저 확인한다.
 6. 프레임 전송 서버 ACK, 원본 미리보기, YOLO 분석 화면을 순차 확인. 카메라 단독·음성 동시·UWB 동시 조건에서 수신 FPS, 분석 FPS, 지연, 드롭을 따로 측정.
 7. 비상어 전달, 서버 다운·AP 다운·전원 재부팅 시나리오. 오프라인 영속성이 필요하면 전원·microSD 검증 후 추가.
 

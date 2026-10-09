@@ -15,7 +15,10 @@ bool hanmir_camera_submit_jpeg(const uint8_t *jpeg, size_t length, uint16_t widt
 bool hanmir_camera_connected(void);
 uint32_t hanmir_camera_dropped(void);
 esp_err_t hanmir_camera_source_start(void);
+bool hanmir_camera_source_ready(void);
 esp_err_t hanmir_voice_start(void);
+bool hanmir_voice_ready(void);
+bool hanmir_voice_ns_ready(void);
 void hanmir_voice_set_playback(bool playing);
 esp_err_t hanmir_speaker_start(void);
 bool hanmir_speaker_ready(void);
