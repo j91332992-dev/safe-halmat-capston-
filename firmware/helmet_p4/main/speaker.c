@@ -21,6 +21,7 @@ esp_err_t hanmir_speaker_start(void)
         return ESP_ERR_INVALID_ARG;
     }
     i2s_chan_config_t channel = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_1, I2S_ROLE_MASTER);
+    channel.auto_clear_after_cb = true;
     ESP_RETURN_ON_ERROR(i2s_new_channel(&channel, &speaker, NULL), TAG, "I2S TX channel");
     i2s_std_config_t std = {
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(16000),
@@ -33,17 +34,32 @@ esp_err_t hanmir_speaker_start(void)
     };
     std.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
     ESP_RETURN_ON_ERROR(i2s_channel_init_std_mode(speaker, &std), TAG, "I2S TX std");
-    esp_err_t err = i2s_channel_enable(speaker);
-    speaker_enabled = err == ESP_OK;
-    return err;
+    // Stay silent at boot. Enable TX only while handling a playback command.
+    speaker_enabled = true;
+    return ESP_OK;
 }
 
 bool hanmir_speaker_ready(void) { return speaker_enabled; }
 
+static bool begin_playback(void)
+{
+    if (i2s_channel_enable(speaker) != ESP_OK) return false;
+    hanmir_voice_set_playback(true);
+    return true;
+}
+
+static void end_playback(void)
+{
+    // Allow the queued PCM tail to finish before stopping the I2S clocks.
+    vTaskDelay(pdMS_TO_TICKS(120));
+    i2s_channel_disable(speaker);
+    hanmir_voice_set_playback(false);
+}
+
 bool hanmir_speaker_tone(int frequency, int duration_ms)
 {
     if (!speaker_enabled || frequency < 100 || frequency > 4000 || duration_ms < 1 || duration_ms > 2000) return false;
-    hanmir_voice_set_playback(true);
+    if (!begin_playback()) return false;
     int16_t pcm[320];
     int total = 16 * duration_ms;
     int produced = 0;
@@ -59,8 +75,7 @@ bool hanmir_speaker_tone(int frequency, int duration_ms)
         }
         produced += count;
     }
-    vTaskDelay(pdMS_TO_TICKS(80));
-    hanmir_voice_set_playback(false);
+    end_playback();
     return ok;
 }
 
@@ -78,7 +93,10 @@ bool hanmir_speaker_play_url(const char *path)
         esp_http_client_fetch_headers(client);
         ok = esp_http_client_get_status_code(client) == 200;
     }
-    hanmir_voice_set_playback(true);
+    if (!ok || !begin_playback()) {
+        esp_http_client_cleanup(client);
+        return false;
+    }
     uint8_t buf[1024];
     uint8_t header[44];
     size_t header_read = 0;
@@ -108,8 +126,7 @@ bool hanmir_speaker_play_url(const char *path)
                 written != n - offset) { ok = false; break; }
         }
     }
-    vTaskDelay(pdMS_TO_TICKS(80));
-    hanmir_voice_set_playback(false);
+    end_playback();
     esp_http_client_cleanup(client);
     return ok && header_read == sizeof(header);
 }
