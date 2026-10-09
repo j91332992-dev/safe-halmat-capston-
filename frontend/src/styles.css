@@ -17,6 +17,26 @@
   --red: #ff4d65;
 }
 
+/* Login, server setup and account registration */
+.admin-login-card{position:relative}
+.admin-login-settings{position:absolute;top:14px;right:14px;display:grid;width:38px;height:38px;place-items:center;border:1px solid #36647a;border-radius:12px;background:#0b2231;color:#c7e4ef;font-size:20px;line-height:1;cursor:pointer}
+.admin-login-settings:hover,.admin-login-settings:focus-visible{border-color:#45d5aa;color:#fff;outline:none}
+.admin-signup-link{margin:14px 0 0;border:0;background:transparent;color:#79a8ba;font-size:10px;font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.admin-signup-link:hover,.admin-signup-link:focus-visible{color:#5ce1b8;outline:none}
+.admin-optional-label{color:#6f8997;font-size:9px;font-weight:600}
+.admin-id-field{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}
+.admin-id-field input{min-width:0}
+.admin-id-check{min-width:76px!important;min-height:44px!important;margin:0!important;padding:0 10px!important;border:1px solid #39778d!important;border-radius:11px!important;background:#123548!important;color:#c8edf7!important;font-size:11px!important;font-weight:800!important}
+.admin-id-status{display:block;margin-top:1px;font-size:10px;font-style:normal;font-weight:700}
+.admin-id-status.available{color:#5ce1b8}
+.admin-id-status.unavailable{color:#ff99a6}
+.admin-login-version{display:block;margin-top:8px;color:#4e7180;font:600 9px "IBM Plex Mono",monospace;letter-spacing:.04em}
+
+@media(max-width:700px){
+  .admin-login-card{padding-top:25px}
+  .admin-login-settings{top:12px;right:12px}
+}
+
 * {box-sizing: border-box}
 body {margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(circle at 76% 12%, rgba(25,74,96,.2), transparent 30%), var(--bg)}
 button {font: inherit}
@@ -1504,3 +1524,8 @@ html, body {
   .mobile-reconnected-notice button { width: 25px; height: 25px; border: 0; border-radius: 7px; background: rgba(255,255,255,.08); color: #c5f8e9; font-size: 18px; line-height: 1; }
   @keyframes connectionSignalPulse { 50% { opacity: .35; transform: scale(.72); } }
 }
+
+.login-role-options {display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+.login-role-options button {min-height:120px;border:1px solid #c9d9ec;border-radius:18px;background:#eff6ff;color:#15385d;font-size:24px;font-weight:700;cursor:pointer}
+.login-role-options button:last-child {background:#e8f7f4;color:#08756e}
+.login-role-options small {display:block;margin-top:12px;font-size:13px;font-weight:400}

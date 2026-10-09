@@ -1,13 +1,13 @@
 import {useCallback, useEffect, useRef, useState} from "react";
 import {App} from "@capacitor/app";
 import {Network} from "@capacitor/network";
-import {api} from "../services/api";
+import {api, auth} from "../services/api";
 import {getWsBaseUrl} from "../services/config";
 import type {LocationPoint, Snapshot, Worker} from "../types";
 
 export type ConnectionState = "connected" | "connecting" | "reconnecting" | "offline" | "error";
 
-export function useSafetyData() {
+export function useSafetyData(enabled = true) {
   const [data, setData] = useState<Snapshot | null>(null);
   const [locationHistory, setLocationHistory] = useState<Record<string, LocationPoint[]>>({});
   const [connected, setConnected] = useState(false);
@@ -26,6 +26,7 @@ export function useSafetyData() {
   const isConnectingRef = useRef<boolean>(false);
 
   const refresh = useCallback(async () => {
+    if (!auth.getToken()) return;
     try {
       const snapshot = await api.snapshot();
       setData(snapshot);
@@ -43,6 +44,10 @@ export function useSafetyData() {
       setError(null);
     } catch (cause) {
       const msg = cause instanceof Error ? cause.message : "서버 연결에 실패했습니다.";
+      if (msg.includes("로그인이 필요")) {
+        setData(null);
+        setLocationHistory({});
+      }
       setServerReachable(false);
       setError(msg);
     }
@@ -53,6 +58,9 @@ export function useSafetyData() {
 
   const connectWebSocket = useCallback(() => {
     if (disposedRef.current || isConnectingRef.current) return;
+
+    const token = auth.getToken();
+    if (!token) return;
 
     if (socketRef.current) {
       try {
@@ -70,7 +78,7 @@ export function useSafetyData() {
     setConnectionState(attemptsRef.current > 0 ? "reconnecting" : "connecting");
 
     try {
-      const socket = new WebSocket(`${wsBase}/ws/dashboard`);
+      const socket = new WebSocket(`${wsBase}/ws/dashboard?token=${encodeURIComponent(token)}`);
       socketRef.current = socket;
 
       socket.onopen = () => {
@@ -188,6 +196,29 @@ export function useSafetyData() {
   }, [connectWebSocket, refresh]);
 
   useEffect(() => {
+    if (!enabled) {
+      disposedRef.current = true;
+      setData(null);
+      setLocationHistory({});
+      setConnected(false);
+      setServerReachable(false);
+      setConnectionState("offline");
+      setReconnectAttempts(0);
+      setError(null);
+      attemptsRef.current = 0;
+      isConnectingRef.current = false;
+      window.clearInterval(pollTimerRef.current);
+      window.clearTimeout(reconnectTimerRef.current);
+      window.clearInterval(heartbeatTimerRef.current);
+      if (socketRef.current) {
+        socketRef.current.onclose = null;
+        socketRef.current.onerror = null;
+        socketRef.current.close();
+        socketRef.current = null;
+      }
+      return;
+    }
+
     disposedRef.current = false;
     void refresh();
     pollTimerRef.current = window.setInterval(refresh, 3000);
@@ -255,7 +286,7 @@ export function useSafetyData() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, []); // Only mount once!
+  }, [enabled, connectWebSocket, forceReconnect, refresh]);
 
   return {
     data,

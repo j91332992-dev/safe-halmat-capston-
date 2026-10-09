@@ -1,3 +1,7 @@
+import {navigation, navigationGroups} from "./adminNavigation";
+import type {Page, NavigationGroupId} from "./adminNavigation";
+import {AdminTeamPage} from "./components/AdminTeamPage";
+import {CameraFrame} from "./components/CameraFrame";
 import {useEffect, useMemo, useState} from "react";
 import {useLocation, useNavigate} from "react-router-dom";
 import {App as CapApp} from "@capacitor/app";
@@ -21,34 +25,10 @@ import {LoginScreen} from "./components/mobile/LoginScreen";
 import {MobileMenuDrawer} from "./components/mobile/MobileMenuDrawer";
 import {NetworkStatusBar} from "./components/mobile/NetworkStatusBar";
 import {ServerSettingsModal} from "./components/mobile/ServerSettingsModal";
+import {WorkerApp} from "./components/mobile/WorkerApp";
 import {useSafetyData} from "./hooks/useSafetyData";
 import {api, auth} from "./services/api";
 import {elapsedTime} from "./utils/elapsedTime";
-
-type Page = "dashboard" | "map" | "camera" | "assistant" | "layout" | "history" | "workers" | "devices" | "events" | "zones" | "diagnostics";
-
-const navigation: {id: Page; path: string; label: string}[] = [
-  {id: "dashboard", path: "/dashboard", label: "통합 대시보드"},
-  {id: "map", path: "/map", label: "실시간 지도"},
-  {id: "layout", path: "/layout", label: "지도 설계"},
-  {id: "history", path: "/history", label: "위치 기록 재생"},
-  {id: "camera", path: "/camera", label: "카메라 관제"},
-  {id: "workers", path: "/workers", label: "작업자 관리"},
-  {id: "devices", path: "/device", label: "장치 관리"},
-  {id: "events", path: "/event", label: "이벤트 로그"},
-  {id: "zones", path: "/danger", label: "위험구역 관리"},
-  {id: "diagnostics", path: "/hardware", label: "하드웨어 진단"},
-  {id: "assistant", path: "/assistant", label: "음성·AI"}
-];
-
-type NavigationGroupId = "location" | "media" | "safety" | "system";
-
-const navigationGroups: {id: NavigationGroupId; label: string; pages: Page[]}[] = [
-  {id: "location", label: "위치 관제", pages: ["map", "history", "layout"]},
-  {id: "media", label: "영상·AI 관제", pages: ["camera", "assistant"]},
-  {id: "safety", label: "안전 관리", pages: ["workers", "zones", "events"]},
-  {id: "system", label: "장치·시스템", pages: ["devices", "diagnostics"]}
-];
 
 function MenuIcon({page}: {page: Page}) {
   const paths: Record<Page, React.ReactNode> = {
@@ -62,6 +42,8 @@ function MenuIcon({page}: {page: Page}) {
     devices: <><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 6h6M10 18h4"/></>,
     events: <><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3" cy="6" r="1"/><circle cx="3" cy="12" r="1"/><circle cx="3" cy="18" r="1"/></>,
     zones: <><path d="M12 3 2.8 20h18.4Z"/><path d="M12 9v5M12 17h.01"/></>,
+    chat: <><path d="M3 4h18v13H9l-6 4Z"/><path d="M7 9h10M7 13h6"/></>,
+    permissions: <><path d="M12 3 4 6v5c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10V6Z"/><path d="m8 12 3 3 5-6"/></>,
     diagnostics: <><path d="M14.7 6.3a4 4 0 0 0-5 5L3 18l3 3 6.7-6.7a4 4 0 0 0 5-5l-3 3-3-3Z"/></>
   };
   return <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[page]}</svg>;
@@ -84,7 +66,10 @@ function App() {
   const navigate = useNavigate();
   const currentNavigation = navigation.find(item => item.path === location.pathname);
   const page = currentNavigation?.id ?? "dashboard";
-  const {data, locationHistory, connected, serverReachable, connectionState, reconnectAttempts, error, refresh, forceReconnect} = useSafetyData();
+  const [authenticated, setAuthenticated] = useState(() => auth.hasSession());
+  const [checkingSession, setCheckingSession] = useState(() => auth.hasSession());
+  const [accountRole, setAccountRole] = useState<string | null>(null);
+  const {data, locationHistory, connected, serverReachable, connectionState, reconnectAttempts, error, refresh, forceReconnect} = useSafetyData(authenticated && !checkingSession && accountRole !== "worker");
   const [selectedId, setSelectedId] = useState("worker-001");
   const [busy, setBusy] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
@@ -109,17 +94,13 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isHardwareMode, setIsHardwareMode] = useState(true);
   const [openGroups, setOpenGroups] = useState<Record<NavigationGroupId, boolean>>({location: false, media: false, safety: false, system: false});
-  const [sosCameraVersion, setSosCameraVersion] = useState(Date.now());
-  const [sosCameraImageAvailable, setSosCameraImageAvailable] = useState(true);
-  const [authenticated, setAuthenticated] = useState(() => auth.hasSession());
-  const [checkingSession, setCheckingSession] = useState(() => auth.hasSession());
   const worker = useMemo(() => data?.workers.find(item => item.worker_id === selectedId) ?? data?.workers[0], [data, selectedId]);
   const evacuationIncident = data?.evacuation?.incident ?? null;
   const emergencyWorker = data?.workers.find(item => item.emergency) ?? null;
   const emergencyEvent = data?.events.find(item =>
     item.worker_id === emergencyWorker?.worker_id &&
-    item.event_type === "VOICE_COMMAND" &&
-    ["help", "emergency"].includes(String(item.details?.intent ?? "")) &&
+    (item.event_type === "WORKER_SOS" || (item.event_type === "VOICE_COMMAND" &&
+    ["help", "emergency"].includes(String(item.details?.intent ?? "")))) &&
     item.status !== "resolved"
   ) ?? null;
   const callRequestEvent = data?.events.find(item =>
@@ -181,21 +162,6 @@ function App() {
     if (currentGroup) setOpenGroups(current => ({...current, [currentGroup.id]: true}));
   }, [page]);
 
-  useEffect(() => {
-    if (!emergencyWorker || !emergencyCameraDevice?.device_id || !sosCameraImageAvailable) return;
-    const timer = window.setInterval(() => {
-      setSosCameraVersion(Date.now());
-    }, 250);
-    return () => window.clearInterval(timer);
-  }, [emergencyWorker, emergencyCameraDevice?.device_id, sosCameraImageAvailable]);
-
-  // A camera timestamp can remain in the last snapshot after a simulator or
-  // helmet is stopped. Retry when a newer frame arrives, but do not hammer a
-  // missing image endpoint while no camera is sending frames.
-  useEffect(() => {
-    setSosCameraImageAvailable(true);
-  }, [emergencyCameraDevice?.device_id, emergencyCameraDevice?.last_camera_at]);
-
   const action = async (callback: () => Promise<unknown>) => {
     setBusy(true);
     try {
@@ -207,8 +173,10 @@ function App() {
   };
 
   const logout = async () => {
-    await auth.logout();
     setAuthenticated(false);
+    setAccountRole(null);
+    setSelectedId("");
+    await auth.logout();
   };
 
   useEffect(() => {
@@ -216,20 +184,32 @@ function App() {
       setCheckingSession(false);
       return;
     }
-    void auth.session().then(() => setCheckingSession(false)).catch(() => {
+    void auth.session().then(session => {setAccountRole(session.role); setCheckingSession(false);}).catch(() => {
       void auth.logout();
       setAuthenticated(false);
       setCheckingSession(false);
     });
   }, [authenticated]);
 
+  useEffect(() => {
+    const handleExpiredSession = () => {
+      setAuthenticated(false);
+      setCheckingSession(false);
+      setSelectedId("");
+    };
+    window.addEventListener("hanmir-auth-expired", handleExpiredSession);
+    return () => window.removeEventListener("hanmir-auth-expired", handleExpiredSession);
+  }, []);
+
   if (checkingSession) {
     return <main className="admin-login-screen"><div className="admin-login-check">로그인 상태를 확인하고 있습니다.</div></main>;
   }
 
   if (!authenticated) {
-    return <LoginScreen onLoggedIn={() => setAuthenticated(true)} />;
+    return <LoginScreen onLoggedIn={role => {setAccountRole(role); setAuthenticated(true);}} />;
   }
+
+  if (accountRole === "worker") return <WorkerApp onLogout={logout} />;
 
   if (!data) {
     return (
@@ -273,6 +253,8 @@ function App() {
     {page: "layout", value: `${data.anchors.length}개 앵커`, detail: `현장 ${data.site.width}m × ${data.site.height}m`},
     {page: "history", value: `${worker ? locationHistory[worker.worker_id]?.length ?? 0 : 0}개 좌표`, detail: "최근 위치 기록 재생"},
     {page: "camera", value: `${data.devices.filter(device => device.device_type === "assistant_device" && device.online).length}대 온라인`, detail: "안전모 카메라 관제"},
+    {page: "chat", value: "팀 대화", detail: "현장 팀 메시지 공유"},
+    {page: "permissions", value: "교육·허가 관리", detail: "이수·승인·작업 조건 설정"},
     {page: "workers", value: `${data.workers.length}명 등록`, detail: "작업자 상태와 권한"},
     {page: "devices", value: `${online}/${data.devices.length} 연결`, detail: "AV · UWB 장치 상태"},
     {page: "events", value: `${critical}건 미처리`, detail: `최근 이벤트 ${data.events.length}건`},
@@ -336,7 +318,7 @@ function App() {
             <button disabled className="hardware">HARDWARE</button>
           </div>
         </div>
-        <footer><span>v1.0.0-integrated</span><span>site-001</span></footer>
+        <footer><span>v1.7 / build 8</span><span>site-001</span></footer>
       </aside>
 
       <main className="main-area" data-page={page}>
@@ -411,6 +393,7 @@ function App() {
           </div>
         )}
 
+        {page === "dashboard" && <section className="shared-feature-shortcuts" aria-label="팀 운영 바로가기"><button onClick={() => navigate("/team-chat")}><b>팀 채팅</b><span>현장 팀 대화 열기 ›</span></button><button onClick={() => navigate("/permissions")}><b>교육·작업 허가</b><span>교육 이수·승인 조건 설정 ›</span></button></section>}
         {page === "dashboard" && (
             <MobileDashboard
               data={data}
@@ -444,20 +427,14 @@ function App() {
                   <header><div><span className="eyebrow">RECENT EVENTS</span><h2>최근 이벤트</h2></div><button onClick={() => navigate("/event")}>전체 보기 →</button></header>
                   <EventLog events={data.events.slice(0, 5)} onRefresh={refresh} />
                 </article>
-                <article className="panel scenario-panel">
-                  <header><div><span className="eyebrow">OPERATOR CONTROL</span><h2>관리자 빠른 제어</h2></div><StatusPill active activeText="실제 장치" inactiveText="오프라인" /></header>
-                  <p>등록된 안전모 장치에 경고를 보내거나 실제 화재 상황을 수동 발령합니다.</p>
-                  <div className="quick-actions">
-                    {!callRequestEvent && !emergencyWorker && callDevice && <HelmetCall deviceId={callDevice.device_id} workerName={worker.worker_name} />}
-                    <button disabled={busy || !data.devices.some(device => device.worker_id === worker.worker_id && device.device_type === "assistant_device" && device.online)} onClick={() => void action(() => api.sendAlert(data.devices.find(device => device.worker_id === worker.worker_id && device.device_type === "assistant_device")?.device_id))}>스피커 경고</button>
-                    <button className="fire-manual-button" disabled={busy || !!evacuationIncident} onClick={() => void action(() => api.triggerFire(worker.worker_id))}>화재 수동발령</button>
-                  </div>
-                </article>
+
               </div>
             </section>
             </div>
           </>
         )}
+
+        {page === "dashboard" && worker && <article className="panel shared-operator-controls"><header><h2>관리자 빠른 제어</h2><span>{worker.worker_name}</span></header><div className="quick-actions">{data.devices.filter(device => device.worker_id === worker.worker_id && device.device_type === "assistant_device").map(device => <HelmetCall key={device.device_id} deviceId={device.device_id} workerName={worker.worker_name} disabled={busy || !serverReachable}/>)}<button disabled={busy || !data.devices.some(device => device.worker_id === worker.worker_id && device.device_type === "assistant_device" && device.online)} onClick={() => void action(() => api.sendAlert(data.devices.find(device => device.worker_id === worker.worker_id && device.device_type === "assistant_device")?.device_id))}>스피커 경고</button><button className="fire-manual-button" disabled={busy || !!evacuationIncident} onClick={() => void action(() => api.triggerFire(worker.worker_id))}>화재 수동발령</button>{evacuationIncident?.status === "active" && <button disabled={busy} onClick={() => void action(() => api.cancelFire(evacuationIncident.incident_id, "resolved"))}>화재 종료</button>}</div></article>}
 
         {page === "map" && worker && (
           <section className="map-page-grid">
@@ -489,6 +466,7 @@ function App() {
           <HistoryReplay site={data.site} anchors={data.anchors} obstacles={data.obstacles} zones={data.zones} workers={data.workers} />
         )}
 
+        {(page === "chat" || page === "permissions") && <AdminTeamPage workers={data.workers} mode={page}/> }
         {page === "workers" && <WorkerManagement workers={data.workers} zones={data.zones} onSaved={refresh} />}
         {page === "devices" && (
           <section className="page-panel">
@@ -545,14 +523,10 @@ function App() {
             <dl><div><dt>작업자</dt><dd>{emergencyWorker.worker_name}</dd></div><div><dt>현재 위치</dt><dd>X {emergencyWorker.x.toFixed(1)}m · Y {emergencyWorker.y.toFixed(1)}m</dd></div></dl>
             <div className="sos-camera-evidence">
               <b>안전모 실시간 카메라</b>
-              {emergencyCameraDevice?.last_camera_at && sosCameraImageAvailable ? (
-                <img src={api.cameraImageUrl(emergencyCameraDevice.device_id, sosCameraVersion)} alt={emergencyWorker.worker_name + " 긴급상황 카메라"} onError={() => setSosCameraImageAvailable(false)} />
-              ) : (
-                <span>카메라 프레임 수신 대기 중</span>
-              )}
+              <CameraFrame deviceId={emergencyCameraDevice?.device_id} alt={emergencyWorker.worker_name + " 긴급상황 카메라"} />
             </div>
             <p>작업자의 안전을 확인하고 즉시 대응하세요.</p>
-            <div className="sos-modal-actions"><button disabled={busy} onClick={() => void action(() => api.acknowledge(emergencyEvent.event_id))}>신고 확인</button><button className="resolve" disabled={busy} onClick={() => void action(() => api.resolve(emergencyEvent.event_id))}>상황 종료</button></div>
+            <div className="sos-modal-actions">{emergencyCameraDevice && <HelmetCall deviceId={emergencyCameraDevice.device_id} workerName={emergencyWorker.worker_name} />}<button disabled={busy} onClick={() => void action(() => api.acknowledge(emergencyEvent.event_id))}>신고 확인</button><button className="resolve" disabled={busy} onClick={() => void action(() => api.resolve(emergencyEvent.event_id))}>상황 종료</button></div>
           </section>
         </div>
       )}
@@ -589,9 +563,8 @@ function App() {
         isHardware={isHardwareMode}
         onToggleHardware={() => setIsHardwareMode(prev => !prev)}
         onLogout={() => {
-          void auth.logout();
           setMenuOpen(false);
-          setAuthenticated(false);
+          void logout();
         }}
       />
 

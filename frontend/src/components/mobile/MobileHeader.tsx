@@ -86,9 +86,6 @@ export function MobileHeader({
           </svg>
         </button>
       </div>
-      <button className={`ops-notification-strip ${hasEmergency ? "has-danger" : ""}`} onClick={handleAlertClick}>
-        <span>{hasEmergency ? "긴급 상황 · 우선 확인" : "현장 알림"}</span><b>{unresolvedCount ? `${unresolvedCount}건 확인하기` : "미처리 알림 없음"} <span aria-hidden="true">›</span></b>
-      </button>
     </header>
   );
 }

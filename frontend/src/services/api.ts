@@ -9,8 +9,17 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...options
   });
   if (!response.ok) {
+    if (response.status === 401 && token) {
+      sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+      window.dispatchEvent(new Event("hanmir-auth-expired"));
+    }
     const body = await response.text();
-    throw new Error(body || `요청 실패: ${response.status}`);
+    let message = body;
+    try {
+      const parsed = JSON.parse(body) as {detail?: unknown};
+      if (typeof parsed.detail === "string") message = parsed.detail;
+    } catch { /* The server returned plain text. */ }
+    throw new Error(message || `요청 실패: ${response.status}`);
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
@@ -20,16 +29,64 @@ const ADMIN_TOKEN_KEY = "hanmir_admin_session";
 
 export const auth = {
   hasSession: () => Boolean(sessionStorage.getItem(ADMIN_TOKEN_KEY)),
+  getToken: () => sessionStorage.getItem(ADMIN_TOKEN_KEY),
   login: async (username: string, password: string) => {
-    const response = await request<{token: string; username: string; role: string; site_id: string}>("/api/auth/login", {method: "POST", body: JSON.stringify({username, password})});
+    const response = await request<{token: string; username: string; role: string; site_id: string; worker_id?: string}>("/api/auth/login", {method: "POST", body: JSON.stringify({username, password})});
     sessionStorage.setItem(ADMIN_TOKEN_KEY, response.token);
     return response;
   },
-  session: () => request<{username: string; role: string; site_id: string}>("/api/auth/session", {headers: {Authorization: `Bearer ${sessionStorage.getItem(ADMIN_TOKEN_KEY) ?? ""}`}}),
+  signup: (username: string, password: string, inviteCode: string) =>
+    request<{username: string; worker_id: string; site_id: string}>("/api/auth/signup", {method: "POST", body: JSON.stringify({username, password, invite_code: inviteCode})}),
+  createWorkerInvite: (workerId: string) =>
+    request<{worker_id: string; invite_code: string; expires_in_hours: number}>(`/api/auth/worker-invites/${encodeURIComponent(workerId)}`, {method: "POST"}),
+  usernameAvailable: (username: string) =>
+    request<{username: string; available: boolean; reason?: string}>(`/api/auth/username-available?username=${encodeURIComponent(username)}`),
+  register: async (username: string, password: string, siteName: string) => {
+    const response = await request<{token: string; username: string; role: string; site_id: string}>("/api/auth/register", {method: "POST", body: JSON.stringify({username, password, site_name: siteName})});
+    sessionStorage.setItem(ADMIN_TOKEN_KEY, response.token);
+    return response;
+  },
+  session: () => request<{username: string; role: string; site_id: string; worker_id?: string}>("/api/auth/session", {headers: {Authorization: `Bearer ${sessionStorage.getItem(ADMIN_TOKEN_KEY) ?? ""}`}}),
   logout: async () => {
-    await request("/api/auth/logout", {method: "POST", headers: {Authorization: `Bearer ${sessionStorage.getItem(ADMIN_TOKEN_KEY) ?? ""}`}}).catch(() => {});
+    const token = sessionStorage.getItem(ADMIN_TOKEN_KEY);
     sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    if (token) await request("/api/auth/logout", {method: "POST", headers: {Authorization: `Bearer ${token}`}}).catch(() => {});
   }
+};
+
+export interface WorkSummary {state: "off" | "working" | "break"; today_seconds: number; server_now: string; history: {kind: string; created_at: string}[]}
+export interface Qualification {qualification_id?: string; kind: "education" | "permit"; name: string; required: boolean; completed: boolean; expires_on: string | null; valid?: boolean}
+export interface Eligibility {items: Qualification[]; can_work: boolean; reasons: string[]}
+export interface Operations {organization: string; team: string; job_title: string; eligibility: Eligibility; work: WorkSummary}
+export interface ChatMessage {message_id: number; sender_id: string; sender_name: string; content: string; created_at: string}
+export interface ChatData {team: string; messages: ChatMessage[]}
+export interface CalendarDay {date: string; seconds: number; records: {kind: string; created_at: string}[]; intervals: {start: string; end: string}[]}
+export interface WorkerCalendar {month: string; timezone: string; days: CalendarDay[]}
+export interface WorkerMapData {site: {name: string; width: number; height: number}; obstacles: {name: string; object_type: string; x: number; y: number; width: number; height: number}[]; zones: {zone_name: string; coordinates: {x: number; y: number; width?: number; height?: number; radius?: number; points?: {x: number; y: number}[]}; zone_category: string; zone_type: string; active: boolean}[]}
+export interface WorkerAppData {
+  worker: {worker_id: string; worker_name: string; site_name: string; organization: string; team: string; job_title: string; current_zone: string | null; x: number; y: number; confidence: number; risk_level: string; emergency: boolean; updated_at: string};
+  devices: {device_id: string; device_type: string; online: boolean; battery: number | null; last_seen: string; last_uwb_at: string | null}[];
+  events: {event_id: string; event_type: string; message: string; severity: string; status: string; created_at: string}[];
+  work: WorkSummary;
+  eligibility: Eligibility;
+}
+
+export const workerApi = {
+  callManager: () => request("/api/worker-app/call-manager", {method: "POST"}),
+  me: () => request<WorkerAppData>("/api/worker-app/me"),
+  work: (kind: "start" | "break_start" | "break_end" | "end", checklist?: {helmet: boolean; vest: boolean; glove: boolean}) => request<{ok: boolean; work: WorkSummary}>(`/api/worker-app/work/${kind}`, {method: "POST", body: JSON.stringify(checklist ?? null)}),
+  calendar: (month: string) => request<WorkerCalendar>(`/api/worker-app/calendar?month=${encodeURIComponent(month)}`),
+  map: () => request<WorkerMapData>("/api/worker-app/map"),
+  chat: (before?: number) => request<ChatData>(`/api/worker-app/chat${before ? `?before=${before}` : ""}`),
+  sendChat: (content: string) => request("/api/worker-app/chat", {method: "POST", body: JSON.stringify({content})}),
+  sos: () => request<{event_id: string; status: string}>("/api/worker-app/sos", {method: "POST"})
+};
+
+export const operationsApi = {
+  get: (id: string) => request<Operations>(`/api/workers/${encodeURIComponent(id)}/operations`),
+  save: (id: string, data: {organization: string; team: string; job_title: string; qualifications: Qualification[]}) => request<Operations>(`/api/workers/${encodeURIComponent(id)}/operations`, {method: "PUT", body: JSON.stringify(data)}),
+  chat: (id: string, before?: number) => request<ChatData>(`/api/workers/${encodeURIComponent(id)}/chat${before ? `?before=${before}` : ""}`),
+  sendChat: (id: string, content: string) => request(`/api/workers/${encodeURIComponent(id)}/chat`, {method: "POST", body: JSON.stringify({content})})
 };
 
 export const api = {

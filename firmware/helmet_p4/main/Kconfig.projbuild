@@ -1,0 +1,96 @@
+menu "HANMIR P4 integration"
+    config HANMIR_ENABLE_CAMERA
+        bool "Enable OV5647 MIPI CSI capture"
+        default n
+    config HANMIR_CAMERA_SDA_GPIO
+        int "DFR1172 camera SCCB SDA"
+        default 7
+    config HANMIR_CAMERA_SCL_GPIO
+        int "DFR1172 camera SCCB SCL"
+        default 8
+    config HANMIR_CAMERA_JPEG_QUALITY
+        int "JPEG quality"
+        range 20 95
+        default 75
+    config HANMIR_CAMERA_TARGET_FPS
+        int "Maximum camera encoding FPS"
+        range 1 30
+        default 10
+    config HANMIR_WIFI_SSID
+        string "2.4 GHz Wi-Fi SSID"
+        default ""
+    config HANMIR_WIFI_PASSWORD
+        string "Wi-Fi password"
+        default ""
+    config HANMIR_SERVER_HOST
+        string "FastAPI server IPv4 address or DNS name"
+        default ""
+    config HANMIR_SERVER_PORT
+        int "FastAPI port"
+        range 1 65535
+        default 8000
+    config HANMIR_DEVICE_ID
+        string "AV device ID"
+        default "helmet-001-av"
+    config HANMIR_ORGANIZATION_ID
+        string "Organization ID"
+        default "org-001"
+    config HANMIR_SITE_ID
+        string "Site ID"
+        default "site-001"
+    config HANMIR_WORKER_ID
+        string "Worker ID"
+        default "worker-001"
+    config HANMIR_HELMET_ID
+        string "Helmet ID"
+        default "helmet-001"
+    config HANMIR_CAMERA_TOKEN
+        string "Camera stream token: match backend CAMERA_INGEST_TOKEN"
+        default ""
+    config HANMIR_CAMERA_HTTP_BASELINE
+        bool "Use existing multipart POST camera endpoint for S3/P4 baseline comparison"
+        default n
+    config HANMIR_ENABLE_VOICE
+        bool "Enable INMP441 AFE and server voice clips"
+        default n
+    config HANMIR_SPK_BCLK_GPIO
+        int "Verified MAX98357A BCLK GPIO (-1 disables)"
+        default -1
+    config HANMIR_SPK_WS_GPIO
+        int "Verified MAX98357A WS GPIO (-1 disables)"
+        default -1
+    config HANMIR_SPK_DATA_GPIO
+        int "Verified MAX98357A DIN GPIO (-1 disables)"
+        default -1
+    config HANMIR_MIC_BCLK_GPIO
+        int "Verified INMP441 BCLK GPIO; -1 disables microphone"
+        default -1
+    config HANMIR_MIC_WS_GPIO
+        int "Verified INMP441 WS GPIO"
+        default -1
+    config HANMIR_MIC_DATA_GPIO
+        int "Verified INMP441 DATA GPIO"
+        default -1
+    config HANMIR_ENABLE_NS
+        bool "ESP-SR WebRTC noise suppression"
+        default y
+    config HANMIR_ENABLE_WAKENET
+        bool "Log WakeNet hits (requires verified model; does not bypass server gate)"
+        default n
+    config HANMIR_CAMERA_MAX_BYTES
+        int "Maximum JPEG bytes queued for stream"
+        range 1024 524288
+        default 262144
+    config HANMIR_BAT_SDA_GPIO
+        int "Verified MAX17048 SDA GPIO (-1 disables)"
+        default -1
+    config HANMIR_BAT_SCL_GPIO
+        int "Verified MAX17048 SCL GPIO (-1 disables)"
+        default -1
+    config HANMIR_IMU_RX_GPIO
+        int "Verified BNO085 sensor TX to P4 RX GPIO (-1 disables)"
+        default -1
+    config HANMIR_IMU_TX_GPIO
+        int "Verified BNO085 sensor RX to P4 TX GPIO (-1 disables)"
+        default -1
+endmenu

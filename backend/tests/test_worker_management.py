@@ -7,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.models.entities import WorkerState
 from app.routers.workers import router
+from app.routers.auth import require_site
 
 
 def test_worker_name_and_notes_can_be_updated():
@@ -28,6 +29,7 @@ def test_worker_name_and_notes_can_be_updated():
             db.close()
 
     test_app.dependency_overrides[get_db] = override_db
+    test_app.dependency_overrides[require_site] = lambda: "site-001"
     with TestClient(test_app) as client:
         response = client.put("/api/workers/worker-test", json={"worker_name": "김작업", "notes": "고소 작업 교육 이수"})
         assert response.status_code == 200

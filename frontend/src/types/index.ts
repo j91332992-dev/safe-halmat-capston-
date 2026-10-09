@@ -1,6 +1,7 @@
 export type RiskLevel = "정상" | "관심" | "주의" | "위험" | "비상";
 
 export interface Worker {
+  work?: {state: "off" | "working" | "break"; today_seconds: number};
   worker_id: string;
   worker_name: string;
   worker_role: "general_worker" | "manager" | "hot_work_authorized" | "heavy_equipment_operator" | "unauthorized";
@@ -178,6 +179,8 @@ export interface VoiceResponse {
 }
 
 export interface CameraLatest {
+  analyzed_at?: string;
+  frame_id?: number;
   device_id: string;
   received: boolean;
   filename?: string;

@@ -1,5 +1,6 @@
 /* All new surfaces are opt-in on phone/tablet. Desktop keeps its original UI. */
-.ops-home, .ops-notification-strip, .ops-alert-overlay { display: none; }
+.auth-signup-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ops-home, .ops-alert-overlay { display: none; }
 @media (max-width: 900px), (min-width: 901px) and (max-width: 1366px) and (hover: none) and (pointer: coarse) {
   .app-frame { display: block; }
   .sidebar, .topbar, .desktop-dashboard, .active-sos-banner, .active-call-request-banner, .missed-call-banner { display: none !important; }
@@ -13,8 +14,6 @@
   .mobile-header-actions { gap: 4px; }
   .mobile-header-btn { width: 44px; height: 44px; box-shadow: none; }
   .mobile-status-badge { display: none; }
-  .ops-notification-strip { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 8px; align-items: center; min-height: 44px; padding: 10px 14px; border: 0; border-radius: 12px; background: #eaf2ff; color: #174b98; font-size: 13px; text-align: left; }
-  .ops-notification-strip.has-danger { background: #fff0ef; color: #b4232d; }
   .ops-home { display: grid; gap: 16px; color: #182b45; font-family: inherit; }
   .ops-home *, .ops-alert-sheet * { min-width: 0; box-sizing: border-box; }
   /* Keep Korean words intact throughout the touch UI.  Long data such as IDs
@@ -141,8 +140,6 @@
   .state-connected { background: rgba(50,210,150,.10); border-color: rgba(50,210,150,.42); color: #66e7b8; }
   .state-connecting, .state-reconnecting { background: rgba(255,179,71,.10); color: #ffd18a; }
   .state-offline, .state-error { background: rgba(255,71,90,.11); color: #ffadb7; }
-  .ops-notification-strip { background: #181b23; border: 1px solid #303746; color: #dce7f5; border-radius: 14px; }
-  .ops-notification-strip.has-danger { background: rgba(255,71,90,.12); border-color: rgba(255,71,90,.6); color: #ffd9de; }
 
   .ops-home { gap: 14px; color: #f7f9fc; }
   .ops-heading small { color: #75aaff; }
@@ -343,6 +340,7 @@
   .admin-login-card label { color: #dce7f5; }
   .admin-login-card input { background: #20242e; border-color: #3a4353; color: #fff; }
   .admin-login-card input::placeholder { color: #7f8a9b; }
+  .admin-login-server-settings { width: 100%; margin: 4px 0 16px; padding: 11px 14px; border: 1px solid #3a67aa; border-radius: 12px; background: #202a3b; color: #a9c9ff; font: inherit; font-weight: 700; }
   .admin-login-card form button { background: #2f72dd; color: #fff; }
   .admin-login-error { background: rgba(255,71,90,.13); border-color: rgba(255,71,90,.55); color: #ffb1ba; }
 

@@ -1,40 +1,77 @@
 import {useState} from "react";
 import type {FormEvent} from "react";
 import {auth} from "../../services/api";
+import {ServerSettingsModal} from "./ServerSettingsModal";
 
-export function LoginScreen({onLoggedIn}: {onLoggedIn: () => void}) {
+type Mode = "login" | "register" | "worker";
+export function LoginScreen({onLoggedIn}: {onLoggedIn: (role: string) => void}) {
+  const [entry, setEntry] = useState<"admin" | "worker" | null>(null);
+  const [mode, setMode] = useState<Mode>("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [siteName, setSiteName] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+  const [available, setAvailable] = useState<boolean | null>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    setSubmitting(true);
-    setError("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const changeMode = (next: Mode) => {
+    setMode(next); setPassword(""); setPasswordConfirm(""); setError(""); setAvailable(null);
+  };
+  const checkUsername = async () => {
     try {
-      await auth.login(username, password);
-      onLoggedIn();
-    } catch {
-      setError("관리자 ID 또는 비밀번호를 다시 확인하세요.");
-    } finally {
-      setSubmitting(false);
+      const result = await auth.usernameAvailable(username.trim());
+      setAvailable(result.available);
+      if (!result.available) setError(result.reason ?? "이미 사용 중인 ID입니다.");
+      return result.available;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "서버 연결을 확인하세요.");
+      return false;
     }
   };
-
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); setSubmitting(true); setError("");
+    try {
+      if (mode !== "login") {
+        if (password !== passwordConfirm) {setError("비밀번호 확인이 일치하지 않습니다."); return;}
+        if (!(await checkUsername())) return;
+      }
+      const session = mode === "register"
+        ? await auth.register(username, password, siteName)
+        : mode === "worker"
+          ? await auth.signup(username, password, inviteCode).then(() => auth.login(username, password))
+          : await auth.login(username, password);
+      if ((session.role === "worker") !== (entry === "worker")) {
+        await auth.logout();
+        setError(entry === "worker" ? "근로자 계정으로 로그인하세요." : "관리자 계정으로 로그인하세요.");
+        return;
+      }
+      onLoggedIn(session.role);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "요청을 완료하지 못했습니다.");
+    } finally {setSubmitting(false);}
+  };
   return <main className="admin-login-screen">
     <section className="admin-login-card">
+      <button className="admin-login-settings" type="button" onClick={() => setSettingsOpen(true)} aria-label="관제 서버 설정">⚙</button>
       <div className="admin-login-mark">H</div>
-      <span className="admin-login-eyebrow">HANMIR SAFETY CONTROL</span>
-      <h1>관리자 로그인</h1>
-      <p>승인된 관리자만 현장 안전관제에 접근할 수 있습니다.</p>
-      <form onSubmit={submit}>
-        <label>관리자 ID<input autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} placeholder="관리자 ID" required /></label>
-        <label>비밀번호<input type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} placeholder="비밀번호" required /></label>
-        {error && <div className="admin-login-error">⚠️ {error}</div>}
-        <button disabled={submitting} type="submit">{submitting ? "로그인 확인 중" : "로그인"}</button>
+      <span className="admin-login-eyebrow">HANMIR SMART SAFETY</span>
+      <h1>{!entry ? "한미르 안전관리" : mode === "login" ? `${entry === "admin" ? "관리자" : "근로자"} 로그인` : mode === "register" ? "관리자 회원가입" : "근로자 회원가입"}</h1>
+      <p>{!entry ? "이용할 메뉴를 선택하세요." : mode === "login" ? "선택한 메뉴의 계정으로 로그인하세요." : mode === "register" ? "회사·현장 계정을 만들면 독립된 관제 공간이 생성됩니다." : "관리자가 전달한 초대 코드로 내 안전 계정을 만드세요."}</p>
+      {!entry ? <div className="login-role-options"><button type="button" onClick={() => {setEntry("admin"); changeMode("login");}}>관리자<small>현장 관제·안전 관리</small></button><button type="button" onClick={() => {setEntry("worker"); changeMode("login");}}>근로자<small>내 작업·내 안전</small></button></div> : <><form onSubmit={submit}>
+        {mode === "register" && <label>회사 또는 현장명 <span className="admin-optional-label">(선택)</span><input value={siteName} onChange={event => setSiteName(event.target.value)} autoComplete="organization" maxLength={100} placeholder="비워두면 ID로 생성됩니다" /></label>}
+        <label>ID <span className="admin-id-field"><input value={username} onChange={event => {setUsername(event.target.value); setAvailable(null);}} autoComplete="username" autoCapitalize="none" autoCorrect="off" minLength={mode === "login" ? undefined : 4} maxLength={30} required placeholder="ID" />{mode !== "login" && <button className="admin-id-check" type="button" onClick={() => void checkUsername()}>중복 확인</button>}</span>{mode !== "login" && available === true && <em className="admin-id-status available">사용 가능한 ID입니다.</em>}</label>
+        <label>비밀번호<input type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={event => setPassword(event.target.value)} minLength={mode === "worker" ? 8 : mode === "register" ? 4 : undefined} maxLength={72} required placeholder={mode === "worker" ? "8자 이상 비밀번호" : "비밀번호"} /></label>
+        {mode !== "login" && <label>비밀번호 확인<input type="password" autoComplete="new-password" value={passwordConfirm} onChange={event => setPasswordConfirm(event.target.value)} required placeholder="비밀번호를 다시 입력하세요" /></label>}
+        {mode === "worker" && <label>초대 코드<input value={inviteCode} onChange={event => setInviteCode(event.target.value)} autoCapitalize="none" autoCorrect="off" required placeholder="관리자에게 받은 코드" /></label>}
+        {error && <div className="admin-login-error" role="alert">{error}</div>}
+        <button disabled={submitting} type="submit">{submitting ? "처리 중…" : mode === "login" ? "로그인" : "회원가입 후 시작"}</button>
       </form>
-      <small>무단 접근 시도는 허용되지 않습니다.</small>
+      {mode === "login" ? <button className="admin-signup-link" onClick={() => changeMode(entry === "admin" ? "register" : "worker")}>{entry === "admin" ? "관리자" : "근로자"} 회원가입</button> : <button className="admin-signup-link" onClick={() => changeMode("login")}>로그인으로 돌아가기</button>}
+      <button type="button" className="admin-signup-link" onClick={() => {setEntry(null); setUsername(""); changeMode("login");}}>관리자·근로자 선택으로 돌아가기</button></>}
+      <span className="admin-login-version">v1.7 · 관리자·근로자 통합 앱</span>
     </section>
+    <ServerSettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onSaved={() => setSettingsOpen(false)} />
   </main>;
 }

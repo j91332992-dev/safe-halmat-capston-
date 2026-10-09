@@ -6,12 +6,12 @@ const config: CapacitorConfig = {
   webDir: "dist",
   server: {androidScheme: "https", cleartext: true, allowNavigation: ["*"]},
   plugins: {
-    StatusBar: {style: "LIGHT", backgroundColor: "#ffffff", overlaysWebView: true},
+    StatusBar: {style: "LIGHT", backgroundColor: "#06101a", overlaysWebView: false},
     CapacitorCookies: {enabled: true},
     CapacitorHttp: {enabled: true}
   },
   android: {allowMixedContent: true, webContentsDebuggingEnabled: true},
-  ios: {contentInset: "always", allowsLinkPreview: false, scrollEnabled: true}
+  ios: {contentInset: "never", allowsLinkPreview: false, scrollEnabled: true}
 };
 
 export default config;

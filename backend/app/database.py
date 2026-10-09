@@ -58,7 +58,7 @@ def session_scope():
 
 
 def init_database() -> None:
-    from .models.entities import AccountSiteAccess, AdminAccount, Anchor, Device, EvacuationIncident, Event, Location, Obstacle, SiteLayout, WorkerState, Zone
+    from .models.entities import AccountSiteAccess, AdminAccount, Anchor, Device, EvacuationIncident, Event, Location, Obstacle, SiteLayout, WorkerAccount, WorkerState, Zone
 
     Base.metadata.create_all(bind=engine)
 
@@ -132,6 +132,15 @@ def init_database() -> None:
                     hazard_json=json.dumps({"fire": False, "smoke": False}),
                 )
             )
+        # Initial demonstration worker login for the A site. Store only its
+        # PBKDF2 hash; do not replace an account that was changed later.
+        if not db.get(WorkerAccount, "WORKER") and not db.query(WorkerAccount).filter(WorkerAccount.worker_id == "worker-001").first():
+            db.add(WorkerAccount(
+                username="WORKER",
+                password_hash="a3e14ee76395489cd948bcc5ca849cc0f87e08951c5dde7f042c326a3965462a",
+                worker_id="worker-001",
+                site_id="site-001",
+            ))
         for device_id, device_type in (
             ("helmet-001-av", "assistant_device"),
             ("helmet-001-uwb", "position_device"),

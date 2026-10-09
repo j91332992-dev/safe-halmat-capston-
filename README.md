@@ -1,5 +1,7 @@
 # 🦺 HANMIR — 산업용 AI 스마트 안전모
 
+> 로컬 통합판 **v1.7 / build 8**: 하드웨어 기준 `mobile-app-handoff-20261006`, v1.5 build6 배포 ZIP의 모바일·iPad 앱, P4 서버/펌웨어 개선과 근로자 화면을 통합했습니다. 관리자 회원가입 및 근로자 초대 가입, 지도·근무 달력·팀 채팅·교육/허가·안전 점검·배터리 경고를 제공합니다. [추가 기능 안내](docs/근로자앱_기능확장_2026-10-09.md) [통합 기록](docs/브랜치_비교_업데이트_2026-10-09.md) · [근로자 앱 실행 안내](docs/근로자앱_실행안내.md)
+
 <div align="center">
 
 ![ESP32-S3](https://img.shields.io/badge/ESP32--S3-Embedded_HW-E7352C?style=for-the-badge&logo=espressif&logoColor=white)

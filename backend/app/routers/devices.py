@@ -10,6 +10,7 @@ from ..services.command_service import queue_command
 from ..services.device_service import mark_device_seen, register_device, update_heartbeat
 from ..services.serializers import device_to_dict
 from ..websocket import manager
+from .auth import require_site
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
 
@@ -49,9 +50,9 @@ async def component_result(device_id: str, payload: ComponentResultIn, db: Sessi
 
 
 @router.post("/{device_id}/command")
-async def command(device_id: str, payload: DeviceCommandIn, db: Session = Depends(get_db)):
+async def command(device_id: str, payload: DeviceCommandIn, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     device = db.get(Device, device_id)
-    if not device:
+    if not device or device.site_id != site_id:
         raise HTTPException(404, "장치를 찾을 수 없습니다.")
     record = queue_command(db, device_id, payload.command_type, payload.payload)
     delivered = await manager.send_device_command(
@@ -66,6 +67,5 @@ async def command(device_id: str, payload: DeviceCommandIn, db: Session = Depend
     device.last_speaker_status = f"{record.command_type}: {record.status}"
     db.commit()
     result = {"command_id": record.command_id, "status": record.status, "delivered_connections": delivered}
-    await manager.broadcast("device_command", {"device_id": device_id, **result, "command_type": record.command_type})
+    await manager.broadcast("device_command", {"device_id": device_id, "site_id": site_id, **result, "command_type": record.command_type})
     return result
-

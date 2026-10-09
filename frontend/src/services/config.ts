@@ -2,6 +2,13 @@ import {Capacitor} from "@capacitor/core";
 
 const STORAGE_KEY = "hanmir_server_url";
 
+export function normalizeServerUrl(url: string): string {
+  const cleaned = url.trim().replace(/\/+$/, "");
+  if (!cleaned) return "";
+  if (/^https?:\/\//i.test(cleaned)) return cleaned;
+  return `http://${cleaned}`;
+}
+
 export function isCapacitorNative(): boolean {
   return Capacitor.isNativePlatform();
 }
@@ -10,7 +17,7 @@ export function getStoredServerUrl(): string {
   if (typeof window === "undefined") return "";
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored && stored.trim().length > 0) {
-    return stored.trim();
+    return normalizeServerUrl(stored);
   }
 
   // 1. Env configured URL
@@ -31,7 +38,7 @@ export function getStoredServerUrl(): string {
 
 export function setStoredServerUrl(url: string): void {
   if (typeof window === "undefined") return;
-  const cleaned = url.trim().replace(/\/+$/, "");
+  const cleaned = normalizeServerUrl(url);
   localStorage.setItem(STORAGE_KEY, cleaned);
 }
 

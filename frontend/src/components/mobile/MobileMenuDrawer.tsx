@@ -1,3 +1,4 @@
+import {navigation, navigationGroups} from "../../adminNavigation";
 import {useNavigate} from "react-router-dom";
 import {Haptics, ImpactStyle} from "@capacitor/haptics";
 import {SafetyIcon, type SafetyIconName} from "./SafetyIcon";
@@ -10,16 +11,6 @@ interface MobileMenuDrawerProps {
   isHardware: boolean;
   onToggleHardware: () => void;
 }
-
-const extraMenuItems = [
-  {path: "/layout", label: "지도 설계", icon: "📐", desc: "앵커 및 장애물 배치 편집"},
-  {path: "/history", label: "위치 기록 재생", icon: "⏪", desc: "작업자 과거 동선 타임라인"},
-  {path: "/device", label: "장치 관리", icon: "📟", desc: "ESP32 헬멧 및 UWB 태그 상태"},
-  {path: "/event", label: "이벤트 로그", icon: "📋", desc: "SOS 및 시스템 감지 이력"},
-  {path: "/danger", label: "위험구역 관리", icon: "⚠️", desc: "출입금지/경고 구역 설정"},
-  {path: "/hardware", label: "하드웨어 진단", icon: "🛠️", desc: "스피커 테스트 및 센서 점검"},
-  {path: "/assistant", label: "음성·AI 어시스턴트", icon: "🎙️", desc: "무전 명령 및 AI 안내"}
-];
 
 export function MobileMenuDrawer({
   isOpen,
@@ -71,14 +62,10 @@ export function MobileMenuDrawer({
           </div>
         </div>
 
-        {[
-          {label: "안전·기록", paths: ["/event", "/danger", "/history"], icon: "shield"},
-          {label: "현장·장치", paths: ["/layout", "/device", "/hardware"], icon: "settings"},
-          {label: "음성·AI", paths: ["/assistant"], icon: "voice"}
-        ].map(group => <details className="ops-menu-group" key={group.label}>
+        {navigationGroups.map(group => <details className="ops-menu-group" key={group.label}>
           <summary><SafetyIcon name={group.icon as SafetyIconName}/>{group.label}<span>+</span></summary>
           <div className="mobile-drawer-grid">
-          {extraMenuItems.filter(item => group.paths.includes(item.path)).map(item => (
+          {navigation.filter(item => group.pages.includes(item.id)).map(item => (
             <button
               key={item.path}
               type="button"
@@ -88,7 +75,7 @@ export function MobileMenuDrawer({
               <span className="drawer-item-icon"><SafetyIcon name={group.icon as SafetyIconName}/></span>
               <div className="drawer-item-text">
                 <strong>{item.label}</strong>
-                <small>{item.desc}</small>
+                <small>{item.label} 기능 열기</small>
               </div>
               <span className="drawer-item-arrow">›</span>
             </button>

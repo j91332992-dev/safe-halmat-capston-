@@ -40,6 +40,7 @@ export function MobileDashboard({data, selectedWorker, serverReachable, onAlerts
   }, [offlineKey, data.devices]);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   return <section className="ops-home" aria-label="현장 안전 대시보드">
+    <section className="ops-card"><header><h3>작업자 근무 현황</h3><button onClick={() => navigate('/workers')}>배정·작업 조건 관리</button></header><div className="admin-work-roster">{data.workers.map(worker => <div key={worker.worker_id}><span><b>{worker.worker_name}</b><small> · 오늘 {Math.floor((worker.work?.today_seconds ?? 0) / 3600)}시간 {Math.floor((worker.work?.today_seconds ?? 0) % 3600 / 60)}분</small></span><span className={`work-status state-${worker.work?.state ?? 'off'}`}>{{working: '작업 중', break: '휴게 중', off: '작업 전·종료'}[worker.work?.state ?? 'off']}</span></div>)}</div></section>
     <div className="ops-counts" aria-label="현장 안전 요약">
       {summaryItems.map(item =>
         <button key={item.tone} className={`tone-${item.tone}`} onClick={() => item.tone === "info" ? navigate('/device') : navigate('/workers')}><SafetyIcon name={item.icon}/><span>{item.label}</span><strong>{item.value}<small>{item.tone === "info" ? "대" : item.tone === "danger" ? "건" : "명"}</small></strong></button>)}

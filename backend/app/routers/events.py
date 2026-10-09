@@ -23,6 +23,8 @@ def list_events(limit: int = 100, status: str | None = None, site_id: str = Depe
 
 
 def _life_safety_intent(row: Event) -> str | None:
+    if row.event_type == "WORKER_SOS":
+        return "emergency"
     try:
         intent = json.loads(row.details_json or "{}").get("intent")
     except (json.JSONDecodeError, TypeError):

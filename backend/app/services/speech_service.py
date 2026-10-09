@@ -10,9 +10,13 @@ COMMANDS = {
     "status_report": ["상태보고", "상태알려줘"],
     "location_query": ["내위치", "내위치알려줘"],
     "risk_query": ["위험도", "현재위험도알려줘"],
+    "battery_query": ["배터리얼마", "배터리알려줘", "배터리몇퍼센트", "배터리상태", "배터리잔량"],
+    "ppe_query": ["보호구상태", "보호구알려줘", "ppe상태", "안전모착용상태"],
+    "device_query": ["장치연결", "기기연결", "장치상태", "연결됐어"],
+    "heading_query": ["내방향", "방향알려줘", "어느방향"],
     "help": ["도와줘", "도와주세요", "도움요청", "도움이필요해요", "구해줘", "구해주세요"],
     "emergency": ["비상상황", "비상상황입니다", "살려줘", "살려주세요", "긴급상황", "응급상황"],
-    "fire_report": ["화재발생", "화재가발생", "화제발생", "불이났어요", "불이났습니다", "불났어요", "불났습니다"],
+    "fire_report": ["화재발생", "화재가발생", "화제발생", "불이야", "불이났어", "불이났어요", "불이났습니다", "불났어", "불났어요", "불났습니다"],
     "repeat_warning": ["경고다시말해줘"],
     "evacuation_route": ["대피경로", "어디로대피", "비상구알려줘"],
 }
@@ -41,6 +45,17 @@ def resolve_intent(text: str) -> tuple[str, float]:
     normalized = normalize(text)
     if not normalized:
         return "unknown", 0.0
+    # Emergency phrases take priority over generic status or call phrases.
+    for phrase, intent in LIFE_CRITICAL.items():
+        if phrase in normalized:
+            return intent, 1.0
+    if any(phrase in normalized for phrase in ("손이끼", "기계에끼", "숨을못쉬", "호흡이안", "피가나", "쓰러졌", "다쳤어", "다쳤습니다")):
+        return "emergency", 0.98
+    for intent in ("battery_query", "ppe_query", "device_query", "heading_query"):
+        if any(phrase in normalized for phrase in COMMANDS[intent]):
+            return intent, 0.98
+    if "배터리" in normalized:
+        return "battery_query", 0.97
     if any(phrase in normalized for phrase in HANG_UP_PHRASES):
         return "hang_up", 1.0
     if any(phrase in normalized for phrase in STOP_SPEAKING_PHRASES):
@@ -93,7 +108,5 @@ def resolve_intent(text: str) -> tuple[str, float]:
         return best if best[1] >= 0.55 else ("unknown", best[1])
     except ImportError:
         return "unknown", 0.0
-
-
 
 

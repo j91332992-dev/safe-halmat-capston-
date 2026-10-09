@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.entities import Zone
 from ..schemas.api import ZoneIn
+from .auth import require_site
 
 router = APIRouter(prefix="/api/zones", tags=["zones"])
 
@@ -40,15 +41,15 @@ def assign(row: Zone, payload: ZoneIn) -> None:
 
 
 @router.get("")
-def list_zones(db: Session = Depends(get_db)):
-    return [serialize(row) for row in db.query(Zone).all()]
+def list_zones(site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    return [serialize(row) for row in db.query(Zone).filter(Zone.site_id == site_id).all()]
 
 
 @router.post("")
-def create_zone(payload: ZoneIn, db: Session = Depends(get_db)):
+def create_zone(payload: ZoneIn, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     if db.get(Zone, payload.zone_id):
         raise HTTPException(409, "같은 zone_id가 이미 있습니다.")
-    row = Zone(zone_id=payload.zone_id, zone_name=payload.zone_name, coordinates_json="{}")
+    row = Zone(zone_id=payload.zone_id, site_id=site_id, zone_name=payload.zone_name, coordinates_json="{}")
     assign(row, payload)
     db.add(row)
     db.commit()
@@ -56,9 +57,9 @@ def create_zone(payload: ZoneIn, db: Session = Depends(get_db)):
 
 
 @router.put("/{zone_id}")
-def update_zone(zone_id: str, payload: ZoneIn, db: Session = Depends(get_db)):
+def update_zone(zone_id: str, payload: ZoneIn, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     row = db.get(Zone, zone_id)
-    if not row:
+    if not row or row.site_id != site_id:
         raise HTTPException(404, "위험구역을 찾을 수 없습니다.")
     assign(row, payload)
     db.commit()
@@ -66,12 +67,11 @@ def update_zone(zone_id: str, payload: ZoneIn, db: Session = Depends(get_db)):
 
 
 @router.delete("/{zone_id}", status_code=204)
-def delete_zone(zone_id: str, db: Session = Depends(get_db)):
+def delete_zone(zone_id: str, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     row = db.get(Zone, zone_id)
-    if not row:
+    if not row or row.site_id != site_id:
         raise HTTPException(404, "위험구역을 찾을 수 없습니다.")
     db.delete(row)
     db.commit()
     return Response(status_code=204)
-
 

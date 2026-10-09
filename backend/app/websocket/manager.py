@@ -4,28 +4,44 @@ from fastapi import WebSocket
 
 class ConnectionManager:
     def __init__(self) -> None:
-        self.dashboard: list[WebSocket] = []
+        self.dashboard: dict[str, list[WebSocket]] = defaultdict(list)
         self.devices: dict[str, list[WebSocket]] = defaultdict(list)
 
-    async def connect_dashboard(self, websocket: WebSocket) -> None:
+    async def connect_dashboard(self, site_id: str, websocket: WebSocket) -> None:
         await websocket.accept()
-        self.dashboard.append(websocket)
+        self.dashboard[site_id].append(websocket)
 
     async def connect_device(self, device_id: str, websocket: WebSocket) -> None:
         await websocket.accept()
         self.devices[device_id].append(websocket)
 
     def disconnect(self, websocket: WebSocket) -> None:
-        if websocket in self.dashboard:
-            self.dashboard.remove(websocket)
+        for sockets in self.dashboard.values():
+            if websocket in sockets:
+                sockets.remove(websocket)
         for sockets in self.devices.values():
             if websocket in sockets:
                 sockets.remove(websocket)
 
-    async def broadcast(self, event_type: str, data: dict) -> None:
+    @staticmethod
+    def _site_id(data: dict) -> str | None:
+        direct = data.get("site_id")
+        if isinstance(direct, str):
+            return direct
+        for key in ("device", "worker", "event", "incident"):
+            nested = data.get(key)
+            if isinstance(nested, dict) and isinstance(nested.get("site_id"), str):
+                return nested["site_id"]
+        return None
+
+    async def broadcast(self, event_type: str, data: dict, site_id: str | None = None) -> None:
+        target_site = site_id or self._site_id(data)
+        # Fail closed: an event without a site must never be sent to every company.
+        if not target_site:
+            return
         payload = {"type": event_type, "data": data}
         dead: list[WebSocket] = []
-        for socket in self.dashboard:
+        for socket in list(self.dashboard.get(target_site, [])):
             try:
                 await socket.send_json(payload)
             except Exception:
@@ -45,4 +61,3 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
-

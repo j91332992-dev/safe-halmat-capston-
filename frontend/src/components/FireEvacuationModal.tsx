@@ -1,3 +1,4 @@
+import {CameraFrame} from "./CameraFrame";
 import {useEffect, useRef, useState} from "react";
 import {api} from "../services/api";
 import type {Device, EvacuationIncident, FireZone, Obstacle, Worker} from "../types";
@@ -29,19 +30,12 @@ export function FireEvacuationModal({incident, site, obstacles, workers, devices
   }));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("지도에서 화재구간을 드래그하거나 아래 수치를 입력하세요.");
-  const [cameraVersion, setCameraVersion] = useState(Date.now());
   const reporter = workers.find(worker => worker.worker_id === incident.worker_id);
   const cameraDevice = devices.find(device => device.worker_id === incident.worker_id && device.device_type === "assistant_device");
 
   useEffect(() => {
     if (incident.fire_zone && Object.keys(incident.fire_zone).length) setZone(incident.fire_zone);
   }, [incident.incident_id, incident.fire_zone]);
-
-  useEffect(() => {
-    if (!cameraDevice?.device_id) return;
-    const timer = window.setInterval(() => setCameraVersion(Date.now()), 1000 / 6);
-    return () => window.clearInterval(timer);
-  }, [cameraDevice?.device_id]);
 
   const point = (event: React.PointerEvent<SVGSVGElement>) => {
     const rect = svgRef.current!.getBoundingClientRect();
@@ -107,9 +101,7 @@ export function FireEvacuationModal({incident, site, obstacles, workers, devices
         </div>
         <section className="fire-camera-evidence">
           <header><div><span className="eyebrow">LIVE HELMET CAMERA</span><h3>화재 발생 카메라 영상</h3></div><b>{cameraDevice?.online ? "실시간 수신" : "카메라 오프라인"}</b></header>
-          {cameraDevice?.last_camera_at
-            ? <img src={api.cameraImageUrl(cameraDevice.device_id, cameraVersion)} alt="화재 발생 안전모 최신 카메라 영상" />
-            : <div className="fire-camera-placeholder">수신된 안전모 카메라 영상이 없습니다.</div>}
+          <CameraFrame deviceId={cameraDevice?.device_id} alt="화재 발생 안전모 최신 카메라 영상" />
         </section>
         <div className="fire-modal-grid">
           <div>

@@ -51,9 +51,12 @@ def test_operator_text_command_works_without_mock_endpoint(monkeypatch):
         return None
     monkeypatch.setattr("app.routers.audio.generate_tts", no_tts)
     with TestClient(app) as client:
+        login = client.post("/api/auth/login", json={"username": "TUTUS", "password": "0000"})
+        headers = {"Authorization": f"Bearer {login.json()['token']}"}
         response = client.post(
             "/api/audio/command",
             json={"worker_id": "worker-001", "device_id": "helmet-001-av", "text": "현재 위험도 알려줘"},
+            headers=headers,
         )
         assert response.status_code == 200
         data = response.json()

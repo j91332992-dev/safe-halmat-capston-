@@ -190,3 +190,63 @@ class AccountSiteAccess(Base):
     username: Mapped[str] = mapped_column(String(80), primary_key=True)
     site_id: Mapped[str] = mapped_column(String(40), primary_key=True)
 
+
+class WorkerAccount(Base):
+    __tablename__ = "worker_accounts"
+    username: Mapped[str] = mapped_column(String(80), primary_key=True)
+    password_hash: Mapped[str] = mapped_column(String(128))
+    worker_id: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    site_id: Mapped[str] = mapped_column(String(40), index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class WorkerInvite(Base):
+    __tablename__ = "worker_invites"
+    code_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    worker_id: Mapped[str] = mapped_column(String(40), index=True)
+    site_id: Mapped[str] = mapped_column(String(40), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class WorkerActivity(Base):
+    __tablename__ = "worker_activities"
+    activity_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    worker_id: Mapped[str] = mapped_column(String(40), index=True)
+    site_id: Mapped[str] = mapped_column(String(40), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class WorkerAssignment(Base):
+    __tablename__ = "worker_assignments"
+    worker_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    site_id: Mapped[str] = mapped_column(String(40), index=True)
+    organization: Mapped[str] = mapped_column(String(100), default="")
+    team: Mapped[str] = mapped_column(String(80), default="현장팀")
+    job_title: Mapped[str] = mapped_column(String(80), default="일반작업자")
+
+
+class WorkerQualification(Base):
+    __tablename__ = "worker_qualifications"
+    qualification_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    worker_id: Mapped[str] = mapped_column(String(40), index=True)
+    site_id: Mapped[str] = mapped_column(String(40), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    name: Mapped[str] = mapped_column(String(100))
+    required: Mapped[bool] = mapped_column(Boolean, default=True)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    expires_on: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
+
+class TeamMessage(Base):
+    __tablename__ = "team_messages"
+    message_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    site_id: Mapped[str] = mapped_column(String(40), index=True)
+    team: Mapped[str] = mapped_column(String(80), index=True)
+    sender_id: Mapped[str] = mapped_column(String(80))
+    sender_name: Mapped[str] = mapped_column(String(100))
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+

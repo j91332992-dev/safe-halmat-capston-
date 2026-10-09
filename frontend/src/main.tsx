@@ -17,8 +17,8 @@ document.documentElement.style.removeProperty("--app-viewport-width");
 // 1. Configure Native Mobile Status Bar for iOS & Android
 if (Capacitor.isNativePlatform()) {
   void StatusBar.setStyle({style: Style.Light}).catch(() => {});
-  void StatusBar.setBackgroundColor({color: "#ffffff"}).catch(() => {});
-  void StatusBar.setOverlaysWebView({overlay: true}).catch(() => {});
+  void StatusBar.setBackgroundColor({color: "#06101a"}).catch(() => {});
+  void StatusBar.setOverlaysWebView({overlay: false}).catch(() => {});
 }
 
 // 2. iOS Safari WebKit Safe Service Worker Handler

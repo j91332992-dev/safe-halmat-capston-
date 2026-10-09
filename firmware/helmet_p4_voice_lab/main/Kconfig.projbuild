@@ -1,0 +1,34 @@
+menu "HANMIR P4 voice lab"
+
+    config HANMIR_MIC_BCLK_GPIO
+        int "INMP441 bit clock GPIO (verify on actual board)"
+        default -1
+
+    config HANMIR_MIC_WS_GPIO
+        int "INMP441 word select GPIO (verify on actual board)"
+        default -1
+
+    config HANMIR_MIC_DATA_GPIO
+        int "INMP441 data GPIO (verify on actual board)"
+        default -1
+
+    config HANMIR_ENABLE_NS
+        bool "ESP-SR WebRTC noise suppression"
+        default y
+
+    config HANMIR_ENABLE_WAKENET
+        bool "Log detections from a selected WakeNet model"
+        default n
+        help
+            Enable only after a model has been selected and flashed through
+            ESP Speech Recognition menuconfig. A generic model does NOT
+            recognize Korean '투투스' or emergency phrases.
+
+    config HANMIR_STREAM_PCM
+        bool "Print AFE output as base64 PCM lines for host-side WAV capture"
+        default n
+        help
+            Lab use only. Printing audio may block the real-time fetch task.
+            Use the board's fast USB console and disable for latency tests.
+
+endmenu

@@ -8,6 +8,7 @@ from ..config import settings
 from ..database import get_db, utcnow
 from ..models.entities import Anchor, LayoutDraft, LayoutVersion, Obstacle, SiteLayout, Zone
 from ..schemas.api import LayoutDraftIn, LayoutVersionCreate, ObstacleIn, SiteLayoutIn
+from .auth import require_site
 
 router = APIRouter(prefix="/api/layout", tags=["layout"])
 
@@ -36,10 +37,10 @@ def zone_dict(row: Zone) -> dict:
     }
 
 
-def current_layout(db: Session) -> SiteLayout:
-    row = db.get(SiteLayout, settings.site_id)
+def current_layout(db: Session, site_id: str) -> SiteLayout:
+    row = db.get(SiteLayout, site_id)
     if not row:
-        row = SiteLayout(site_id=settings.site_id, name=settings.site_name, width=settings.site_width_m, height=settings.site_height_m)
+        row = SiteLayout(site_id=site_id, name=site_id, width=settings.site_width_m, height=settings.site_height_m)
         db.add(row)
         db.flush()
     return row
@@ -58,65 +59,67 @@ def fit_obstacle(payload: ObstacleIn, layout: SiteLayout) -> dict:
     }
 
 
-def applied_design(db: Session) -> dict:
-    layout = current_layout(db)
+def applied_design(db: Session, site_id: str) -> dict:
+    layout = current_layout(db, site_id)
     return {
         "site": {"name": layout.name, "width": layout.width, "height": layout.height},
-        "anchors": [anchor_dict(row) for row in db.query(Anchor).order_by(Anchor.anchor_id).all()],
+        "anchors": [anchor_dict(row) for row in db.query(Anchor).filter(Anchor.site_id == site_id).order_by(Anchor.anchor_id).all()],
         "obstacles": [obstacle_dict(row) for row in db.query(Obstacle).filter(Obstacle.site_id == layout.site_id).all()],
-        "zones": [zone_dict(row) for row in db.query(Zone).all()],
+        "zones": [zone_dict(row) for row in db.query(Zone).filter(Zone.site_id == site_id).all()],
     }
 
 
 @router.get("")
-def get_layout(db: Session = Depends(get_db)):
-    result = applied_design(db)
+def get_layout(site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    result = applied_design(db, site_id)
     db.commit()
     return result
 
 
 @router.get("/draft")
-def get_draft(db: Session = Depends(get_db)):
-    row = db.get(LayoutDraft, settings.site_id)
+def get_draft(site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    row = db.get(LayoutDraft, site_id)
     if row:
         return {**json.loads(row.draft_json), "saved_at": row.updated_at.isoformat() + "Z"}
-    result = applied_design(db)
+    result = applied_design(db, site_id)
     db.commit()
     return {**result, "saved_at": None}
 
 
 @router.put("/draft")
-def save_draft(payload: LayoutDraftIn, db: Session = Depends(get_db)):
-    row = db.get(LayoutDraft, settings.site_id)
+def save_draft(payload: LayoutDraftIn, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    row = db.get(LayoutDraft, site_id)
     data = json.dumps(payload.model_dump(), ensure_ascii=False)
     if row:
         row.draft_json = data
         row.updated_at = utcnow()
     else:
-        row = LayoutDraft(site_id=settings.site_id, draft_json=data, updated_at=utcnow())
+        row = LayoutDraft(site_id=site_id, draft_json=data, updated_at=utcnow())
         db.add(row)
     db.commit()
     return {"saved": True, "saved_at": row.updated_at.isoformat() + "Z"}
 
 
 @router.post("/apply")
-def apply_draft(db: Session = Depends(get_db)):
-    draft = db.get(LayoutDraft, settings.site_id)
+def apply_draft(site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    draft = db.get(LayoutDraft, site_id)
     if not draft:
         raise HTTPException(404, "저장된 설계안이 없습니다.")
     payload = LayoutDraftIn.model_validate(json.loads(draft.draft_json))
-    layout = current_layout(db)
+    layout = current_layout(db, site_id)
     layout.name = payload.site.name
     layout.width = payload.site.width
     layout.height = payload.site.height
 
     for item in payload.anchors:
         row = db.get(Anchor, item.anchor_id)
-        if row:
+        if row and row.site_id == site_id:
             for key, value in item.model_dump(exclude={"anchor_id", "online"}).items():
                 setattr(row, key, value)
         else:
-            db.add(Anchor(**item.model_dump(exclude={"online"}), online=False))
+            if row:
+                raise HTTPException(409, "다른 현장에서 사용 중인 앵커 ID입니다.")
+            db.add(Anchor(**item.model_dump(exclude={"online"}), site_id=site_id, online=False))
 
     keep_obstacle_ids = {item.obstacle_id for item in payload.obstacles}
     obstacle_query = db.query(Obstacle).filter(Obstacle.site_id == layout.site_id)
@@ -127,21 +130,25 @@ def apply_draft(db: Session = Depends(get_db)):
     for item in payload.obstacles:
         row = db.get(Obstacle, item.obstacle_id)
         values = fit_obstacle(item, layout)
-        if row:
+        if row and row.site_id == site_id:
             for key, value in values.items():
                 setattr(row, key, value)
-        else:
+        elif not row:
             db.add(Obstacle(obstacle_id=item.obstacle_id, site_id=layout.site_id, **values))
+        else:
+            raise HTTPException(409, "다른 현장에서 사용 중인 장애물 ID입니다.")
 
     keep_zone_ids = {item.zone_id for item in payload.zones}
     if keep_zone_ids:
-        db.query(Zone).filter(Zone.zone_id.notin_(keep_zone_ids)).delete(synchronize_session=False)
+        db.query(Zone).filter(Zone.site_id == site_id, Zone.zone_id.notin_(keep_zone_ids)).delete(synchronize_session=False)
     else:
-        db.query(Zone).delete()
+        db.query(Zone).filter(Zone.site_id == site_id).delete(synchronize_session=False)
     for item in payload.zones:
         row = db.get(Zone, item.zone_id)
+        if row and row.site_id != site_id:
+            raise HTTPException(409, "다른 현장에서 사용 중인 구역 ID입니다.")
         if not row:
-            row = Zone(zone_id=item.zone_id, zone_name=item.zone_name, coordinates_json="{}")
+            row = Zone(zone_id=item.zone_id, site_id=site_id, zone_name=item.zone_name, coordinates_json="{}")
             db.add(row)
         row.zone_name = item.zone_name
         row.zone_type = item.zone_type
@@ -155,12 +162,12 @@ def apply_draft(db: Session = Depends(get_db)):
         row.active = item.active
 
     db.commit()
-    return {"applied": True, "design": applied_design(db)}
+    return {"applied": True, "design": applied_design(db, site_id)}
 
 
 @router.put("/site")
-def update_site(payload: SiteLayoutIn, db: Session = Depends(get_db)):
-    layout = current_layout(db)
+def update_site(payload: SiteLayoutIn, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    layout = current_layout(db, site_id)
     layout.name = payload.name
     layout.width = payload.width
     layout.height = payload.height
@@ -169,10 +176,10 @@ def update_site(payload: SiteLayoutIn, db: Session = Depends(get_db)):
 
 
 @router.post("/obstacles")
-def create_obstacle(payload: ObstacleIn, db: Session = Depends(get_db)):
+def create_obstacle(payload: ObstacleIn, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     if db.get(Obstacle, payload.obstacle_id):
         raise HTTPException(409, "같은 장애물 ID가 이미 있습니다.")
-    layout = current_layout(db)
+    layout = current_layout(db, site_id)
     row = Obstacle(obstacle_id=payload.obstacle_id, site_id=layout.site_id, **fit_obstacle(payload, layout))
     db.add(row)
     db.commit()
@@ -180,11 +187,11 @@ def create_obstacle(payload: ObstacleIn, db: Session = Depends(get_db)):
 
 
 @router.put("/obstacles/{obstacle_id}")
-def update_obstacle(obstacle_id: str, payload: ObstacleIn, db: Session = Depends(get_db)):
+def update_obstacle(obstacle_id: str, payload: ObstacleIn, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     row = db.get(Obstacle, obstacle_id)
-    if not row:
+    if not row or row.site_id != site_id:
         raise HTTPException(404, "장애물을 찾을 수 없습니다.")
-    layout = current_layout(db)
+    layout = current_layout(db, site_id)
     for key, value in fit_obstacle(payload, layout).items():
         setattr(row, key, value)
     db.commit()
@@ -192,9 +199,9 @@ def update_obstacle(obstacle_id: str, payload: ObstacleIn, db: Session = Depends
 
 
 @router.delete("/obstacles/{obstacle_id}", status_code=204)
-def delete_obstacle(obstacle_id: str, db: Session = Depends(get_db)):
+def delete_obstacle(obstacle_id: str, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     row = db.get(Obstacle, obstacle_id)
-    if not row:
+    if not row or row.site_id != site_id:
         raise HTTPException(404, "장애물을 찾을 수 없습니다.")
     db.delete(row)
     db.commit()
@@ -202,19 +209,19 @@ def delete_obstacle(obstacle_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/versions")
-def list_versions(db: Session = Depends(get_db)):
-    rows = db.query(LayoutVersion).filter(LayoutVersion.site_id == settings.site_id).order_by(LayoutVersion.created_at.desc()).all()
+def list_versions(site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    rows = db.query(LayoutVersion).filter(LayoutVersion.site_id == site_id).order_by(LayoutVersion.created_at.desc()).all()
     return [{"version_id": row.version_id, "name": row.name, "created_at": row.created_at.isoformat() + "Z"} for row in rows]
 
 
 @router.post("/versions")
-def create_version(payload: LayoutVersionCreate, db: Session = Depends(get_db)):
-    draft = db.get(LayoutDraft, settings.site_id)
+def create_version(payload: LayoutVersionCreate, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    draft = db.get(LayoutDraft, site_id)
     if not draft:
         raise HTTPException(400, "버전으로 저장할 설계안을 먼저 저장하세요.")
     row = LayoutVersion(
         version_id="layout-" + uuid4().hex,
-        site_id=settings.site_id,
+        site_id=site_id,
         name=payload.name,
         design_json=draft.draft_json,
     )
@@ -224,28 +231,27 @@ def create_version(payload: LayoutVersionCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/versions/{version_id}/load")
-def load_version(version_id: str, db: Session = Depends(get_db)):
+def load_version(version_id: str, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     version = db.get(LayoutVersion, version_id)
-    if not version:
+    if not version or version.site_id != site_id:
         raise HTTPException(404, "설계 버전을 찾을 수 없습니다.")
-    draft = db.get(LayoutDraft, settings.site_id)
+    draft = db.get(LayoutDraft, site_id)
     if draft:
         draft.draft_json = version.design_json
         draft.updated_at = utcnow()
     else:
-        draft = LayoutDraft(site_id=settings.site_id, draft_json=version.design_json, updated_at=utcnow())
+        draft = LayoutDraft(site_id=site_id, draft_json=version.design_json, updated_at=utcnow())
         db.add(draft)
     db.commit()
     return {**json.loads(version.design_json), "saved_at": draft.updated_at.isoformat() + "Z"}
 
 
 @router.delete("/versions/{version_id}", status_code=204)
-def delete_version(version_id: str, db: Session = Depends(get_db)):
+def delete_version(version_id: str, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     row = db.get(LayoutVersion, version_id)
-    if not row:
+    if not row or row.site_id != site_id:
         raise HTTPException(404, "설계 버전을 찾을 수 없습니다.")
     db.delete(row)
     db.commit()
     return Response(status_code=204)
-
 

@@ -11,9 +11,12 @@ import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 SOURCE_LIBRARY = PROJECT_ROOT / "firmware" / "lib" / "Dw3000"
+MULTI_PROJECT = PROJECT_ROOT / "firmware" / "uwb_multi_test"
+if not MULTI_PROJECT.is_dir():
+    MULTI_PROJECT = PROJECT_ROOT / "firmware" / "uwb_multi_test - 복사본"
 SOURCE_PROJECTS = {
     "range": PROJECT_ROOT / "firmware" / "uwb_range_test",
-    "multi": PROJECT_ROOT / "firmware" / "uwb_multi_test",
+    "multi": MULTI_PROJECT,
 }
 BUILD_ENVS = {
     "range": ("tag", "anchor"),
@@ -44,7 +47,7 @@ def _safe_remove(path: Path) -> None:
 
 def stage_sources(profile: str) -> Path:
     source_project = SOURCE_PROJECTS[profile]
-    staged_project = ASCII_ROOT / source_project.name
+    staged_project = ASCII_ROOT / f"uwb_{profile}_test"
     if not source_project.is_dir() or not SOURCE_LIBRARY.is_dir():
         raise FileNotFoundError("UWB 프로젝트 또는 DW3000 라이브러리가 없습니다.")
     ASCII_ROOT.mkdir(parents=True, exist_ok=True)
