@@ -351,3 +351,55 @@
     .ops-condition-main strong { font-size: 19px; }
   }
 }
+
+/* Explicit light alert surfaces prevent dark dashboard text leaking into dialogs. */
+:is(.ops-alert-sheet,.alerts-modal,.sos-modal,.fire-modal,.mobile-modal-card){background:#fff;color:#172033;border-color:#cbd5e1;color-scheme:light}
+:is(.ops-alert-sheet,.alerts-modal,.sos-modal,.fire-modal,.mobile-modal-card) :is(h2,h3,b,strong){color:#172033}
+:is(.ops-alert-sheet,.alerts-modal,.sos-modal,.fire-modal,.mobile-modal-card) :is(p,small,dt,.eyebrow,.mobile-modal-desc,.mobile-input-label){color:#475569}
+:is(.ops-alert-sheet,.alerts-modal) .event-row{color:#334155;border-color:#d5deea}
+:is(.ops-alert-sheet,.alerts-modal) .event-row b{color:#172033;font-size:14px}
+:is(.ops-alert-sheet,.alerts-modal) .event-row small{color:#475569;font-size:13px;white-space:normal}
+:is(.ops-alert-sheet,.alerts-modal) .event-row>span{color:#334155}
+:is(.ops-alert-sheet,.alerts-modal) .event-status.status-open{background:#fee2e2;color:#991b1b;padding:6px 10px;border-radius:8px;font-weight:700}
+:is(.ops-alert-sheet,.alerts-modal) .event-status.status-acknowledged{background:#dbeafe;color:#1e40af;padding:6px 10px;border-radius:8px;font-weight:700}
+:is(.ops-alert-sheet,.alerts-modal) .event-status.status-resolved{background:#dcfce7;color:#166534;padding:6px 10px;border-radius:8px;font-weight:700}
+:is(.ops-alert-sheet,.alerts-modal) button,.sos-modal-actions button.resolve,.mobile-modal-card button{background:#eaf2ff;border:1px solid #a8bfde;color:#174174;font-weight:700}
+:is(.ops-alert-sheet,.alerts-modal) .ops-alert-resolve-all,.sos-modal-actions>button:not(.resolve){background:#b91c1c;border-color:#991b1b;color:#fff}
+.sos-modal .sos-pulse{background:#b91c1c;color:#fff}
+.sos-modal>div>small{color:#991b1b}
+.sos-modal dl>div{background:#f1f5f9;border-color:#cbd5e1}.sos-modal dd{color:#172033}
+:is(.sos-camera-evidence,.fire-camera-evidence){background:#101828;color:#fff}
+:is(.sos-modal,.fire-modal) :is(.sos-camera-evidence,.fire-camera-evidence) :is(b,h3){color:#fff}
+:is(.sos-modal,.fire-modal) :is(.sos-camera-evidence,.fire-camera-evidence) :is(span,small){color:#fca5a5}
+.mobile-modal-card .mobile-modal-close{color:#334155;background:#f1f5f9}
+.mobile-modal-card input{background:#fff;color:#172033;border-color:#94a3b8}
+.mobile-modal-card .btn-save-conn{background:#174ea6;color:#fff;border-color:#174ea6}
+.mobile-modal-card .mobile-test-alert.is-error{background:#fee2e2;color:#991b1b}
+.mobile-modal-card .mobile-test-alert.is-success{background:#dcfce7;color:#166534}
+
+:is(.ops-alert-sheet,.alerts-modal) .event-severity-label{padding:6px 10px;border-radius:8px;font-weight:800;background:#e0edff;color:#1e40af}
+:is(.ops-alert-sheet,.alerts-modal) .event-severity-label:is(.level-emergency,.level-danger){background:#b91c1c;color:#fff}
+:is(.ops-alert-sheet,.alerts-modal) .event-severity-label.level-warning{background:#fef3c7;color:#78350f}
+
+/* Light islands inside the dark administrator dashboard own their text colors. */
+.main-area[data-page] .shared-feature-shortcuts button{background:#edf4ff;border:2px solid #a8bfde;color:#173a63}
+.main-area[data-page] .shared-feature-shortcuts button b{color:#173a63;font-weight:800}
+.main-area[data-page] .shared-feature-shortcuts button span{color:#39536f}
+.main-area[data-page] .shared-feature-shortcuts button:last-child{background:#e5f5ef;border-color:#95c7b5}
+.main-area[data-page] .shared-feature-shortcuts button:last-child b{color:#145343}
+.main-area[data-page] .shared-feature-shortcuts button:last-child span{color:#345b50}
+.main-area[data-page] .admin-team-page :is(.team-chat,.worker-operations-editor){background:#fff;color:#172033;color-scheme:light}
+.main-area[data-page] .admin-team-page :is(.team-chat,.worker-operations-editor) :is(h2,h3,b,strong,legend,label){color:#172033}
+.main-area[data-page] .admin-team-page :is(.team-chat,.worker-operations-editor) :is(p,small,time){color:#475569}
+.main-area[data-page] .admin-team-page :is(input:not([type=checkbox]),select,textarea){background:#fff;color:#172033;border-color:#94a3b8}
+.main-area[data-page] .admin-team-page .team-chat .chat-messages article{background:#fff;color:#172033}
+.main-area[data-page] .admin-team-page .team-chat form button,.main-area[data-page] .admin-team-page .team-chat-heading button{background:#174ea6;color:#fff}
+.main-area[data-page] .admin-team-page .admin-worker-selector{background:#f1f5f9;color:#172033;padding:12px;border-radius:10px}.main-area[data-page] .admin-team-page .admin-worker-selector label{color:#172033}
+.main-area[data-page] .admin-team-page .worker-operations-editor .eligible{color:#166534!important}
+.main-area[data-page] .admin-team-page .worker-operations-editor .ineligible{color:#991b1b!important}
+.mobile-modal-card{background:#fff!important;color:#172033!important;color-scheme:light}
+.mobile-modal-card :is(h1,h2,h3,h4,strong){color:#172033!important}
+.mobile-modal-card :is(p,small,span,label){color:#475569}
+.mobile-modal-card .mobile-input{background:#fff!important;color:#172033!important;border-color:#94a3b8!important}
+.mobile-modal-card .btn-test-conn{background:#eaf2ff!important;color:#174174!important;border-color:#a8bfde!important}
+.mobile-modal-card .btn-save-conn{background:#174ea6!important;color:#fff!important}

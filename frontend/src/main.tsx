@@ -7,6 +7,7 @@ import App from "./App";
 import "./styles.css";
 import "./mobile-theme.css";
 import "./mobile-operations.css";
+import "./contrast.css";
 
 // Let the browser calculate the actual mobile viewport.  Hard-coding a
 // visualViewport value here can be stale during iOS Home Screen startup and
