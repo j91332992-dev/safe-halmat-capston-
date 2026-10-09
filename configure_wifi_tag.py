@@ -7,7 +7,10 @@ import socket
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-SECRETS_FILE = PROJECT_ROOT / "firmware" / "uwb_multi_test" / "include" / "wifi_secrets.h"
+MULTI_PROJECT = PROJECT_ROOT / "firmware" / "uwb_multi_test"
+if not MULTI_PROJECT.is_dir():
+    MULTI_PROJECT = PROJECT_ROOT / "firmware" / "uwb_multi_test - 복사본"
+SECRETS_FILE = MULTI_PROJECT / "include" / "wifi_secrets.h"
 
 
 def detect_local_ip() -> str:

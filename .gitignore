@@ -16,6 +16,7 @@ frontend/vite.config.d.ts
 .pytest_cache/
 .pio/
 firmware/uwb_multi_test/include/wifi_secrets.h
+firmware/uwb_multi_test - 복사본/include/wifi_secrets.h
 
 backend/tts_output/*
 !backend/tts_output/.gitkeep
