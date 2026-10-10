@@ -49,7 +49,14 @@
 
 ## 실제 확인의 범위
 
-펌웨어 빌드·업로드 및 장치 채널 등록 확인 결과는 완료 후 추가한다. 컴파일 성공이나 연결 성공만으로 실제 양방향 음성이 검증됐다고 판단하지 않는다.
+P4 ESP-IDF 빌드 성공. 앱 크기 1,892,528바이트. COM25에서 앱 파티션 `0x10000`에 업로드하고 esptool 해시 일치 및 재부팅을 확인했다. 서버에 P4 `/ws/call/device/helmet-001-av`가 인증 후 등록됐다.
+
+- `/api/calls/helmet-001-av/status`: HTTP 200, `channel_online=true`.
+- `/api/calls/helmet-001-av/ticket`: 이전 HTTP 409에서 HTTP 200으로 변경, 통화 티켓 발급 확인.
+- 동시에 원본 카메라 수신: frame_id 397, 조회 시 age_ms 31.
+- 실제 두 방향 음성이 들리는지와 에코 상태는 사용자 확인 대기다. 컴파일 성공이나 연결 성공만으로 실제 양방향 음성이 검증됐다고 판단하지 않는다.
+- 통화 상태 API의 `helmet_packets/bytes`, `operator_packets/bytes`는 해당 통화에서 서버에 도착한 PCM 계측이다. 패킷 수신만으로 스피커 재생 성공을 판단하지 않는다.
+- 최종 서버 로그: `C:\dev\hanmir-runtime\backend-call-final.out.log`, `.err.log`; 펌웨어 빌드/업로드 로그: `p4-call-build.log`, `p4-call-upload.log`.
 
 사용자는 앱/PC 마이크로 말한 내용이 안전모 스피커에서 들리는지, 안전모 마이크로 말한 내용이 앱/PC에서 들리는지를 각각 확인해야 한다. 통화 종료 후 AI 질문과 TTS가 복귀하는지도 확인한다.
 
