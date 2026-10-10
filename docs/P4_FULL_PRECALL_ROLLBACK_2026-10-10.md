@@ -21,3 +21,7 @@
 - 현재 P4는 이 롤백 버전으로 유지한다. 저장소 최신 코드와 빌드 스테이지가 다르므로 후속 작업자는 최신 펌웨어 업로드 전에 반드시 이 문서를 확인한다.
 - 로컬 로그: `p4-full-precall-rollback-build.log`, `p4-full-precall-rollback-upload.log`, `p4-full-precall-rollback-serial.log` (C:/dev/hanmir-runtime).
 
+
+## 후속 독립 진단
+
+스피커 전용·GPIO 전용 진단에서 GPIO20/21 교차 레벨이 관측됐다. 자세한 내용은 `P4_SPEAKER_SIGNAL_DIAGNOSIS_2026-10-10.md` 참조. 진단 이후 P4는 다시 일반 통화 수정 전 버전으로 복구한다.
