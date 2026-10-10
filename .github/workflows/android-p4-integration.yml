@@ -46,11 +46,11 @@ jobs:
       - name: Package APK and signing information
         run: |
           mkdir -p android-output
-          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk android-output/HanmirSafety-p4-mobile-v1.8-build11.apk
+          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk android-output/HanmirSafety-p4-mobile-v1.8-build12.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs android-output/*.apk > android-output/new-apk-signature.txt
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs releases/HanmirSafety-integrated-worker-app-v1.8-build10.apk > android-output/previous-apk-signature.txt
           sha256sum android-output/*.apk > android-output/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: HanmirSafety-p4-mobile-build11
+          name: HanmirSafety-p4-mobile-build12
           path: android-output/
