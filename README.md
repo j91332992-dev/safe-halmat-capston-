@@ -2,6 +2,8 @@
 
 ## 현재 통합판 — 2026-10-10
 
+**현재 장치 주의:** P4는 스피커 무음 비교를 위해 통화 수정 전 펌웨어로 롤백된 상태입니다. 최신 소스와 장치 버전이 다르며, 독립 검사에서 GPIO20·21 교차 현상이 관측됐습니다. [어제·오늘 전체 상세 인수인계](docs/HANMIR_2.0_FULL_HANDOFF_2026-10-09_10.md)를 먼저 확인하세요.
+
 최신 작업 브랜치는 `integration/p4-mobile-live-heading-20261010`입니다. ESP32-P4 통신·카메라·BNO 방향 수정, AI/STT/TTS 서버, UWB 수동 지도, 최신 관리자/작업자 앱 및 PC 웹 디자인을 함께 반영했습니다. 최신 웹 원본은 `codex/integrated-worker-app-v1.8-web-ui-20261010` (`51d555c`)입니다.
 
 Android 최신 빌드는 **[v1.8 / build 13](releases/HanmirSafety-p4-mobile-v1.8-build13.apk)**입니다. 통화 서버 주소 및 오류 표시를 수정했습니다. 최종 build12 위에는 업데이트할 수 있으며 기존 build10·build11은 서명이 달라 삭제 후 설치해야 합니다. iOS 프로젝트 자산도 build13으로 동기화했지만 새 서명 IPA는 아직 제작하지 않았습니다. 기존 IPA와 `release-packages`의 build10 ZIP에는 최신 P4 통합 변경 전체가 들어 있지 않습니다. 이어받을 때는 이 브랜치 소스를 사용하세요.
