@@ -30,12 +30,13 @@ export function siteCondition(data: Snapshot, reachable: boolean) {
 }
 
 export function safetySummary(data: Snapshot) {
+  const events = pendingEvents(data.events);
   return {
     emergencyWorkers: data.workers.filter(worker => workerTone(worker) === "danger").length,
     warningWorkers: data.workers.filter(worker => workerTone(worker) === "warning").length,
     safeWorkers: data.workers.filter(worker => workerTone(worker) === "safe").length,
+    urgentEvents: events.filter(event => priority(event) < 2).length,
     onlineDevices: data.devices.filter(device => device.online).length,
     totalDevices: data.devices.length,
-    urgentEvents: pendingEvents(data.events).filter(event => priority(event) < 2).length
   };
 }
