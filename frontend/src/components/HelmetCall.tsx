@@ -1,5 +1,6 @@
 import {useEffect, useRef, useState} from "react";
 import {api} from "../services/api";
+import {getWsBaseUrl} from "../services/config";
 
 type CallStatus = "idle" | "requesting" | "connecting" | "connected" | "offline" | "busy" | "error";
 
@@ -61,6 +62,7 @@ function resample(input: Float32Array, inputRate: number, outputRate = 16000): I
 export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
   const [status, setStatus] = useState<CallStatus>("idle");
   const [seconds, setSeconds] = useState(0);
+  const [errorMessage, setErrorMessage] = useState("");
   const socketRef = useRef<WebSocket | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const contextRef = useRef<AudioContext | null>(null);
@@ -139,14 +141,18 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
       return;
     }
     closingRef.current = false;
+    setErrorMessage("");
     setStatus("requesting");
     try {
       const ticket = await api.callTicket(deviceId);
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("MIC_INSECURE_CONTEXT");
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true},
         video: false
       });
+      streamRef.current = stream;
       const context = new AudioContext();
+      contextRef.current = context;
       await context.resume();
       const source = context.createMediaStreamSource(stream);
       const processor = context.createScriptProcessor(2048, 1, 1);
@@ -162,16 +168,14 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
       processorRef.current = processor;
       muteRef.current = mute;
 
-      const configured = import.meta.env.VITE_WS_URL;
-      const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-      const wsBase = configured ?? `${protocol}://${window.location.host}`;
+      const wsBase = getWsBaseUrl();
       const socket = new WebSocket(`${wsBase}/ws/call/operator/${encodeURIComponent(deviceId)}?ticket=${encodeURIComponent(ticket.ticket)}`);
       socket.binaryType = "arraybuffer";
       socketRef.current = socket;
       setStatus("connecting");
 
       processor.onaudioprocess = event => {
-        if (socket.readyState !== WebSocket.OPEN || closingRef.current) return;
+        if (socket.readyState !== WebSocket.OPEN || closingRef.current || !callConnectedRef.current) return;
         if (socket.bufferedAmount > 640 * 4) {
           pendingRef.current = new Int16Array(0);
           return;
@@ -202,18 +206,27 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
           setStatus("connected");
         }
         else if (message.status === "ended") stop();
-        else if (message.status === "device_offline") setStatus("offline");
-        else if (message.status === "busy") setStatus("busy");
-        else if (message.status === "unauthorized") setStatus("error");
+        else if (message.status === "device_offline") { stop(false); setStatus("offline"); }
+        else if (message.status === "busy") { stop(false); setStatus("busy"); }
+        else if (message.status === "unauthorized") { stop(false); setErrorMessage("통화 인증이 만료됐습니다. 다시 연결하세요."); setStatus("error"); }
       };
-      socket.onerror = () => setStatus("error");
+      socket.onerror = () => { setErrorMessage("통화 서버에 연결하지 못했습니다. 앱의 서버 주소와 Wi-Fi를 확인하세요."); setStatus("error"); };
       socket.onclose = () => {
-        if (!closingRef.current) setStatus(current => current === "busy" || current === "offline" ? current : "error");
+        if (!closingRef.current) { stop(false); setErrorMessage("통화 연결이 끊겼습니다. 다시 연결하세요."); setStatus("error"); }
       };
     } catch (error) {
       console.error("Helmet call failed", error);
       stop();
-      setStatus("error");
+      const message = error instanceof Error ? error.message : "";
+      if (message.includes("통화 채널이 오프라인")) setStatus("offline");
+      else {
+        setErrorMessage(message === "MIC_INSECURE_CONTEXT" ? "웹 마이크는 HTTPS 또는 localhost에서 사용할 수 있습니다. PC는 localhost:5174로 접속하세요."
+          : error instanceof DOMException && error.name === "NotAllowedError" ? "마이크 권한을 허용한 뒤 다시 연결하세요."
+          : error instanceof DOMException && error.name === "NotFoundError" ? "사용할 마이크가 없습니다. 마이크 연결을 확인하세요."
+          : message.includes("로그인") ? "로그인이 만료됐습니다. 다시 로그인하세요."
+          : "통화 준비에 실패했습니다. 서버 연결과 마이크 상태를 확인하세요.");
+        setStatus("error");
+      }
     }
   };
 
@@ -225,9 +238,9 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
         {statusText[status]}
       </button>
       {status === "connected" && <small>{workerName} · {elapsed} · 양방향</small>}
-      {status === "offline" && <small>안전모 전원과 Wi-Fi를 확인하세요.</small>}
+      {status === "offline" && <small>안전모 통화 채널이 연결되지 않았습니다. 통화 지원 펌웨어와 Wi-Fi를 확인하세요.</small>}
       {status === "busy" && <small>현재 다른 관리자와 연결되어 있습니다.</small>}
-      {status === "error" && <small>마이크 권한 또는 서버 연결을 확인하세요.</small>}
+      {status === "error" && <small>{errorMessage || "통화 연결에 실패했습니다. 다시 연결하세요."}</small>}
     </div>
   );
 }

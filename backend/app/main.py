@@ -153,6 +153,9 @@ def issue_call_ticket(device_id: str, site_id: str = Depends(require_site), db: 
 
 @app.websocket("/ws/call/device/{device_id}")
 async def call_device_socket(websocket: WebSocket, device_id: str, token: str = ""):
+    authorization = websocket.headers.get("authorization", "")
+    if not token and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
     connected = await call_manager.connect_device(device_id, token, websocket)
     if not connected:
         return
