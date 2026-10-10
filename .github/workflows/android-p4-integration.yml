@@ -34,6 +34,12 @@ jobs:
         with:
           path: ~/.android/debug.keystore
           key: hanmir-p4-debug-signing-v1
+      - name: Prepare persistent debug signing key
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -keystore "$HOME/.android/debug.keystore" -storepass android -keypass android -alias androiddebugkey -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
+          fi
       - name: Install required Android SDK packages
         run: |
           sdkmanager "platforms;android-36" "build-tools;36.0.0"
@@ -42,7 +48,11 @@ jobs:
         run: |
           printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon \
+            -Pandroid.injected.signing.store.file="$HOME/.android/debug.keystore" \
+            -Pandroid.injected.signing.store.password=android \
+            -Pandroid.injected.signing.key.alias=androiddebugkey \
+            -Pandroid.injected.signing.key.password=android
       - name: Package APK and signing information
         run: |
           mkdir -p android-output
