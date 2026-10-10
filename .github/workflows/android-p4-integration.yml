@@ -1,5 +1,8 @@
 name: Build Android P4 integration
 on:
+  push:
+    branches: [integration/p4-mobile-live-heading-20261010]
+    paths: [frontend/**, .github/workflows/android-p4-integration.yml]
   workflow_dispatch:
 permissions:
   contents: read
