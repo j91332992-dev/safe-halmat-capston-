@@ -58,6 +58,8 @@ P4 ESP-IDF 빌드 성공. 앱 크기 1,892,528바이트. COM25에서 앱 파티�
 - 통화 상태 API의 `helmet_packets/bytes`, `operator_packets/bytes`는 해당 통화에서 서버에 도착한 PCM 계측이다. 패킷 수신만으로 스피커 재생 성공을 판단하지 않는다.
 - 최종 서버 로그: `C:\dev\hanmir-runtime\backend-call-final.out.log`, `.err.log`; 펌웨어 빌드/업로드 로그: `p4-call-build.log`, `p4-call-upload.log`.
 
+첫 실제 Android 통화 관측: 휴대폰 IP `192.168.0.41`의 통화 티켓 요청 HTTP 200. 통화 종료 후 누적 계측은 안전모→관리자 1,176패킷/602,112바이트, 관리자→안전모 936패킷/599,040바이트였다. PCM16 mono 16kHz 기준 각각 약 18.82초/18.72초다. 통화 종료 후 `operator_connected=false`, 장치 통화 채널은 `channel_online=true`로 유지됐다. 이는 양방향 PCM 수신 증거이며 실제 가청 음질·에코는 사용자 확인이 필요하다.
+
 사용자는 앱/PC 마이크로 말한 내용이 안전모 스피커에서 들리는지, 안전모 마이크로 말한 내용이 앱/PC에서 들리는지를 각각 확인해야 한다. 통화 종료 후 AI 질문과 TTS가 복귀하는지도 확인한다.
 
 현재 통화는 NS 처리된 마이크 PCM을 사용하지만 스피커 재생 신호를 참조하는 AEC는 구현하지 않았다. 실제 에코·하울링은 실물 배치와 음량 조건에서 확인해야 한다.
