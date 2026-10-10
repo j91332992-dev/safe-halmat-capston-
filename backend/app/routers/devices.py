@@ -13,14 +13,15 @@ from ..services.device_service import mark_device_seen, register_device, update_
 from ..services.serializers import device_to_dict
 from ..services.orientation_service import live_status
 from ..websocket import manager
+from .auth import require_site
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
 
 
 @router.post("/{device_id}/heading-calibration")
-async def calibrate_heading(device_id: str, payload: HeadingCalibrationIn, db: Session = Depends(get_db)):
+async def calibrate_heading(device_id: str, payload: HeadingCalibrationIn, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     device = db.get(Device, device_id)
-    if not device:
+    if not device or device.site_id != site_id:
         raise HTTPException(404, "장치를 찾을 수 없습니다.")
     status = live_status(device_id, json.loads(device.component_status_json or "{}"))
     yaw = status.get("imu_yaw_deg")
@@ -31,7 +32,7 @@ async def calibrate_heading(device_id: str, payload: HeadingCalibrationIn, db: S
         raise HTTPException(409, "최신 방향 센서 데이터가 없습니다.")
     a, b = (db.get(Anchor, key) for key in payload.anchor_ids)
     worker = db.get(WorkerState, device.worker_id)
-    if not a or not b or not worker:
+    if not a or not b or not worker or a.site_id != site_id or b.site_id != site_id or worker.site_id != site_id:
         raise HTTPException(409, "앵커 또는 작업자 위치가 없습니다.")
     # Face perpendicular to the wall, toward it from the worker's side.
     nx, ny = -(b.y - a.y), b.x - a.x
@@ -87,9 +88,9 @@ async def component_result(device_id: str, payload: ComponentResultIn, db: Sessi
 
 
 @router.post("/{device_id}/command")
-async def command(device_id: str, payload: DeviceCommandIn, db: Session = Depends(get_db)):
+async def command(device_id: str, payload: DeviceCommandIn, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     device = db.get(Device, device_id)
-    if not device:
+    if not device or device.site_id != site_id:
         raise HTTPException(404, "장치를 찾을 수 없습니다.")
     record = queue_command(db, device_id, payload.command_type, payload.payload)
     delivered = await manager.send_device_command(
@@ -105,5 +106,5 @@ async def command(device_id: str, payload: DeviceCommandIn, db: Session = Depend
         device.last_speaker_status = f"{record.command_type}: {record.status}"
     db.commit()
     result = {"command_id": record.command_id, "status": record.status, "delivered_connections": delivered}
-    await manager.broadcast("device_command", {"device_id": device_id, **result, "command_type": record.command_type})
+    await manager.broadcast("device_command", {"device_id": device_id, "site_id": site_id, **result, "command_type": record.command_type})
     return result

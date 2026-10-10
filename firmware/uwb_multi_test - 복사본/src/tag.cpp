@@ -447,10 +447,7 @@ static void handle_response_frame(uint32_t poll_tx_ts_32)
     uint32_t resp_rx_ts_32 = dwt_readrxtimestamplo32();
     int32_t raw_clock_offset = dwt_readclockoffset();
 
-    if (raw_clock_offset & 0x00000400)
-    {
-        raw_clock_offset |= 0xFFFFF800;
-    }
+    // dwt_readclockoffset() already returns a signed int16_t from the driver.
 
     float clock_offset = ((float)raw_clock_offset) / (uint32_t)(1 << 26);
 

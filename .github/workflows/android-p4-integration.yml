@@ -1,0 +1,46 @@
+name: Build Android P4 integration
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build and sync native assets
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build:mobile
+      - name: Install required Android SDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Build APK
+        working-directory: frontend/android
+        run: |
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+      - name: Package APK and signing information
+        run: |
+          mkdir -p android-output
+          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk android-output/HanmirSafety-p4-mobile-v1.8-build11.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs android-output/*.apk > android-output/new-apk-signature.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs releases/HanmirSafety-integrated-worker-app-v1.8-build10.apk > android-output/previous-apk-signature.txt
+          sha256sum android-output/*.apk > android-output/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HanmirSafety-p4-mobile-build11
+          path: android-output/

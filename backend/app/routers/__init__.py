@@ -1,7 +1,8 @@
-from . import anchors, audio, auth, button, camera, dashboard, devices, diagnostics, evacuation, events, layout, risk, system, uwb, workers, zones
+from . import anchors, audio, auth, button, camera, dashboard, devices, diagnostics, evacuation, events, layout, risk, system, uwb, workers, zones, worker_app
 
 ALL_ROUTERS = [
     auth.router,
+    worker_app.router,
     devices.router,
     camera.router,
     audio.router,

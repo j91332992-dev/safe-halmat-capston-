@@ -34,6 +34,7 @@ class Device(Base):
 class WorkerState(Base):
     __tablename__ = "worker_states"
     worker_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    site_id: Mapped[str] = mapped_column(String(40), default="site-001", index=True)
     worker_name: Mapped[str] = mapped_column(String(80), default="작업자")
     worker_role: Mapped[str] = mapped_column(String(40), default="general_worker")
     notes: Mapped[str] = mapped_column(Text, default="")
@@ -54,6 +55,7 @@ class WorkerState(Base):
 class Anchor(Base):
     __tablename__ = "anchors"
     anchor_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    site_id: Mapped[str] = mapped_column(String(40), default="site-001", index=True)
     name: Mapped[str] = mapped_column(String(80))
     x: Mapped[float] = mapped_column(Float)
     y: Mapped[float] = mapped_column(Float)
@@ -65,6 +67,7 @@ class Anchor(Base):
 class Zone(Base):
     __tablename__ = "zones"
     zone_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    site_id: Mapped[str] = mapped_column(String(40), default="site-001", index=True)
     zone_name: Mapped[str] = mapped_column(String(100))
     zone_type: Mapped[str] = mapped_column(String(30), default="rectangle")
     zone_category: Mapped[str] = mapped_column(String(30), default="danger")
@@ -114,6 +117,7 @@ class Location(Base):
     __tablename__ = "locations"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     worker_id: Mapped[str] = mapped_column(String(40), index=True)
+    site_id: Mapped[str] = mapped_column(String(40), default="site-001", index=True)
     x: Mapped[float] = mapped_column(Float)
     y: Mapped[float] = mapped_column(Float)
     confidence: Mapped[float] = mapped_column(Float)
@@ -125,6 +129,7 @@ class Event(Base):
     __tablename__ = "events"
     event_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     event_type: Mapped[str] = mapped_column(String(50), index=True)
+    site_id: Mapped[str] = mapped_column(String(40), default="site-001", index=True)
     severity: Mapped[str] = mapped_column(String(20), default="info")
     message: Mapped[str] = mapped_column(Text)
     worker_id: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
@@ -138,6 +143,7 @@ class VoiceCommand(Base):
     __tablename__ = "voice_commands"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     worker_id: Mapped[str] = mapped_column(String(40))
+    site_id: Mapped[str] = mapped_column(String(40), default="site-001", index=True)
     device_id: Mapped[str] = mapped_column(String(80))
     original_text: Mapped[str] = mapped_column(Text)
     normalized_text: Mapped[str] = mapped_column(Text)
@@ -150,6 +156,7 @@ class CommandRecord(Base):
     __tablename__ = "command_records"
     command_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     device_id: Mapped[str] = mapped_column(String(80), index=True)
+    site_id: Mapped[str] = mapped_column(String(40), default="site-001", index=True)
     command_type: Mapped[str] = mapped_column(String(40))
     payload_json: Mapped[str] = mapped_column(Text, default="{}")
     status: Mapped[str] = mapped_column(String(30), default="queued")
@@ -159,6 +166,7 @@ class EvacuationIncident(Base):
     __tablename__ = "evacuation_incidents"
     incident_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     worker_id: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    site_id: Mapped[str] = mapped_column(String(40), default="site-001", index=True)
     source: Mapped[str] = mapped_column(String(30))
     status: Mapped[str] = mapped_column(String(30), default="pending_manager", index=True)
     fire_zone_json: Mapped[str] = mapped_column(Text, default="{}")
@@ -166,4 +174,79 @@ class EvacuationIncident(Base):
     cancel_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class AdminAccount(Base):
+    __tablename__ = "admin_accounts"
+    username: Mapped[str] = mapped_column(String(80), primary_key=True)
+    password_hash: Mapped[str] = mapped_column(String(128))
+    role: Mapped[str] = mapped_column(String(40), default="site_admin")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class AccountSiteAccess(Base):
+    __tablename__ = "account_site_access"
+    username: Mapped[str] = mapped_column(String(80), primary_key=True)
+    site_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+
+
+class WorkerAccount(Base):
+    __tablename__ = "worker_accounts"
+    username: Mapped[str] = mapped_column(String(80), primary_key=True)
+    password_hash: Mapped[str] = mapped_column(String(128))
+    worker_id: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    site_id: Mapped[str] = mapped_column(String(40), index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class WorkerInvite(Base):
+    __tablename__ = "worker_invites"
+    code_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    worker_id: Mapped[str] = mapped_column(String(40), index=True)
+    site_id: Mapped[str] = mapped_column(String(40), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class WorkerActivity(Base):
+    __tablename__ = "worker_activities"
+    activity_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    worker_id: Mapped[str] = mapped_column(String(40), index=True)
+    site_id: Mapped[str] = mapped_column(String(40), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class WorkerAssignment(Base):
+    __tablename__ = "worker_assignments"
+    worker_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    site_id: Mapped[str] = mapped_column(String(40), index=True)
+    organization: Mapped[str] = mapped_column(String(100), default="")
+    team: Mapped[str] = mapped_column(String(80), default="현장팀")
+    job_title: Mapped[str] = mapped_column(String(80), default="일반작업자")
+
+
+class WorkerQualification(Base):
+    __tablename__ = "worker_qualifications"
+    qualification_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    worker_id: Mapped[str] = mapped_column(String(40), index=True)
+    site_id: Mapped[str] = mapped_column(String(40), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    name: Mapped[str] = mapped_column(String(100))
+    required: Mapped[bool] = mapped_column(Boolean, default=True)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    expires_on: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
+
+class TeamMessage(Base):
+    __tablename__ = "team_messages"
+    message_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    site_id: Mapped[str] = mapped_column(String(40), index=True)
+    team: Mapped[str] = mapped_column(String(80), index=True)
+    sender_id: Mapped[str] = mapped_column(String(80))
+    sender_name: Mapped[str] = mapped_column(String(100))
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 

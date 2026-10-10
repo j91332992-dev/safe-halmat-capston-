@@ -25,6 +25,7 @@ from ..services.voice_execution_gate import voice_execution_gate
 from ..services.wake_word_service import WakeDecision, wake_word_gate
 from ..services.inference_priority import voice_priority
 from ..websocket import call_manager, manager
+from .auth import require_site
 
 router = APIRouter(prefix="/api/audio", tags=["audio"])
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ async def process_text(
     # not a condition for discarding an explicit SOS or fire report.
     command = VoiceCommand(
         worker_id=worker_id,
+        site_id=worker.site_id,
         device_id=device_id,
         original_text=text,
         normalized_text=normalize(text),
@@ -73,7 +75,7 @@ async def process_text(
     }
     av = next((device for device in live if device.device_id == device_id), None)
     worker_data["battery"] = av.battery if av else None
-    incident = current_incident(db)
+    incident = current_incident(db, worker.site_id)
     if incident:
         worker_data["evacuation"] = calculate_route(db, worker, incident)
     agent_plan = build_safety_action_plan(intent, worker_data, text)
@@ -185,7 +187,7 @@ async def process_text(
         "event": event_to_dict(event),
         "worker": worker_to_dict(worker),
         "safety_agent": agent_plan,
-        "evacuation": evacuation_snapshot(db) if current_incident(db) else {"incident": None, "routes": {}},
+        "evacuation": evacuation_snapshot(db, worker.site_id),
         "timings_ms": {
             "response": round((response_done - response_started) * 1000, 1),
             "tts": round((tts_done - response_done) * 1000, 1),
@@ -308,10 +310,13 @@ async def upload_audio(
 @router.post("/command")
 async def text_command(
     payload: TextCommandIn,
+    site_id: str = Depends(require_site),
     db: Session = Depends(get_db),
     _voice_priority: None = Depends(voice_priority),
 ):
-    if not db.get(Device, payload.device_id):
+    device = db.get(Device, payload.device_id)
+    worker = db.get(WorkerState, payload.worker_id)
+    if not device or device.site_id != site_id or not worker or worker.site_id != site_id:
         raise HTTPException(404, "선택한 안전모 장치가 등록되지 않았습니다.")
     result = await process_text(db, payload.worker_id, payload.device_id, payload.text, payload.sound_db)
     db.commit()
@@ -320,8 +325,8 @@ async def text_command(
 
 
 @router.get("/commands")
-def list_commands(limit: int = 50, db: Session = Depends(get_db)):
-    rows = db.query(VoiceCommand).order_by(VoiceCommand.created_at.desc()).limit(min(limit, 200)).all()
+def list_commands(limit: int = 50, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    rows = db.query(VoiceCommand).filter(VoiceCommand.site_id == site_id).order_by(VoiceCommand.created_at.desc()).limit(min(limit, 200)).all()
     return [
         {
             "id": row.id,

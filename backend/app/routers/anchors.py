@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.entities import Anchor
 from ..schemas.api import AnchorIn
+from .auth import require_site
 
 router = APIRouter(prefix="/api/anchors", tags=["anchors"])
 
@@ -13,24 +14,24 @@ def serialize(row: Anchor) -> dict:
 
 
 @router.get("")
-def list_anchors(db: Session = Depends(get_db)):
-    return [serialize(row) for row in db.query(Anchor).order_by(Anchor.anchor_id).all()]
+def list_anchors(site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    return [serialize(row) for row in db.query(Anchor).filter(Anchor.site_id == site_id).order_by(Anchor.anchor_id).all()]
 
 
 @router.post("")
-def create_anchor(payload: AnchorIn, db: Session = Depends(get_db)):
+def create_anchor(payload: AnchorIn, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     if db.get(Anchor, payload.anchor_id):
         raise HTTPException(409, "같은 anchor_id가 이미 있습니다.")
-    row = Anchor(**payload.model_dump(exclude={"online"}), online=False)
+    row = Anchor(**payload.model_dump(exclude={"online"}), site_id=site_id, online=False)
     db.add(row)
     db.commit()
     return serialize(row)
 
 
 @router.put("/{anchor_id}")
-def update_anchor(anchor_id: str, payload: AnchorIn, db: Session = Depends(get_db)):
+def update_anchor(anchor_id: str, payload: AnchorIn, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     row = db.get(Anchor, anchor_id)
-    if not row:
+    if not row or row.site_id != site_id:
         raise HTTPException(404, "앵커를 찾을 수 없습니다.")
     for key, value in payload.model_dump(exclude={"anchor_id", "online"}).items():
         setattr(row, key, value)
@@ -39,11 +40,10 @@ def update_anchor(anchor_id: str, payload: AnchorIn, db: Session = Depends(get_d
 
 
 @router.delete("/{anchor_id}", status_code=204)
-def delete_anchor(anchor_id: str, db: Session = Depends(get_db)):
+def delete_anchor(anchor_id: str, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     row = db.get(Anchor, anchor_id)
-    if not row:
+    if not row or row.site_id != site_id:
         raise HTTPException(404, "앵커를 찾을 수 없습니다.")
     db.delete(row)
     db.commit()
     return Response(status_code=204)
-

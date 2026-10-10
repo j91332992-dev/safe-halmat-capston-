@@ -24,7 +24,9 @@ class Settings(BaseSettings):
     location_move_confirm_samples: int = 2
     location_stop_step_m: float = 0.08
     location_stop_confirm_samples: int = 5
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    # Browser development plus native Capacitor Android/iOS WebViews.
+    # Android uses https://localhost when androidScheme is set to https.
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost,https://localhost,capacitor://localhost,ionic://localhost"
     openai_api_key: str | None = None
     use_whisper_stt: bool = True
     stt_model: str = "gpt-4o-mini-transcribe"

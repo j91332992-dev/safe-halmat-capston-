@@ -1,3 +1,4 @@
+import {useEffect, useRef} from "react";
 import {useLocation, useNavigate} from "react-router-dom";
 import {Haptics, ImpactStyle} from "@capacitor/haptics";
 
@@ -16,6 +17,19 @@ export function MobileBottomNav({
 }: MobileBottomNavProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const navRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+
+    const keepNavFixed = (event: TouchEvent) => {
+      event.preventDefault();
+    };
+
+    nav.addEventListener("touchmove", keepNavFixed, {passive: false});
+    return () => nav.removeEventListener("touchmove", keepNavFixed);
+  }, []);
 
   const handleNav = (path: string) => {
     void Haptics.impact({style: ImpactStyle.Light}).catch(() => {});
@@ -30,7 +44,7 @@ export function MobileBottomNav({
   const currentPath = location.pathname;
 
   return (
-    <nav className="mobile-bottom-nav">
+    <nav ref={navRef} className="mobile-bottom-nav">
       {/* 1. Dashboard */}
       <button
         type="button"

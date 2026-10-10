@@ -1,0 +1,9 @@
+{
+  "name": "HANMIR 웹 대시보드 초안",
+  "id": "hanmir-control-room-draft",
+  "api": "1.0.0",
+  "main": "code.js",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {"allowedDomains": ["none"]}
+}

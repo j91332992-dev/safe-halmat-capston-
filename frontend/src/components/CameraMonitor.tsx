@@ -1,17 +1,16 @@
+import {CameraFrame} from "./CameraFrame";
 import {useEffect, useMemo, useState} from "react";
 import {api} from "../services/api";
 import type {Device, Worker} from "../types";
 import {StatusPill} from "./StatusPill";
+import {elapsedTime} from "../utils/elapsedTime";
 
 interface Props {workers: Worker[]; devices: Device[]}
 
 export function CameraMonitor({workers, devices}: Props) {
   const avDevices = devices.filter(device => device.device_type === "assistant_device");
   const [deviceId, setDeviceId] = useState(avDevices[0]?.device_id ?? "");
-  const [imageVersion, setImageVersion] = useState(Date.now());
-  const [imageError, setImageError] = useState(false);
   const [latest, setLatest] = useState<import("../types").CameraLatest | null>(null);
-  const [frameToken, setFrameToken] = useState<string | null>(null);
   const [live, setLive] = useState<{received: boolean; frame_id?: number; age_ms?: number} | null>(null);
   const selected = avDevices.find(device => device.device_id === deviceId) ?? avDevices[0];
   const worker = useMemo(() => workers.find(item => item.worker_id === selected?.worker_id), [workers, selected]);
@@ -20,46 +19,28 @@ export function CameraMonitor({workers, devices}: Props) {
     if (!deviceId && avDevices[0]) setDeviceId(avDevices[0].device_id);
   }, [avDevices, deviceId]);
   useEffect(() => {
-    setImageError(false);
-    setImageVersion(Date.now());
-    setFrameToken(null);
-    setLive(null);
-  }, [selected?.device_id]);
-  useEffect(() => {
-    if (!selected?.device_id) return;
-    let active = true;
-    const loadLive = () => api.liveCamera(selected.device_id).then(data => {
-      if (!active) return;
-      setLive(data);
-    }).catch(() => { if (active) setLive(null); });
-    loadLive();
-    const timer = window.setInterval(loadLive, 500);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [selected?.device_id]);
-  useEffect(() => {
     if (!selected?.device_id) { setLatest(null); return; }
     let active = true;
     const load = () => api.latestCamera(selected.device_id).then(data => {
       if (!active) return;
       setLatest(data);
-      // A missing image is held as NO FRAME. Only a genuinely new camera
-      // frame (not a routine dashboard refresh) may clear that state.
-      const nextToken = data.received
-        ? `${data.filename ?? ""}:${data.url ?? ""}`
-        : null;
-      if (!nextToken) return;
-      setFrameToken(previousToken => {
-        if (previousToken !== nextToken) {
-          setImageError(false);
-          setImageVersion(Date.now());
-          return nextToken;
-        }
-        return previousToken;
-      });
     }).catch(() => { if (active) setLatest(null); });
     load();
     const timer = window.setInterval(load, 1000);
     return () => { active = false; window.clearInterval(timer); };
+  }, [selected?.device_id]);
+  useEffect(() => {
+    setLive(null);
+    if (!selected?.device_id) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try { const value = await api.liveCamera(selected.device_id); if (active) setLive(value); }
+      catch { if (active) setLive(null); }
+      if (active) timer = setTimeout(() => void poll(), 500);
+    };
+    void poll();
+    return () => { active = false; clearTimeout(timer); };
   }, [selected?.device_id]);
   const judgement = latest?.analysis?.ppe_judgement;
   const observedPpe = latest?.analysis?.ppe ?? worker?.hazards.observed_person_ppe ?? {};
@@ -79,26 +60,20 @@ export function CameraMonitor({workers, devices}: Props) {
           <select value={selected?.device_id ?? ""} onChange={event => setDeviceId(event.target.value)}>
             {avDevices.map(device => <option key={device.device_id} value={device.device_id}>{device.worker_id} · {device.device_id}</option>)}
           </select>
-          <button onClick={() => {setImageError(false); setImageVersion(Date.now());}}>영상 새로고침</button>
+          <button onClick={() => { if (selected) void api.latestCamera(selected.device_id).then(setLatest); }}>분석 새로고침</button>
         </div>
       </header>
       {!selected ? <p className="empty">등록된 AV 장치가 없습니다.</p> : (
         <div className="camera-monitor-grid">
           <article className="camera-live-card">
             <div className="camera-card-head"><b>실시간 원본 영상</b><StatusPill active={Boolean(live?.received && (live.age_ms ?? Infinity) < 3000)} activeText="새 프레임 수신 중" inactiveText="영상 정지" /></div>
-            {live?.received && (live.age_ms ?? Infinity) < 3000 ? (
-              <img src={api.liveCameraStreamUrl(selected.device_id)} alt="안전모 카메라 원본 영상" />
-            ) : <div className="camera-placeholder"><strong>NO LIVE FRAME</strong><span>최근 3초 동안 새 원본 프레임이 없습니다.</span></div>}
-            <small>원본 프레임 번호: {live?.frame_id ?? "확인 불가"} · 수신 후 {live?.age_ms ?? "-"}ms</small>
+            {live?.received && (live.age_ms ?? Infinity) < 3000 ? <img src={api.liveCameraStreamUrl(selected.device_id)} alt="안전모 카메라 원본 영상" /> : <div className="camera-placeholder"><strong>NO LIVE FRAME</strong><span>최근 3초 동안 새 원본 프레임이 없습니다.</span></div>}
+            <small>원본 프레임 {live?.frame_id ?? "확인 불가"} · 수신 후 {live?.age_ms ?? "-"}ms</small>
           </article>
           <article className="camera-live-card">
             <div className="camera-card-head"><b>최근 분석 화면</b><StatusPill active={selected.online} activeText="카메라 온라인" inactiveText="카메라 오프라인" /></div>
-            {!imageError && selected.last_camera_at ? (
-              <img src={api.cameraImageUrl(selected.device_id, imageVersion)} alt={`${worker?.worker_name ?? selected.worker_id} 카메라 최신 프레임`} onError={() => setImageError(true)} />
-            ) : (
-              <div className="camera-placeholder"><strong>NO FRAME</strong><span>ESP32 안전모 카메라에서 실제 프레임을 수신하면 표시됩니다.</span></div>
-            )}
-            <small>마지막 수신: {selected.last_camera_at ? new Date(selected.last_camera_at).toLocaleString("ko-KR") : "없음"}</small>
+            <CameraFrame deviceId={selected.device_id} alt={`${worker?.worker_name ?? selected.worker_id} 카메라 최신 프레임`} />
+            <small>마지막 수신: {elapsedTime(selected.last_camera_at)}</small>
           </article>
           <article className="camera-analysis-card">
             <span className="eyebrow">WORKER DETECTION</span>

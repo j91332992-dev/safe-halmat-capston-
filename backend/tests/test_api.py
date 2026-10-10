@@ -3,12 +3,18 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
+def login_headers(client: TestClient) -> dict[str, str]:
+    response = client.post("/api/auth/login", json={"username": "TUTUS", "password": "0000"})
+    assert response.status_code == 200
+    return {"Authorization": f"Bearer {response.json()['token']}"}
+
+
 def test_health_snapshot_starts_in_hardware_mode_and_offline():
     with TestClient(app) as client:
         health = client.get("/api/health")
         assert health.status_code == 200
         assert health.json()["mode"] == "hardware"
-        snapshot = client.get("/api/dashboard/snapshot")
+        snapshot = client.get("/api/dashboard/snapshot", headers=login_headers(client))
         assert snapshot.status_code == 200
         data = snapshot.json()
         assert len(data["anchors"]) == 4
@@ -34,7 +40,7 @@ def test_real_heartbeat_is_the_only_way_to_mark_device_online():
         assert response.status_code == 200
         assert response.json()["server_mode"] == "hardware"
         assert response.json()["device"]["online"] is True
-        snapshot = client.get("/api/dashboard/snapshot").json()
+        snapshot = client.get("/api/dashboard/snapshot", headers=login_headers(client)).json()
         av = next(item for item in snapshot["devices"] if item["device_id"] == "helmet-001-av")
         assert av["online"] is True
         assert av["battery"] == 77
@@ -76,7 +82,7 @@ def test_uwb_packet_marks_only_measured_anchors_online():
             },
         )
         assert response.status_code == 200
-        snapshot = client.get("/api/dashboard/snapshot").json()
+        snapshot = client.get("/api/dashboard/snapshot", headers=login_headers(client)).json()
         states = {item["anchor_id"]: item["online"] for item in snapshot["anchors"]}
         assert states == {
             "anchor-001": True,

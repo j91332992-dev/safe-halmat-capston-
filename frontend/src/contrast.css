@@ -1,0 +1,58 @@
+/* Shared contrast rules loaded after both legacy themes. Pair every surface
+   with its foreground; never inherit the dashboard's dark text palette. */
+:root{--readable-text:#172033;--readable-muted:#475569;--readable-dark-text:#f1f5f9;--readable-dark-muted:#bdc9da}
+.work-status.state-off{background:#e8eef5;color:#334155!important}
+.work-status.state-working{background:#dbeafe;color:#174174!important}
+.work-status.state-break{background:#fef3c7;color:#78350f!important}
+.main-area[data-page] :is(.active-sos-banner,.missed-call-banner,.active-call-request-banner){color:#172033}
+.main-area[data-page] .active-sos-banner :is(b,span){color:#991b1b}
+.main-area[data-page] .active-call-request-banner :is(b,span){color:#145343}
+.main-area[data-page] .missed-call-banner :is(b,span){color:#78350f}
+.main-area[data-page] :is(.sos-banner-actions,.call-request-actions) button{color:#172033}
+.worker-app .worker-card :is(p,small,time){color:#475569}
+.worker-app .worker-card span{color:#345b50}
+.worker-app .worker-list :is(small,time){color:#475569}
+.worker-app .worker-intro p{color:#475569}
+.worker-app .worker-nav button{color:#475569}
+.worker-app .team-chat>small{color:#475569}
+.worker-app .calendar-grid button{color:#284863}
+.worker-app .calendar-grid button.selected{color:#fff}
+.worker-app .worker-actions button,.worker-app .team-chat button{color:#fff}
+.worker-app .worker-actions button+button{color:#334155}
+.worker-app :is(.worker-role,.eligible){color:#145343}
+.worker-app .worker-hero :is(small,p){color:#fff;opacity:1}
+.worker-app .assignment-info dt{color:#475569}
+.worker-app .worker-header small{color:#475569}
+.worker-app .worker-intro>span{color:#145343}
+.worker-app .worker-hero{background-color:#075b62}
+.worker-app.safety-danger .worker-hero{background-color:#991b1b}
+.worker-app.safety-warning .worker-hero{background-color:#92400e}
+.worker-app .worker-hero-icon{background:#073d4b;color:#fff}
+.worker-app.safety-danger .worker-hero-icon{background:#7f1d1d}
+.worker-app .worker-nav button.active{background:#174174;color:#fff}
+.worker-app.safety-danger .worker-nav button.active{background:#991b1b;color:#fff}
+.worker-app .worker-nav button.active span{color:#fff}
+.worker-app .calendar-grid button.selected small{color:#fff}
+@media (max-width:900px),(min-width:901px) and (max-width:1366px) and (hover:none) and (pointer:coarse){
+  .main-area[data-page]{--muted:#bdc9da;--teal:#81efc8;--red:#ffb4bc;color-scheme:dark}
+  .main-area[data-page] :is(.eyebrow,.section-title>span,.diag-card footer,.diag-card footer span,.component-list>span,.component-list>div>span,.replay-time,.property-title span,.assistant-empty,.event-head){color:#bdc9da}
+  .main-area[data-page] :is(.management-overview,.worker-overview) article :is(small,em){color:#bdc9da!important}
+  .main-area[data-page] .zone-grid :is(dt,dd){color:#dce7f5}
+  .main-area[data-page] .worker-avatar{background:#d8f3e7;color:#145343}
+  .main-area[data-page] :is(.risk-orb.risk-비상,.risk-orb.risk-위험,.camera-risk.level-비상,.camera-risk.level-위험){background:#fee2e2;border-color:#dc2626;color:#991b1b}
+  .main-area[data-page] :is(.risk-orb.risk-비상,.risk-orb.risk-위험,.camera-risk.level-비상,.camera-risk.level-위험) :is(strong,b,span){color:#991b1b}
+  .main-area[data-page] :is(.risk-orb.risk-주의,.risk-orb.risk-관심){background:#fef3c7;color:#78350f}
+  .main-area[data-page] :is(.risk-orb.risk-주의,.risk-orb.risk-관심) :is(strong,span){color:#78350f}
+  .main-area[data-page] .ops-counts .tone-info{color:#bdc9da}
+  .main-area[data-page] .ops-counts .tone-info :is(span,strong){color:#bdc9da}
+  .main-area[data-page] :is(.ops-sos-mark,.alert-button){background:#b91c1c;color:#fff}
+  .main-area[data-page] .ops-sos-mark{box-shadow:0 0 0 5px #b91c1c22}
+  .main-area[data-page] :is(.site-map,.blueprint,.replay-map-wrap) text{color:#172033;fill:#172033}
+  .main-area[data-page] :is(.site-map,.blueprint,.replay-map-wrap) .worker-label-risk{fill:#991b1b}
+  .main-area[data-page] .alert-button span{background:#991b1b;color:#fff}
+  .main-area[data-page] .replay-time span{color:#bdc9da}
+  .mobile-drawer-card :is(.ops-menu-group summary,.drawer-nav-item,.mobile-mode-card){color:#e2e8f0!important}
+  .mobile-drawer-card :is(p,small,.mobile-mode-card span){color:#bdc9da}
+  .admin-login-card :is(.admin-login-version,.admin-optional-label){color:#bdc9da}
+  .admin-login-card input::placeholder{color:#bdc9da}
+}

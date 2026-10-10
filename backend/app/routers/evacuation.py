@@ -19,6 +19,7 @@ from ..services.event_service import create_event, event_to_dict
 from ..services.evacuation_guidance_service import assistant_device_id, clear_guidance, send_helmet_guidance
 from ..services.risk_service import recalculate_risk
 from ..websocket import manager
+from .auth import require_site
 
 router = APIRouter(prefix="/api/evacuation", tags=["evacuation"])
 
@@ -42,20 +43,20 @@ async def _send_all_guidance(db: Session, snapshot: dict, force: bool) -> list[d
 
 
 @router.get("/current")
-def get_current(worker_id: str | None = None, db: Session = Depends(get_db)):
-    result = evacuation_snapshot(db)
+def get_current(worker_id: str | None = None, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    result = evacuation_snapshot(db, site_id)
     if worker_id and result["incident"]:
         worker = db.get(WorkerState, worker_id)
-        if not worker:
+        if not worker or worker.site_id != site_id:
             raise HTTPException(404, "작업자를 찾을 수 없습니다.")
-        result["route"] = calculate_route(db, worker, current_incident(db))
+        result["route"] = calculate_route(db, worker, current_incident(db, site_id))
     return result
 
 
 @router.post("/trigger")
-async def trigger(payload: FireTriggerIn, db: Session = Depends(get_db)):
+async def trigger(payload: FireTriggerIn, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     worker = db.get(WorkerState, payload.worker_id)
-    if not worker:
+    if not worker or worker.site_id != site_id:
         raise HTTPException(404, "작업자를 찾을 수 없습니다.")
     incident, created = trigger_fire(db, payload.source, payload.worker_id, payload.details)
     event = None
@@ -69,18 +70,18 @@ async def trigger(payload: FireTriggerIn, db: Session = Depends(get_db)):
             details={"incident_id": incident.incident_id, "source": payload.source},
         )
     db.commit()
-    result = {**evacuation_snapshot(db), "event": event_to_dict(event) if event else None}
+    result = {**evacuation_snapshot(db, site_id), "event": event_to_dict(event) if event else None}
     result["helmet_guidance"] = await _send_all_guidance(db, result, force=created)
     await manager.broadcast("evacuation_triggered", result)
     return result
 
 
 @router.post("/{incident_id}/confirm-zone")
-async def confirm_zone(incident_id: str, payload: FireZoneIn, db: Session = Depends(get_db)):
+async def confirm_zone(incident_id: str, payload: FireZoneIn, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     incident = db.get(EvacuationIncident, incident_id)
-    if not incident or incident.status not in ("pending_manager", "active"):
+    if not incident or incident.site_id != site_id or incident.status not in ("pending_manager", "active"):
         raise HTTPException(404, "확인 가능한 화재 사건이 없습니다.")
-    layout = db.get(SiteLayout, settings.site_id)
+    layout = db.get(SiteLayout, site_id)
     width = layout.width if layout else settings.site_width_m
     height = layout.height if layout else settings.site_height_m
     zone = payload.model_dump()
@@ -98,20 +99,20 @@ async def confirm_zone(incident_id: str, payload: FireZoneIn, db: Session = Depe
         details={"incident_id": incident.incident_id, "fire_zone": zone},
     )
     db.commit()
-    result = {**evacuation_snapshot(db), "event": event_to_dict(event)}
+    result = {**evacuation_snapshot(db, site_id), "event": event_to_dict(event)}
     result["helmet_guidance"] = await _send_all_guidance(db, result, force=True)
     await manager.broadcast("fire_zone_confirmed", result)
     return result
 
 
 @router.post("/{incident_id}/cancel")
-async def cancel(incident_id: str, payload: FireCancelIn, db: Session = Depends(get_db)):
+async def cancel(incident_id: str, payload: FireCancelIn, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     incident = db.get(EvacuationIncident, incident_id)
-    if not incident or incident.status not in ("pending_manager", "active"):
+    if not incident or incident.site_id != site_id or incident.status not in ("pending_manager", "active"):
         raise HTTPException(404, "취소 가능한 화재 사건이 없습니다.")
     cancel_incident(incident, payload.reason)
     clear_guidance()
-    for worker in db.query(WorkerState).all():
+    for worker in db.query(WorkerState).filter(WorkerState.site_id == site_id).all():
         hazards = json.loads(worker.hazard_json or "{}")
         for key in ("fire", "large_fire", "fire_reported"):
             hazards[key] = False
@@ -130,4 +131,3 @@ async def cancel(incident_id: str, payload: FireCancelIn, db: Session = Depends(
     result = {"incident": incident_to_dict(incident), "routes": {}, "event": event_to_dict(event)}
     await manager.broadcast("evacuation_cancelled", result)
     return result
-

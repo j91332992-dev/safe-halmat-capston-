@@ -2,11 +2,12 @@ import {useState} from "react";
 import {api} from "../services/api";
 import type {Anchor, Device} from "../types";
 import {StatusPill} from "./StatusPill";
+import {elapsedTime} from "../utils/elapsedTime";
 
 interface Props {devices: Device[]; anchors: Anchor[]; mode: string; onRefresh: () => Promise<unknown>}
 
 function time(value: string | null) {
-  return value ? new Date(value).toLocaleTimeString("ko-KR") : "수신 없음";
+  return elapsedTime(value);
 }
 
 function recent(value: string | null, seconds: number) {

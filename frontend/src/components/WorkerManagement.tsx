@@ -1,5 +1,6 @@
+import {WorkerOperations} from "./WorkerOperations";
 import {useEffect, useState} from "react";
-import {api} from "../services/api";
+import {api, auth} from "../services/api";
 import type {Worker, Zone} from "../types";
 
 interface Props {
@@ -18,6 +19,8 @@ export function WorkerManagement({workers, zones, onSaved}: Props) {
   const [drafts, setDrafts] = useState<Record<string, DraftProfile>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [openWorker, setOpenWorker] = useState<string | null>(null);
+  const [invite, setInvite] = useState<{workerId: string; code: string} | null>(null);
 
   useEffect(() => {
     setDrafts(current => Object.fromEntries(workers.map(worker => [
@@ -48,6 +51,16 @@ export function WorkerManagement({workers, zones, onSaved}: Props) {
   const change = (workerId: string, patch: Partial<DraftProfile>) =>
     setDrafts(current => ({...current, [workerId]: {...current[workerId], ...patch}}));
 
+  const createInvite = async (workerId: string) => {
+    try {
+      const result = await auth.createWorkerInvite(workerId);
+      setInvite({workerId, code: result.invite_code});
+      setMessage("초대 코드는 24시간 동안 사용할 수 있습니다. 해당 작업자에게 전달하세요.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "초대 코드 생성에 실패했습니다.");
+    }
+  };
+
   return (
     <section className="page-panel worker-management">
       <header><div><span className="eyebrow">WORKER & HELMET</span><h2>작업자·안전모 관리</h2></div><span className="worker-count-badge">등록 작업자 <b>{workers.length}명</b></span></header>
@@ -70,6 +83,7 @@ export function WorkerManagement({workers, zones, onSaved}: Props) {
                 <span className={"level level-" + worker.risk_level}>{worker.risk_level} · {worker.risk_score}점</span>
               </header>
               <div className="worker-live-summary">
+                <span className={`work-status state-${worker.work?.state ?? "off"}`}>근무 상태 <b>{{working: "작업 중", break: "휴게 중", off: "작업 전·종료"}[worker.work?.state ?? "off"]}</b></span>
                 <span>현재 위치 <b>{worker.x.toFixed(2)}, {worker.y.toFixed(2)}m</b></span>
                 <span>위치 신뢰도 <b>{Math.round(worker.confidence * 100)}%</b></span>
                 <span>마지막 갱신 <b>{new Date(worker.updated_at).toLocaleTimeString("ko-KR")}</b></span>
@@ -79,8 +93,11 @@ export function WorkerManagement({workers, zones, onSaved}: Props) {
                 <label>작업 역할<select value={draft.worker_role} onChange={event => change(worker.worker_id, {worker_role: event.target.value as Worker["worker_role"]})}><option value="general_worker">일반작업자</option><option value="manager">관리자</option><option value="hot_work_authorized">화기인가자</option><option value="heavy_equipment_operator">중장비운전자</option><option value="unauthorized">비인가자</option></select></label>
                 <label>특이사항·주의사항<textarea rows={4} placeholder="예: 고소 작업 교육 이수, 특정 구역 접근 시 관리자 동행 필요" value={draft.notes} onChange={event => change(worker.worker_id, {notes: event.target.value})} /></label>
               </div>
+              <details open={openWorker === worker.worker_id} onToggle={e => {if (e.currentTarget.open) setOpenWorker(worker.worker_id); else setOpenWorker(id => id === worker.worker_id ? null : id);}}><summary>소속·직책·교육·작업 허가·팀 채팅 관리</summary>{openWorker === worker.worker_id && <WorkerOperations workerId={worker.worker_id}/>}</details>
               <div className="worker-zone-access"><b>출입 허용 제한구역</b>{allowedZones.length ? allowedZones.map(zone => <span key={zone.zone_id}>{zone.zone_name}</span>) : <em>지정된 구역 없음</em>}</div>
               <button className="worker-save" disabled={savingId === worker.worker_id || !changed} onClick={() => void save(worker)}>{savingId === worker.worker_id ? "저장 중…" : "작업자 정보 저장"}</button>
+              <button className="worker-save" onClick={() => void createInvite(worker.worker_id)}>근로자 회원가입 초대 코드 만들기</button>
+              {invite?.workerId === worker.worker_id && <p role="status">초대 코드: <strong>{invite.code}</strong> (24시간 유효)</p>}
             </article>
           );
         })}

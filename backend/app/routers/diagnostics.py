@@ -7,13 +7,16 @@ from ..models.entities import Device
 from ..services.presence_service import refresh_presence
 from ..services.serializers import device_to_dict
 from ..websocket import manager
+from .auth import require_site
 
 router = APIRouter(prefix="/api/diagnostics", tags=["diagnostics"])
 
 
 @router.get("/summary")
-def summary(db: Session = Depends(get_db)):
+def summary(site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     devices, anchors = refresh_presence(db)
+    devices = [item for item in devices if item.site_id == site_id]
+    anchors = [item for item in anchors if item.site_id == site_id]
     return {
         "mode": settings.operation_mode,
         "server": "online",
@@ -26,24 +29,24 @@ def summary(db: Session = Depends(get_db)):
 
 
 @router.get("/devices")
-def diagnostic_devices(db: Session = Depends(get_db)):
+def diagnostic_devices(site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     devices, _ = refresh_presence(db)
-    return [device_to_dict(row) for row in devices]
+    return [device_to_dict(row) for row in devices if row.site_id == site_id]
 
 
 @router.get("/{device_id}")
-def diagnostic_device(device_id: str, db: Session = Depends(get_db)):
+def diagnostic_device(device_id: str, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     refresh_presence(db)
     row = db.get(Device, device_id)
-    if not row:
+    if not row or row.site_id != site_id:
         raise HTTPException(404, "장치를 찾을 수 없습니다.")
     return device_to_dict(row)
 
 
 @router.post("/{device_id}/speaker-test")
-async def speaker_test(device_id: str, db: Session = Depends(get_db)):
+async def speaker_test(device_id: str, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     row = db.get(Device, device_id)
-    if not row:
+    if not row or row.site_id != site_id:
         raise HTTPException(404, "장치를 찾을 수 없습니다.")
 
     payload = {"frequency": 1400, "duration": 1000}

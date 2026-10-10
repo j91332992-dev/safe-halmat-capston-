@@ -1,10 +1,6 @@
 # 🦺 HANMIR — 산업용 AI 스마트 안전모
 
-> **2026-10-02 업데이트 · HANMIR 2.0 P4 / 음성 / 영상 통신 준비**
->
-> 이 브랜치(`feature/mobile-safety-app-20261001`)는 모바일 관제 앱에 P4 통합 펌웨어 준비 코드, STT·긴급어 보완, 바이너리 영상 수신과 원본 미리보기를 추가합니다. **P4 빌드·실물 검증 전이며 OV5647 캡처·P4 통화·BNO085 낙상은 미완료입니다.**
->
-> [오늘 전체 작업·파일별 변경·검증 결과](docs/HANMIR_2_DAILY_REPORT_2026-10-02.md) · [P4 통합 펌웨어](firmware/helmet_p4/README.md) · [통신 개편 계획](docs/HANMIR_2_P4_COMMUNICATION_PLAN_2026-10-02.md) · [음성 준비 상태](docs/HANMIR_2_VOICE_PREP_2026-10-02.md)
+> 모바일 통합판 **v1.8 / build 10**: 관리자·근로자 통합 로그인, 계정별 현장 데이터 분리, 근로자의 누적 작업·휴게시간, 지도·근무 달력·팀 채팅·교육/허가·안전 점검·배터리 경고를 제공합니다. 같은 기능이 반영된 iOS IPA와 Android APK는 [`releases`](releases/)에서 확인할 수 있습니다. [추가 기능 안내](docs/근로자앱_기능확장_2026-10-09.md) · [통합 기록](docs/브랜치_비교_업데이트_2026-10-09.md) · [근로자 앱 실행 안내](docs/근로자앱_실행안내.md)
 
 <div align="center">
 

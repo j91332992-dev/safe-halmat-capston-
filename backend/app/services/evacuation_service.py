@@ -22,6 +22,7 @@ def incident_to_dict(item: EvacuationIncident | None) -> dict | None:
         return None
     return {
         "incident_id": item.incident_id,
+        "site_id": item.site_id,
         "worker_id": item.worker_id,
         "source": item.source,
         "status": item.status,
@@ -33,22 +34,27 @@ def incident_to_dict(item: EvacuationIncident | None) -> dict | None:
     }
 
 
-def current_incident(db: Session) -> EvacuationIncident | None:
+def current_incident(db: Session, site_id: str | None = None) -> EvacuationIncident | None:
+    query = db.query(EvacuationIncident).filter(EvacuationIncident.status.in_(ACTIVE_STATUSES))
+    if site_id:
+        query = query.filter(EvacuationIncident.site_id == site_id)
     return (
-        db.query(EvacuationIncident)
-        .filter(EvacuationIncident.status.in_(ACTIVE_STATUSES))
+        query
         .order_by(EvacuationIncident.created_at.desc())
         .first()
     )
 
 
 def trigger_fire(db: Session, source: str, worker_id: str | None, details: dict | None = None) -> tuple[EvacuationIncident, bool]:
-    current = current_incident(db)
+    worker = db.get(WorkerState, worker_id) if worker_id else None
+    site_id = worker.site_id if worker else settings.site_id
+    current = current_incident(db, site_id)
     if not current and source == "yolo":
         recently_cancelled = (
             db.query(EvacuationIncident)
             .filter(
                 EvacuationIncident.status == "cancelled",
+                EvacuationIncident.site_id == site_id,
                 EvacuationIncident.cancel_reason.in_(("false_alarm", "no_fire")),
                 EvacuationIncident.updated_at >= datetime.utcnow() - timedelta(seconds=30),
             )
@@ -66,6 +72,7 @@ def trigger_fire(db: Session, source: str, worker_id: str | None, details: dict 
         return current, False
     item = EvacuationIncident(
         incident_id="fire-" + uuid4().hex,
+        site_id=site_id,
         worker_id=worker_id,
         source=source,
         status="pending_manager",
@@ -188,10 +195,10 @@ def _alert_result(
 
 
 def calculate_route(db: Session, worker: WorkerState, incident: EvacuationIncident | None = None) -> dict:
-    layout = db.get(SiteLayout, settings.site_id)
+    layout = db.get(SiteLayout, worker.site_id)
     width = layout.width if layout else settings.site_width_m
     height = layout.height if layout else settings.site_height_m
-    objects = db.query(Obstacle).filter(Obstacle.site_id == settings.site_id).all()
+    objects = db.query(Obstacle).filter(Obstacle.site_id == worker.site_id).all()
     exits = [item for item in objects if item.object_type == "emergency_exit"]
     fire_zone = None
     if incident and incident.status == "active":
@@ -256,11 +263,13 @@ def calculate_route(db: Session, worker: WorkerState, incident: EvacuationIncide
     return result
 
 
-def evacuation_snapshot(db: Session) -> dict:
-    incident = current_incident(db)
+def evacuation_snapshot(db: Session, site_id: str | None = None) -> dict:
+    incident = current_incident(db, site_id)
     if not incident:
         return {"incident": None, "routes": {}}
-    routes = {worker.worker_id: calculate_route(db, worker, incident) for worker in db.query(WorkerState).all()}
+    workers = db.query(WorkerState)
+    if site_id:
+        workers = workers.filter(WorkerState.site_id == site_id)
+    routes = {worker.worker_id: calculate_route(db, worker, incident) for worker in workers.all()}
     return {"incident": incident_to_dict(incident), "routes": routes}
-
 

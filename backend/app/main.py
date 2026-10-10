@@ -2,7 +2,11 @@ from contextlib import asynccontextmanager
 import json
 from time import monotonic
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, Depends
+from sqlalchemy.orm import Session
+from .database import get_db
+from .models.entities import Device
+from .routers.auth import require_site
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -12,6 +16,7 @@ from .models.entities import Device
 from .services.orientation_service import record_orientation
 from .routers import ALL_ROUTERS
 from .routers.camera import start_camera_processor, stop_camera_processor
+from .routers.auth import session_identity
 from .websocket import call_manager, manager
 
 
@@ -33,6 +38,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def restrict_worker_routes(request: Request, call_next):
+    authorization = request.headers.get("authorization", "")
+    if authorization.startswith("Bearer ") and request.url.path.startswith("/api/"):
+        try:
+            identity = session_identity(authorization)
+        except HTTPException:
+            return await call_next(request)
+        if identity.get("role") == "worker" and not request.url.path.startswith(("/api/worker-app/", "/api/auth/")):
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=403, content={"detail": "관리자 권한이 필요합니다."})
+    return await call_next(request)
+
+
 for router in ALL_ROUTERS:
     app.include_router(router)
 app.mount("/captures", StaticFiles(directory=BASE_DIR / "captures"), name="captures")
@@ -50,8 +71,15 @@ def health():
 
 
 @app.websocket("/ws/dashboard")
-async def dashboard_socket(websocket: WebSocket):
-    await manager.connect_dashboard(websocket)
+async def dashboard_socket(websocket: WebSocket, token: str = ""):
+    try:
+        identity = session_identity(f"Bearer {token}")
+        if identity.get("role") == "worker":
+            raise HTTPException(403, "관리자 권한이 필요합니다.")
+    except HTTPException:
+        await websocket.close(code=4401)
+        return
+    await manager.connect_dashboard(str(identity["site_id"]), websocket)
     try:
         while True:
             await websocket.receive_text()
@@ -63,6 +91,7 @@ async def dashboard_socket(websocket: WebSocket):
 async def device_socket(websocket: WebSocket, device_id: str):
     await manager.connect_device(device_id, websocket)
     known_device = False
+    device_site_id = None
     checked_at = -10.0
     try:
         while True:
@@ -80,19 +109,20 @@ async def device_socket(websocket: WebSocket, device_id: str):
                 with SessionLocal() as db:
                     device = db.get(Device, device_id)
                     known_device = bool(device and device.device_type == "assistant_device")
+                    device_site_id = device.site_id if known_device else None
             if known_device:
                 sample = record_orientation(device_id, message)
                 if sample:
-                    await manager.broadcast("orientation", sample)
+                    await manager.broadcast("orientation", sample, site_id=device_site_id)
     except WebSocketDisconnect:
         pass
     finally:
         manager.disconnect(websocket)
 @app.post("/api/calls/{device_id}/ticket")
-def issue_call_ticket(device_id: str, request: Request):
-    client_host = request.client.host if request.client else ""
-    if client_host not in {"127.0.0.1", "::1", "localhost"}:
-        raise HTTPException(403, "통화 연결은 관제 서버 PC에서만 시작할 수 있습니다.")
+def issue_call_ticket(device_id: str, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    device = db.get(Device, device_id)
+    if not device or device.site_id != site_id:
+        raise HTTPException(404, "장치를 찾을 수 없습니다.")
     if not call_manager.device_online(device_id):
         raise HTTPException(409, "안전모 통화 채널이 오프라인입니다.")
     return {"device_id": device_id, "ticket": call_manager.issue_ticket(device_id), "expires_in": 30}

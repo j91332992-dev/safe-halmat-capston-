@@ -19,6 +19,7 @@ from ..site_profile import clamp_position
 from ..services.uwb_service import measurements_to_dict
 from ..services.zone_service import confirm_zone, point_in_zone
 from ..websocket import manager
+from .auth import require_site
 
 router = APIRouter(prefix="/api", tags=["uwb"])
 
@@ -30,7 +31,7 @@ async def upload_distances(payload: UwbDistancesIn, db: Session = Depends(get_db
         raise HTTPException(404, "작업자를 찾을 수 없습니다.")
     refresh_presence(db)
     measured_ids = {item.anchor_id for item in payload.measurements}
-    measured_anchors = db.query(Anchor).filter(Anchor.anchor_id.in_(measured_ids)).all()
+    measured_anchors = db.query(Anchor).filter(Anchor.anchor_id.in_(measured_ids), Anchor.site_id == worker.site_id).all()
     seen_at = utcnow()
     for anchor in measured_anchors:
         anchor.online = True
@@ -46,12 +47,13 @@ async def upload_distances(payload: UwbDistancesIn, db: Session = Depends(get_db
     previous_position = (worker.x, worker.y)
     x, y = filter_location(payload.worker_id, raw_x, raw_y, previous_position)
     position_changed = abs(x - previous_position[0]) > 0.001 or abs(y - previous_position[1]) > 0.001
-    layout = db.get(SiteLayout, settings.site_id)
+    layout = db.get(SiteLayout, worker.site_id)
     worker.x, worker.y = clamp_position(x, y, layout.width if layout else None, layout.height if layout else None)
     worker.confidence = confidence
     if position_changed:
         location = Location(
             worker_id=payload.worker_id,
+            site_id=worker.site_id,
             x=worker.x,
             y=worker.y,
             confidence=confidence,
@@ -59,7 +61,7 @@ async def upload_distances(payload: UwbDistancesIn, db: Session = Depends(get_db
         )
         db.add(location)
     zone_event = None
-    for zone in db.query(Zone).filter(Zone.active.is_(True)).all():
+    for zone in db.query(Zone).filter(Zone.site_id == worker.site_id, Zone.active.is_(True)).all():
         allowed_worker_ids = json.loads(zone.allowed_worker_ids_json)
         if payload.worker_id in allowed_worker_ids:
             if worker.current_zone == zone.zone_id:
@@ -97,16 +99,16 @@ async def upload_distances(payload: UwbDistancesIn, db: Session = Depends(get_db
 
 
 @router.get("/locations/{worker_id}/latest")
-def latest_location(worker_id: str, db: Session = Depends(get_db)):
-    worker = db.get(WorkerState, worker_id)
+def latest_location(worker_id: str, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    worker = db.query(WorkerState).filter(WorkerState.worker_id == worker_id, WorkerState.site_id == site_id).first()
     if not worker:
         raise HTTPException(404, "작업자를 찾을 수 없습니다.")
     return worker_to_dict(worker)
 
 
 @router.get("/locations/{worker_id}/history")
-def location_history(worker_id: str, limit: int = 100, db: Session = Depends(get_db)):
-    rows = db.query(Location).filter(Location.worker_id == worker_id).order_by(Location.created_at.desc()).limit(min(limit, 10000)).all()
+def location_history(worker_id: str, limit: int = 100, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    rows = db.query(Location).filter(Location.worker_id == worker_id, Location.site_id == site_id).order_by(Location.created_at.desc()).limit(min(limit, 10000)).all()
     return [
         {"x": r.x, "y": r.y, "confidence": r.confidence, "created_at": r.created_at.isoformat() + "Z"}
         for r in reversed(rows)

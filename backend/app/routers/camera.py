@@ -31,6 +31,7 @@ from ..services.serializers import worker_to_dict
 from ..services.yolo_service import analyze_frame
 from ..services.inference_priority import voice_requests_active
 from ..websocket import manager
+from .auth import session_identity
 
 router = APIRouter(prefix="/api/camera", tags=["camera"])
 logger = logging.getLogger(__name__)
@@ -314,7 +315,7 @@ async def _process_camera_job(job: CameraJob) -> None:
             "details": cache_details,
         }
         result["worker"] = worker_to_dict(worker)
-        result["evacuation"] = evacuation_snapshot(db)
+        result["evacuation"] = evacuation_snapshot(db, worker.site_id)
         if event and evacuation_created and result["evacuation"]["incident"]:
             route = result["evacuation"]["routes"].get(job.worker_id)
             if route:
@@ -528,7 +529,14 @@ def latest_raw_image(device_id: str):
 
 
 @router.get("/{device_id}/live/mjpeg")
-async def raw_live_stream(device_id: str, request: Request):
+async def raw_live_stream(device_id: str, request: Request, token: str = ""):
+    identity = session_identity(request.headers.get("authorization") or f"Bearer {token}")
+    if identity.get("role") == "worker":
+        raise HTTPException(403, "관리자 권한이 필요합니다.")
+    with SessionLocal() as db:
+        device = db.get(Device, device_id)
+        if not device or device.site_id != identity.get("site_id"):
+            raise HTTPException(404, "장치를 찾을 수 없습니다.")
     async def frames():
         previous = None
         while not await request.is_disconnected():
@@ -561,7 +569,11 @@ def latest_frame(device_id: str, db: Session = Depends(get_db)):
     )
     if not event:
         return {"device_id": device_id, "received": False}
-    return {"device_id": device_id, "received": True, **json.loads(event.details_json)}
+    details = json.loads(event.details_json)
+    filename = details.get("filename")
+    if not filename or not (CAPTURE_DIR / str(filename)).is_file():
+        return {"device_id": device_id, "received": False}
+    return {"device_id": device_id, "received": True, "analyzed_at": event.created_at.isoformat() + "Z", **details}
 
 
 @router.get("/{device_id}/latest/image")
@@ -585,7 +597,7 @@ def latest_frame_image(device_id: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "수신된 카메라 프레임이 없습니다.")
     filename = json.loads(event.details_json).get("filename")
     filepath = CAPTURE_DIR / str(filename or "")
-    if not filepath.exists():
+    if not filepath.is_file():
         raise HTTPException(404, "이미지 파일을 찾을 수 없습니다.")
     return FileResponse(
         filepath,

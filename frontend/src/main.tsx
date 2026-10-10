@@ -5,12 +5,21 @@ import {StatusBar, Style} from "@capacitor/status-bar";
 import {Capacitor} from "@capacitor/core";
 import App from "./App";
 import "./styles.css";
+import "./mobile-theme.css";
+import "./mobile-operations.css";
+import "./contrast.css";
+
+// Let the browser calculate the actual mobile viewport.  Hard-coding a
+// visualViewport value here can be stale during iOS Home Screen startup and
+// creates an artificial horizontal layout area until device rotation.
+document.documentElement.dataset.touchViewport = "";
+document.documentElement.style.removeProperty("--app-viewport-width");
 
 // 1. Configure Native Mobile Status Bar for iOS & Android
 if (Capacitor.isNativePlatform()) {
-  void StatusBar.setStyle({style: Style.Dark}).catch(() => {});
+  void StatusBar.setStyle({style: Style.Light}).catch(() => {});
   void StatusBar.setBackgroundColor({color: "#06101a"}).catch(() => {});
-  void StatusBar.setOverlaysWebView({overlay: true}).catch(() => {});
+  void StatusBar.setOverlaysWebView({overlay: false}).catch(() => {});
 }
 
 // 2. iOS Safari WebKit Safe Service Worker Handler

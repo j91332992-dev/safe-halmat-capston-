@@ -53,8 +53,13 @@ def device_to_dict(device) -> dict:
 
 
 def worker_to_dict(worker) -> dict:
+    from sqlalchemy.orm import object_session
+    from .worker_operations import work_summary
+    db = object_session(worker)
     return {
+        "work": work_summary(db, worker) if db else {"state": "off", "today_seconds": 0, "today_break_seconds": 0},
         "worker_id": worker.worker_id,
+        "site_id": worker.site_id,
         "worker_name": worker.worker_name,
         "worker_role": worker.worker_role,
         "notes": worker.notes,

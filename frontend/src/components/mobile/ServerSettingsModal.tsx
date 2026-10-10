@@ -1,6 +1,6 @@
 import {useState} from "react";
 import {Haptics, ImpactStyle, NotificationType} from "@capacitor/haptics";
-import {getStoredServerUrl, setStoredServerUrl, isCapacitorNative} from "../../services/config";
+import {getStoredServerUrl, setStoredServerUrl, isCapacitorNative, normalizeServerUrl} from "../../services/config";
 
 interface ServerSettingsModalProps {
   isOpen: boolean;
@@ -18,17 +18,37 @@ export function ServerSettingsModal({isOpen, onClose, onSaved}: ServerSettingsMo
   const handleTest = async () => {
     setTesting(true);
     setTestResult(null);
-    const targetUrl = url.trim().replace(/\/+$/, "");
+    const targetUrl = normalizeServerUrl(url);
+    if (!targetUrl) {
+      setTestResult({ok: false, message: "백엔드가 실행 중인 PC의 IP 주소와 포트를 입력하세요."});
+      setTesting(false);
+      return;
+    }
+    setUrl(targetUrl);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
     try {
-      const res = await fetch(`${targetUrl}/api/dashboard/snapshot`, {
+      const health = await fetch(`${targetUrl}/api/health`, {
         method: "GET",
-        headers: {"Accept": "application/json"}
+        headers: {"Accept": "application/json"}, signal: controller.signal
       });
-      if (res.ok) {
-        setTestResult({ok: true, message: "연결 성공! 관제 서버가 정상 응답했습니다."});
+      if (!health.ok) {
+        setTestResult({ok: false, message: `서버 응답 오류 (상태 코드: ${health.status})`});
+        return;
+      }
+
+      const signupFeature = await fetch(`${targetUrl}/api/auth/username-available?username=HANMIR_CHECK`, {
+        method: "GET",
+        headers: {"Accept": "application/json"}, signal: controller.signal
+      });
+      if (signupFeature.ok) {
+        setTestResult({ok: true, message: "연결 성공! 로그인과 회원가입을 지원하는 최신 관제 서버입니다."});
         void Haptics.notification({type: NotificationType.Success}).catch(() => {});
+      } else if (signupFeature.status === 404) {
+        setTestResult({ok: false, message: "연결된 서버는 회원가입 기능이 없는 이전 버전입니다. 새 프로젝트의 backend를 실행하세요."});
+        void Haptics.notification({type: NotificationType.Warning}).catch(() => {});
       } else {
-        setTestResult({ok: false, message: `서버 응답 오류 (상태 코드: ${res.status})`});
+        setTestResult({ok: false, message: `회원가입 기능 확인 실패 (상태 코드: ${signupFeature.status})`});
         void Haptics.notification({type: NotificationType.Warning}).catch(() => {});
       }
     } catch {
@@ -38,17 +58,22 @@ export function ServerSettingsModal({isOpen, onClose, onSaved}: ServerSettingsMo
       });
       void Haptics.notification({type: NotificationType.Error}).catch(() => {});
     } finally {
+      window.clearTimeout(timeout);
       setTesting(false);
     }
   };
 
   const handleSave = () => {
+    const targetUrl = normalizeServerUrl(url);
+    if (!targetUrl) {
+      setTestResult({ok: false, message: "저장할 서버 주소를 입력하세요."});
+      return;
+    }
     void Haptics.impact({style: ImpactStyle.Medium}).catch(() => {});
-    setStoredServerUrl(url.trim());
+    setUrl(targetUrl);
+    setStoredServerUrl(targetUrl);
     onSaved();
     onClose();
-    // Reload page to reinitialize all sockets and API base paths
-    window.location.reload();
   };
 
   return (
@@ -63,7 +88,7 @@ export function ServerSettingsModal({isOpen, onClose, onSaved}: ServerSettingsMo
 
         <div className="mobile-modal-body">
           <p className="mobile-modal-desc">
-            설치형 관리자 앱은 처음 한 번만 관제 서버 주소를 설정하면 됩니다. 백엔드가 실행 중인 PC의 Wi-Fi IP와 포트(기본 8000)를 입력하세요.
+            새 프로젝트의 백엔드가 실행 중인 PC의 Wi-Fi IP와 포트(기본 8000)를 입력하세요. 저장해도 현재 로그인·회원가입 화면은 유지됩니다.
           </p>
 
           <label className="mobile-input-label">

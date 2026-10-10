@@ -7,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.models.entities import Anchor, SiteLayout
 from app.routers.layout import router
+from app.routers.auth import require_site
 
 
 def test_draft_is_saved_before_it_is_applied():
@@ -29,6 +30,7 @@ def test_draft_is_saved_before_it_is_applied():
             db.close()
 
     test_app.dependency_overrides[get_db] = override_db
+    test_app.dependency_overrides[require_site] = lambda: "site-001"
     draft = {
         "site": {"name": "새 설계안", "width": 10, "height": 12},
         "anchors": [{"anchor_id": "anchor-001", "name": "A1", "x": 1, "y": 2, "z": 2.5, "online": True}],

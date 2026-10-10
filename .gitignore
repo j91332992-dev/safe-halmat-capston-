@@ -1,4 +1,9 @@
 .venv/
+.venv-*/
+.pytest_tmp/
+firmware/max17048_test/build/
+firmware/max17048_test/sdkconfig
+firmware/max17048_test/sdkconfig.old
 __pycache__/
 *.pyc
 node_modules/
