@@ -58,7 +58,10 @@ export function DiagnosticPanel({devices, anchors, mode, onRefresh}: Props) {
           const cameraActive = device.online && recent(device.last_camera_at, 20);
           const micActive = device.online && recent(device.last_audio_at, 300);
           const speakerActive = device.online && recent(device.last_speaker_at, 300) && device.last_speaker_status?.startsWith("ok:");
-          const speakerInitialized = device.online && device.component_status?.speaker === "ready";
+          const speakerInitialized = device.online && ["ready", "initialized"].includes(String(device.component_status?.speaker));
+          const imuActive = device.online && device.component_status?.imu === "ready";
+          const angle = (key: string) => typeof device.component_status?.[key] === "number"
+            ? `${(device.component_status[key] as number).toFixed(1)}°` : "수신 대기";
           return <article className="diag-card" key={device.device_id}>
             <header>
               <div><span className="eyebrow">{isAv ? "AV CONTROLLER" : "POSITION TAG"}</span><h3>{device.device_id}</h3></div>
@@ -77,6 +80,13 @@ export function DiagnosticPanel({devices, anchors, mode, onRefresh}: Props) {
                 <div><span>MIC</span><StatusPill active={micActive} activeText="음성 수신 확인" inactiveText={device.online ? "검증 필요" : "확인 불가"} /></div>
                 <div><span>SPEAKER I2S</span><StatusPill active={speakerInitialized} activeText="READY · 출력 초기화" inactiveText={device.online ? "초기화 오류" : "확인 불가"} /></div>
                 <div><span>SPEAKER TEST</span><StatusPill active={Boolean(speakerActive)} activeText="재생 명령 정상" inactiveText={device.online ? "실청 테스트 필요" : "확인 불가"} /></div>
+                <div><span>BNO085</span><StatusPill active={imuActive} activeText="회전 보고 수신 중" inactiveText={device.online ? "센서 데이터 대기" : "확인 불가"} /></div>
+              </div>
+              <div className="diag-metrics">
+                <div><span>방향 Yaw</span><strong>{angle("imu_yaw_deg")}</strong></div>
+                <div><span>기울기 Pitch</span><strong>{angle("imu_pitch_deg")}</strong></div>
+                <div><span>회전 Roll</span><strong>{angle("imu_roll_deg")}</strong></div>
+                <div><span>각도 기준</span><strong>센서 좌표계</strong></div>
               </div>
               <button className="speaker-test-button" disabled={!device.online || testing === device.device_id} onClick={() => void speakerTest(device.device_id)}>
                 {testing === device.device_id ? "재생 결과 확인 중…" : "스피커 실제 재생 테스트"}

@@ -13,8 +13,8 @@ from pathlib import Path
 from threading import Lock
 import time
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, Response
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect, Request
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -525,6 +525,25 @@ def latest_raw_image(device_id: str):
         raise HTTPException(404, "수신된 원본 카메라 프레임이 없습니다.")
     return Response(content=raw[0], media_type="image/jpeg",
                     headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+
+
+@router.get("/{device_id}/live/mjpeg")
+async def raw_live_stream(device_id: str, request: Request):
+    async def frames():
+        previous = None
+        while not await request.is_disconnected():
+            raw = latest_raw_frame(device_id)
+            if raw is not None:
+                jpeg, metadata = raw
+                token = metadata["received_monotonic"]
+                if token != previous and time.monotonic() - token < 3:
+                    previous = token
+                    yield (b"--hanmirframe\r\nContent-Type: image/jpeg\r\nContent-Length: "
+                           + str(len(jpeg)).encode() + b"\r\n\r\n" + jpeg + b"\r\n")
+            # Preview the newest frame only; slow viewers never create a backlog.
+            await asyncio.sleep(1 / 15)
+    return StreamingResponse(frames(), media_type="multipart/x-mixed-replace; boundary=hanmirframe",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
 
 @router.get("/{device_id}/latest")

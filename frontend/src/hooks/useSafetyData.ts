@@ -28,7 +28,15 @@ export function useSafetyData() {
   const refresh = useCallback(async () => {
     try {
       const snapshot = await api.snapshot();
-      setData(snapshot);
+      setData(current => ({...snapshot, devices: snapshot.devices.map(device => {
+        const live = current?.devices.find(item => item.device_id === device.device_id);
+        if (!live?.heading_at || Date.parse(live.heading_at) <= Date.parse(device.heading_at ?? "1970-01-01")) return device;
+        return {...device, heading_deg: live.heading_deg, heading_at: live.heading_at,
+          component_status: {...device.component_status, imu: live.component_status?.imu,
+            imu_yaw_deg: live.component_status?.imu_yaw_deg,
+            imu_pitch_deg: live.component_status?.imu_pitch_deg, imu_roll_deg: live.component_status?.imu_roll_deg,
+            imu_received_at: live.heading_at, heading_transport: live.component_status?.heading_transport}};
+      })}));
       setServerReachable(true);
       const histories = await Promise.all(
         snapshot.workers.map(async worker => {
@@ -104,9 +112,25 @@ export function useSafetyData() {
         try {
           const message = JSON.parse(event.data) as {
             type: string;
-            data?: {worker?: Worker; location?: {x: number; y: number; confidence: number}};
+            data?: {worker?: Worker; location?: {x: number; y: number; confidence: number};
+              device_id?: string; imu_yaw_deg?: number; imu_pitch_deg?: number; imu_roll_deg?: number; heading_at?: string};
           };
           if (message.type === "pong") {
+            return;
+          }
+          if (message.type === "orientation" && message.data?.device_id) {
+            const sample = message.data;
+            if (typeof sample.imu_yaw_deg !== "number" || !Number.isFinite(sample.imu_yaw_deg) || !sample.heading_at) return;
+            setData(current => current ? {...current, devices: current.devices.map(device => {
+              if (device.device_id !== sample.device_id || Date.parse(sample.heading_at!) <= Date.parse(device.heading_at ?? "1970-01-01")) return device;
+              const calibration = device.component_status?.heading_calibration as {offset_deg?: number} | undefined;
+              const offset = calibration?.offset_deg;
+              return {...device, online: true,
+                heading_deg: typeof offset === "number" ? ((sample.imu_yaw_deg! + offset) % 360 + 360) % 360 : null,
+                heading_at: sample.heading_at!, component_status: {...device.component_status,
+                  imu: "ready", imu_yaw_deg: sample.imu_yaw_deg!, imu_pitch_deg: sample.imu_pitch_deg ?? 0,
+                  imu_roll_deg: sample.imu_roll_deg ?? 0, imu_received_at: sample.heading_at!, heading_transport: "websocket"}};
+            })} : current);
             return;
           }
           if (message.type === "location" && message.data?.worker && message.data.location) {

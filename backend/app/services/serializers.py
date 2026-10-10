@@ -1,6 +1,8 @@
 from datetime import datetime
 import json
+import math
 from typing import Any
+from .orientation_service import live_status
 
 
 def parse_json(value: str | None, fallback: Any) -> Any:
@@ -15,6 +17,13 @@ def iso(value: datetime | None) -> str | None:
 
 
 def device_to_dict(device) -> dict:
+    status = live_status(device.device_id, parse_json(device.component_status_json, {}))
+    calibration = status.get("heading_calibration") or {}
+    yaw = status.get("imu_yaw_deg")
+    offset = calibration.get("offset_deg")
+    heading = ((yaw + offset) % 360 if isinstance(yaw, (int, float))
+               and isinstance(offset, (int, float)) and math.isfinite(yaw + offset)
+               and status.get("imu") == "ready" else None)
     return {
         "device_id": device.device_id,
         "device_type": device.device_type,
@@ -28,7 +37,10 @@ def device_to_dict(device) -> dict:
         "battery": device.battery,
         "firmware_version": device.firmware_version,
         "online": device.online,
-        "component_status": parse_json(device.component_status_json, {}),
+        "component_status": status,
+        "heading_deg": heading,
+        "heading_at": status.get("imu_received_at"),
+        "heading_calibrated_at": calibration.get("calibrated_at"),
         "last_error": device.last_error,
         "last_seen": iso(device.last_seen),
         "last_camera_at": iso(device.last_camera_at),
@@ -60,5 +72,4 @@ def worker_to_dict(worker) -> dict:
         "emergency": worker.emergency,
         "updated_at": iso(worker.updated_at),
     }
-
 

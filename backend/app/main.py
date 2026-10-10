@@ -1,11 +1,15 @@
 from contextlib import asynccontextmanager
+import json
+from time import monotonic
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .config import BASE_DIR, settings
-from .database import init_database
+from .database import init_database, SessionLocal
+from .models.entities import Device
+from .services.orientation_service import record_orientation
 from .routers import ALL_ROUTERS
 from .routers.camera import start_camera_processor, stop_camera_processor
 from .websocket import call_manager, manager
@@ -58,10 +62,31 @@ async def dashboard_socket(websocket: WebSocket):
 @app.websocket("/ws/device/{device_id}")
 async def device_socket(websocket: WebSocket, device_id: str):
     await manager.connect_device(device_id, websocket)
+    known_device = False
+    checked_at = -10.0
     try:
         while True:
-            await websocket.receive_text()
+            text = await websocket.receive_text()
+            if len(text) > 512:
+                continue
+            try:
+                message = json.loads(text)
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(message, dict) or message.get("type") != "orientation":
+                continue
+            if not known_device and monotonic() - checked_at >= 5:
+                checked_at = monotonic()
+                with SessionLocal() as db:
+                    device = db.get(Device, device_id)
+                    known_device = bool(device and device.device_type == "assistant_device")
+            if known_device:
+                sample = record_orientation(device_id, message)
+                if sample:
+                    await manager.broadcast("orientation", sample)
     except WebSocketDisconnect:
+        pass
+    finally:
         manager.disconnect(websocket)
 @app.post("/api/calls/{device_id}/ticket")
 def issue_call_ticket(device_id: str, request: Request):

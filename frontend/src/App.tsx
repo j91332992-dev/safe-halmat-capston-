@@ -444,6 +444,7 @@ function App() {
               obstacles={data.obstacles}
               zones={data.zones}
               workers={data.workers}
+              devices={data.devices}
               history={locationHistory[worker.worker_id] ?? []}
               lastLocationAt={data.devices.find(device => device.worker_id === worker.worker_id && device.device_type === "position_device")?.last_uwb_at ?? null}
               selectedId={worker.worker_id}

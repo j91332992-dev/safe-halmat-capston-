@@ -9,7 +9,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 
-typedef struct { char kind[32]; char id[64]; char url[192]; int frequency; int duration; int repeats; } command_t;
+typedef struct { char kind[32]; char id[64]; char url[192]; int frequency; int duration; int repeats; int send_timeout_ms; } command_t;
 static const char *TAG = "hanmir_command";
 static QueueHandle_t commands;
 static esp_websocket_client_handle_t client;
@@ -32,6 +32,8 @@ static void command_event(void *arg, esp_event_base_t base, int32_t id, void *ev
     cJSON *frequency = cJSON_GetObjectItem(payload, "frequency");
     cJSON *duration = cJSON_GetObjectItem(payload, "duration");
     cJSON *repeats = cJSON_GetObjectItem(payload, "repeats");
+    cJSON *timeout = cJSON_GetObjectItem(payload, "send_timeout_ms");
+    if (cJSON_IsNumber(timeout)) command.send_timeout_ms = timeout->valueint;
     if (cJSON_IsString(url)) strlcpy(command.url, url->valuestring, sizeof(command.url));
     if (cJSON_IsNumber(frequency)) command.frequency = frequency->valueint;
     if (cJSON_IsNumber(duration)) command.duration = duration->valueint;
@@ -58,11 +60,35 @@ static void command_task(void *arg)
                 ok &= hanmir_speaker_tone(1400, 220);
                 vTaskDelay(pdMS_TO_TICKS(100));
             }
+        } else if (!strcmp(cmd.kind, "set_camera_timeout")) {
+            esp_err_t err = hanmir_camera_set_send_timeout_ms(cmd.send_timeout_ms);
+            ESP_LOGI(TAG, "set_camera_timeout result=%s", esp_err_to_name(err));
+            continue;
         } else if (!strcmp(cmd.kind, "request_status")) { continue; }
         else {
             ESP_LOGW(TAG, "command %s needs P4 hardware integration", cmd.kind);
         }
         if (cmd.id[0]) hanmir_report_speaker(cmd.id, ok);
+    }
+}
+
+// Share the existing command socket; keep only the latest sensor value.
+static void orientation_task(void *arg)
+{
+    char packet[192];
+    for (;;) {
+        float yaw, pitch, roll;
+        if (hanmir_network_online() && esp_websocket_client_is_connected(client) &&
+            hanmir_imu_orientation(&yaw, &pitch, &roll)) {
+            int length = snprintf(packet, sizeof(packet),
+                "{\"type\":\"orientation\",\"yaw_deg\":%.3f,\"pitch_deg\":%.3f,\"roll_deg\":%.3f}",
+                yaw, pitch, roll);
+            if (length > 0 && length < sizeof(packet)) {
+                // Short timeout: do not build a backlog when Wi-Fi is busy.
+                esp_websocket_client_send_text(client, packet, length, pdMS_TO_TICKS(30));
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -83,5 +109,6 @@ esp_err_t hanmir_command_start(void)
     esp_websocket_register_events(client, WEBSOCKET_EVENT_DATA, command_event, NULL);
     esp_err_t err = esp_websocket_client_start(client);
     if (err != ESP_OK) return err;
-    return xTaskCreate(command_task, "helmet_command", 6144, NULL, 4, NULL) == pdPASS ? ESP_OK : ESP_ERR_NO_MEM;
+    if (xTaskCreate(command_task, "helmet_command", 6144, NULL, 4, NULL) != pdPASS) return ESP_ERR_NO_MEM;
+    return xTaskCreate(orientation_task, "helmet_heading", 4096, NULL, 3, NULL) == pdPASS ? ESP_OK : ESP_ERR_NO_MEM;
 }

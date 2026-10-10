@@ -28,7 +28,10 @@ export interface Device {
   rssi: number | null;
   battery: number | null;
   online: boolean;
-  component_status: Record<string, string>;
+  heading_deg?: number | null;
+  heading_at?: string | null;
+  heading_calibrated_at?: string | null;
+  component_status: Record<string, string | number | boolean>;
   last_error: string | null;
   last_seen: string;
   last_camera_at: string | null;
@@ -202,6 +205,4 @@ export interface CameraLatest {
     };
   };
 }
-
-
 

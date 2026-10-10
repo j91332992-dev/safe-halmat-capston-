@@ -90,6 +90,12 @@ void hanmir_api_task(void *arg)
         cJSON_AddStringToObject(components, "camera", hanmir_camera_source_ready() ? "capturing" : "unavailable");
         cJSON_AddStringToObject(components, "battery", battery_ready ? "ready" : "unavailable");
         cJSON_AddStringToObject(components, "imu", hanmir_imu_ready() ? "ready" : "unverified");
+        float imu_yaw = 0, imu_pitch = 0, imu_roll = 0;
+        if (hanmir_imu_orientation(&imu_yaw, &imu_pitch, &imu_roll)) {
+            cJSON_AddNumberToObject(components, "imu_yaw_deg", imu_yaw);
+            cJSON_AddNumberToObject(components, "imu_pitch_deg", imu_pitch);
+            cJSON_AddNumberToObject(components, "imu_roll_deg", imu_roll);
+        }
         cJSON_AddStringToObject(components, "speaker", hanmir_speaker_ready() ? "initialized" : "unavailable");
         cJSON_AddStringToObject(components, "video_transport", hanmir_camera_connected() ? "connected" : "disconnected");
 #if CONFIG_HANMIR_ENABLE_VOICE
@@ -99,6 +105,8 @@ void hanmir_api_task(void *arg)
         cJSON_AddStringToObject(components, "mic", "disabled");
 #endif
         cJSON_AddNumberToObject(components, "camera_dropped", hanmir_camera_dropped());
+        cJSON_AddNumberToObject(components, "camera_send_timeout_ms", hanmir_camera_send_timeout_ms());
+        cJSON_AddNumberToObject(components, "camera_ws_buffer_bytes", CONFIG_HANMIR_CAMERA_WS_BUFFER_BYTES);
         if (!post_json("/api/devices/heartbeat", body)) registered = false;
         cJSON_Delete(body);
         vTaskDelay(pdMS_TO_TICKS(5000));

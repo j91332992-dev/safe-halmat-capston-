@@ -1,4 +1,4 @@
-import type {Anchor, CameraLatest, EvacuationSnapshot, FireZone, LayoutDraft, LayoutVersion, LocationPoint, Obstacle, Snapshot, VoiceResponse, Worker, Zone} from "../types";
+import type {Anchor, Device, CameraLatest, EvacuationSnapshot, FireZone, LayoutDraft, LayoutVersion, LocationPoint, Obstacle, Snapshot, VoiceResponse, Worker, Zone} from "../types";
 import {getServerBaseUrl} from "./config";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -75,6 +75,8 @@ export const api = {
     }),
   speakerTest: (deviceId: string) =>
     request<{ok: boolean}>(`/api/diagnostics/${encodeURIComponent(deviceId)}/speaker-test`, {method: "POST"}),
+  calibrateHeading: (deviceId: string) =>
+    request<Device>(`/api/devices/${encodeURIComponent(deviceId)}/heading-calibration`, {method: "POST", body: JSON.stringify({anchor_ids: ["anchor-001", "anchor-004"]})}),
   sendTextCommand: (text: string, workerId = "worker-001", deviceId = "helmet-001-av") =>
     request<VoiceResponse>("/api/audio/command", {
       method: "POST",
@@ -82,6 +84,7 @@ export const api = {
     }),
   latestCamera: (deviceId: string) => request<CameraLatest>(`/api/camera/${encodeURIComponent(deviceId)}/latest`),
   liveCamera: (deviceId: string) => request<{device_id: string; received: boolean; frame_id?: number; age_ms?: number}>(`/api/camera/${encodeURIComponent(deviceId)}/live`),
+  liveCameraStreamUrl: (deviceId: string) => `${getServerBaseUrl()}/api/camera/${encodeURIComponent(deviceId)}/live/mjpeg`,
   liveCameraImageUrl: (deviceId: string, version: string | number = Date.now()) =>
     `${getServerBaseUrl()}/api/camera/${encodeURIComponent(deviceId)}/live/image?v=${encodeURIComponent(String(version))}`,
   cameraImageUrl: (deviceId: string, version: string | number = Date.now()) =>
@@ -90,4 +93,3 @@ export const api = {
   acknowledge: (eventId: string) => request(`/api/events/${eventId}/acknowledge`, {method: "POST"}),
   resolve: (eventId: string) => request(`/api/events/${eventId}/resolve`, {method: "POST"})
 };
-

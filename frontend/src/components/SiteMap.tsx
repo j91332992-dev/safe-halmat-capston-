@@ -1,5 +1,6 @@
-import {useEffect, useMemo, useState} from "react";
-import type {Anchor, EvacuationRoute, FireZone, LocationPoint, Obstacle, Worker, Zone} from "../types";
+import {useEffect, useMemo, useRef, useState} from "react";
+import type {Anchor, Device, EvacuationRoute, FireZone, LocationPoint, Obstacle, Worker, Zone} from "../types";
+import {api} from "../services/api";
 import {AnchorSymbol} from "./AnchorSymbol";
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
   obstacles: Obstacle[];
   zones: Zone[];
   workers: Worker[];
+  devices: Device[];
   history: LocationPoint[];
   lastLocationAt: string | null;
   selectedId?: string;
@@ -31,17 +33,57 @@ function timestamp(value: string | null) {
   return new Date(normalized).getTime();
 }
 
-export function SiteMap({width, height, anchors, obstacles, zones, workers, history, lastLocationAt, selectedId, evacuationRoute, fireZone, onSelect}: Props) {
+function HeadingArrow({angle, label}: {angle: number; label: string}) {
+  const [display, setDisplay] = useState(angle);
+  const current = useRef(angle);
+  useEffect(() => {
+    const start = current.current;
+    const delta = (((angle - start + 180) % 360 + 360) % 360) - 180;
+    const began = performance.now();
+    let frame = 0;
+    const animate = (now: number) => {
+      const progress = Math.min(1, (now - began) / 80);
+      current.current = start + delta * progress;
+      setDisplay(current.current);
+      if (progress < 1) frame = requestAnimationFrame(animate);
+    };
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [angle]);
+  return <g transform={`rotate(${display})`} className="worker-heading">
+    <title>{label}</title>
+    <path d="M 0 0 L 82 -30 A 87 87 0 0 1 82 30 Z" fill="#38bdf8" opacity=".18" />
+    <path d="M 28 0 L 68 0 M 55 -12 L 68 0 L 55 12" fill="none" stroke="#0284c7" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+  </g>;
+}
+
+export function SiteMap({width, height, anchors, obstacles, zones, workers, devices, history, lastLocationAt, selectedId, evacuationRoute, fireZone, onSelect}: Props) {
   const scaleX = (x: number) => 50 + (x / width) * 900;
   const scaleY = (y: number) => 560 - (y / height) * 520;
   const [showTrail, setShowTrail] = useState(true);
   const [trailWindow, setTrailWindow] = useState<"60" | "300" | "all">("300");
   const [now, setNow] = useState(Date.now());
+  const [calibrating, setCalibrating] = useState(false);
+  const [calibrationMessage, setCalibrationMessage] = useState("");
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
   const selectedWorker = workers.find(worker => worker.worker_id === selectedId) ?? workers[0];
+  const headingDevice = (worker: Worker) => devices.find(device => device.worker_id === worker.worker_id && device.device_type === "assistant_device");
+  const freshHeading = (device?: Device) => device?.online && device.heading_deg != null && Number.isFinite(device.heading_deg)
+    && timestamp(device.heading_at ?? null) > 0 && now - timestamp(device.heading_at ?? null) < (device.component_status?.heading_transport === "websocket" ? 3000 : 15000);
+  const selectedDevice = selectedWorker ? headingDevice(selectedWorker) : undefined;
+  const calibrate = async () => {
+    if (!selectedDevice) return;
+    setCalibrating(true);
+    try {
+      await api.calibrateHeading(selectedDevice.device_id);
+      setCalibrationMessage("앵커 1·4 벽면을 바라보는 방향으로 보정했습니다.");
+    } catch (error) {
+      setCalibrationMessage(error instanceof Error ? error.message : "방향 보정 실패");
+    } finally { setCalibrating(false); }
+  };
   const receivedAt = timestamp(lastLocationAt);
   const ageMs = receivedAt ? Math.max(0, now - receivedAt) : Number.POSITIVE_INFINITY;
   const offline = ageMs > 20000;
@@ -77,6 +119,15 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, hist
         </div>
         <span className={"map-reception " + (offline ? "offline" : "live")}><i /> {offline ? "수신 끊김" : "실시간"} · {ageLabel}</span>
         <strong>{width}m × {height}m</strong>
+      </div>
+      <div className="map-heading-panel" role="status">
+        <strong>바라보는 방향: {freshHeading(selectedDevice)
+          ? `${["오른쪽", "오른쪽 위", "위쪽", "왼쪽 위", "왼쪽", "왼쪽 아래", "아래쪽", "오른쪽 아래"][Math.round(selectedDevice!.heading_deg! / 45) % 8]} · ${selectedDevice!.heading_deg!.toFixed(0)}°`
+          : "확인 불가"}</strong>
+        <span>지도 기준 · 파란 화살표는 시선 방향</span>
+        <button disabled={calibrating || !selectedDevice?.online || selectedDevice.component_status?.imu !== "ready"}
+          onClick={() => void calibrate()}>{calibrating ? "보정 중…" : "앵커 1·4 벽을 정면으로 보고 보정"}</button>
+        {calibrationMessage && <span>{calibrationMessage}</span>}
       </div>
       {evacuationRoute && (
         <div className={"map-alert-strip evacuation " + (evacuationRoute.mode === "fire_confirmed" ? "avoidance" : "official")} role="alert">
@@ -150,6 +201,11 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, hist
         {workers.map(worker => {
           const color = riskColor[worker.risk_level] ?? "#37d49f";
           const selected = selectedId === worker.worker_id;
+          const device = headingDevice(worker);
+          const hasHeading = freshHeading(device);
+          const angle = (device?.heading_deg ?? 0) * Math.PI / 180;
+          // Account for the map's unequal X/Y scale and inverted screen Y.
+          const screenAngle = Math.atan2(-Math.sin(angle) * 520 / height, Math.cos(angle) * 900 / width) * 180 / Math.PI;
           return (
             <g
               key={worker.worker_id}
@@ -161,6 +217,7 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, hist
               onKeyDown={event => event.key === "Enter" && onSelect(worker)}
             >
               <circle r={38 + (1 - worker.confidence) * 25} fill="none" stroke={color} opacity=".16" strokeWidth="12" />
+              {hasHeading && <HeadingArrow angle={screenAngle} label={`${worker.worker_name} 바라보는 방향 ${device!.heading_deg!.toFixed(0)}도`} />}
               <circle r="25" fill={color} filter="url(#glow)" />
               <path d="M-8-4 A8 8 0 1 1 8-4 M-13 15 C-11 4 11 4 13 15" fill="none" stroke="#06101a" strokeWidth="4" strokeLinecap="round" />
               {worker.emergency && <g className="worker-sos-badge" transform="translate(-28,-62)"><rect x="0" y="0" width="56" height="24" rx="12" /><text x="28" y="16" textAnchor="middle">SOS</text></g>}
@@ -176,4 +233,3 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, hist
     </div>
   );
 }
-

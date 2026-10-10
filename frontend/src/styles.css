@@ -1327,3 +1327,9 @@ html, body {
   .mobile-reconnected-notice button { width: 25px; height: 25px; border: 0; border-radius: 7px; background: rgba(255,255,255,.08); color: #c5f8e9; font-size: 18px; line-height: 1; }
   @keyframes connectionSignalPulse { 50% { opacity: .35; transform: scale(.72); } }
 }
+.map-heading-panel { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 18px; background: rgba(56, 189, 248, .08); border-bottom: 1px solid rgba(56, 189, 248, .2); }
+.map-heading-panel strong { color: #0284c7; }
+.map-heading-panel span { font-size: 12px; }
+.map-heading-panel button { padding: 8px 12px; border-radius: 8px; border: 1px solid #0284c7; cursor: pointer; }
+.map-heading-panel button:disabled { opacity: .5; cursor: default; }
+.worker-heading { pointer-events: none; }

@@ -5,6 +5,9 @@
 #include "esp_heap_caps.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
+#include "esp_timer.h"
+#include "nvs.h"
+#include <stdatomic.h>
 #include "esp_websocket_client.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -27,6 +30,25 @@ static QueueHandle_t latest_frame;
 static esp_websocket_client_handle_t client;
 static uint64_t next_id;
 static uint32_t dropped;
+static atomic_int send_timeout_ms = CONFIG_HANMIR_CAMERA_SEND_TIMEOUT_MS;
+
+int hanmir_camera_send_timeout_ms(void) { return atomic_load(&send_timeout_ms); }
+
+esp_err_t hanmir_camera_set_send_timeout_ms(int value)
+{
+    if (value < 100 || value > 5000) return ESP_ERR_INVALID_ARG;
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open("camera_tx", NVS_READWRITE, &handle);
+    if (err != ESP_OK) return err;
+    err = nvs_set_i32(handle, "timeout_ms", value);
+    if (err == ESP_OK) err = nvs_commit(handle);
+    nvs_close(handle);
+    if (err == ESP_OK) {
+        atomic_store(&send_timeout_ms, value);
+        ESP_LOGI(TAG, "Camera send timeout saved=%d ms", value);
+    }
+    return err;
+}
 
 static bool write_all(esp_http_client_handle_t http, const uint8_t *data, size_t length)
 {
@@ -103,10 +125,21 @@ static void put_u64_be(uint8_t *target, uint64_t value)
 
 static void sender_task(void *arg)
 {
+    unsigned attempts = 0, failures = 0;
+    uint64_t send_us = 0, jpeg_bytes = 0;
+    TickType_t last_restart = xTaskGetTickCount();
     camera_frame_t frame;
     for (;;) {
         if (!hanmir_network_online() ||
             (!CONFIG_HANMIR_CAMERA_HTTP_BASELINE && (!client || !esp_websocket_client_is_connected(client)))) {
+            if (!CONFIG_HANMIR_CAMERA_HTTP_BASELINE && client && hanmir_network_online()
+                && xTaskGetTickCount() - last_restart > pdMS_TO_TICKS(10000)) {
+                ESP_LOGW(TAG, "Recovering disconnected camera WebSocket");
+                esp_websocket_client_stop(client);
+                esp_err_t err = esp_websocket_client_start(client);
+                ESP_LOGI(TAG, "Camera restart result=%s", esp_err_to_name(err));
+                last_restart = xTaskGetTickCount();
+            }
             vTaskDelay(pdMS_TO_TICKS(200));
             continue;
         }
@@ -125,11 +158,29 @@ static void sender_task(void *arg)
         packet[14] = frame.height >> 8;
         packet[15] = frame.height & 0xff;
         memcpy(packet + 16, frame.jpeg, frame.length);
+        int64_t send_start = esp_timer_get_time();
         int sent = esp_websocket_client_send_bin(client, (const char *)packet, frame.length + 16,
-                                                  pdMS_TO_TICKS(600));
+                                                  pdMS_TO_TICKS(hanmir_camera_send_timeout_ms()));
+        send_us += esp_timer_get_time() - send_start;
+        jpeg_bytes += frame.length;
+        attempts++;
         if (sent != (int)(frame.length + 16)) {
+            failures++;
             dropped++;
             ESP_LOGW(TAG, "send failed frame=%llu bytes=%d", (unsigned long long)frame.id, sent);
+            // A partial fragmented JPEG cannot be followed by another frame on
+            // the same connection. Reset it from this sender task, not a callback.
+            esp_websocket_client_stop(client);
+            esp_err_t err = esp_websocket_client_start(client);
+            ESP_LOGI(TAG, "Camera restart after send failure=%s", esp_err_to_name(err));
+            last_restart = xTaskGetTickCount();
+        }
+        if (attempts == 20) {
+            ESP_LOGI(TAG, "TX sample attempts=%u failures=%u avg_send_ms=%llu avg_jpeg_bytes=%llu",
+                     attempts, failures, (unsigned long long)(send_us / attempts / 1000),
+                     (unsigned long long)(jpeg_bytes / attempts));
+            attempts = failures = 0;
+            send_us = jpeg_bytes = 0;
         }
         free(packet);
         free(frame.jpeg);
@@ -138,6 +189,15 @@ static void sender_task(void *arg)
 
 esp_err_t hanmir_camera_transport_start(void)
 {
+    nvs_handle_t handle;
+    if (nvs_open("camera_tx", NVS_READONLY, &handle) == ESP_OK) {
+        int32_t value;
+        if (nvs_get_i32(handle, "timeout_ms", &value) == ESP_OK && value >= 100 && value <= 5000)
+            atomic_store(&send_timeout_ms, value);
+        nvs_close(handle);
+    }
+    ESP_LOGI(TAG, "WebSocket buffer=%d bytes send_timeout=%d ms",
+             CONFIG_HANMIR_CAMERA_WS_BUFFER_BYTES, hanmir_camera_send_timeout_ms());
     latest_frame = xQueueCreate(1, sizeof(camera_frame_t));
     if (!latest_frame) return ESP_ERR_NO_MEM;
     if (!CONFIG_HANMIR_SERVER_HOST[0] ||
@@ -155,7 +215,8 @@ esp_err_t hanmir_camera_transport_start(void)
              CONFIG_HANMIR_WORKER_ID, CONFIG_HANMIR_HELMET_ID);
     snprintf(headers, sizeof(headers), "X-Hanmir-Camera-Token: %s\r\n", CONFIG_HANMIR_CAMERA_TOKEN);
     esp_websocket_client_config_t config = {.uri = uri, .reconnect_timeout_ms = 2000,
-                                             .network_timeout_ms = 1500, .headers = headers};
+                                             .network_timeout_ms = 1500, .headers = headers,
+                                             .buffer_size = CONFIG_HANMIR_CAMERA_WS_BUFFER_BYTES};
     client = esp_websocket_client_init(&config);
     if (!client) return ESP_ERR_NO_MEM;
     esp_err_t err = esp_websocket_client_start(client);

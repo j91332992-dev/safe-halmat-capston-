@@ -49,9 +49,15 @@ def update_heartbeat(db: Session, data: Heartbeat) -> Device:
     # A device without a battery measurement circuit sends null. Preserve that
     # state, while storing a real percentage whenever the helmet reports one.
     device.battery = data.battery
-    device.component_status_json = json.dumps(data.component_status, ensure_ascii=False)
+    previous = json.loads(device.component_status_json or "{}")
+    # Site heading calibration belongs to the server, not the firmware payload.
+    status = dict(data.component_status)
+    if "heading_calibration" in previous:
+        status["heading_calibration"] = previous["heading_calibration"]
+    if status.get("imu") == "ready" and isinstance(status.get("imu_yaw_deg"), (int, float)):
+        status["imu_received_at"] = utcnow().isoformat() + "Z"
+    device.component_status_json = json.dumps(status, ensure_ascii=False)
     device.last_error = data.error
     mark_device_seen(device)
     db.flush()
     return device
-

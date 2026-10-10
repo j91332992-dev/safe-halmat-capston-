@@ -4,6 +4,7 @@ import json
 
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from .config import settings
 from .site_profile import default_anchor_positions
@@ -20,6 +21,10 @@ class Base(DeclarativeBase):
 engine = create_engine(
     settings.database_url,
     connect_args={"check_same_thread": False, "timeout": 30} if settings.database_url.startswith("sqlite") else {},
+    # Sync SQLite sessions used by async routes must not block the event loop
+    # waiting for a pool slot whose dependency cleanup needs that same loop.
+    **({"poolclass": NullPool} if settings.database_url.startswith("sqlite")
+       and ":memory:" not in settings.database_url else {}),
 )
 
 
@@ -164,7 +169,6 @@ def init_database() -> None:
                     active=True,
                 )
             )
-
 
 
 

@@ -16,6 +16,14 @@ menu "HANMIR P4 integration"
         int "Maximum camera encoding FPS"
         range 1 30
         default 10
+    config HANMIR_CAMERA_WS_BUFFER_BYTES
+        int "Camera WebSocket buffer bytes"
+        range 1024 65536
+        default 16384
+    config HANMIR_CAMERA_SEND_TIMEOUT_MS
+        int "Camera frame send timeout milliseconds"
+        range 100 5000
+        default 1500
     config HANMIR_WIFI_SSID
         string "2.4 GHz Wi-Fi SSID"
         default ""
@@ -93,4 +101,7 @@ menu "HANMIR P4 integration"
     config HANMIR_IMU_TX_GPIO
         int "Verified BNO085 sensor RX to P4 TX GPIO (-1 disables)"
         default -1
+    config HANMIR_ENABLE_BNO_SH2
+        bool "Enable BNO085 UART-SHTP orientation driver"
+        default n
 endmenu
