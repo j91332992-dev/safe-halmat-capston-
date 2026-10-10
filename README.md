@@ -4,7 +4,7 @@
 
 최신 작업 브랜치는 `integration/p4-mobile-live-heading-20261010`입니다. ESP32-P4 통신·카메라·BNO 방향 수정, AI/STT/TTS 서버, UWB 수동 지도, 최신 관리자/작업자 앱 및 PC 웹 디자인을 함께 반영했습니다. 최신 웹 원본은 `codex/integrated-worker-app-v1.8-web-ui-20261010` (`51d555c`)입니다.
 
-Android 최신 빌드는 **v1.8 / build 12**입니다. 기존 build10과 서명이 달라 기존 앱을 삭제하고 설치해야 합니다. build11을 이미 설치했다면 같은 CI 서명인지 확인 후 업데이트합니다. iOS 프로젝트 자산도 build12로 동기화했지만 새 서명 IPA는 아직 제작하지 않았습니다. 기존 IPA와 `release-packages`의 build10 ZIP에는 최신 P4 통합 변경 전체가 들어 있지 않습니다. 이어받을 때는 이 브랜치 소스를 사용하세요.
+Android 최신 빌드는 **[v1.8 / build 12](releases/HanmirSafety-p4-mobile-v1.8-build12.apk)**입니다. 기존 build10·build11과 서명이 달라 기존 앱을 삭제하고 설치해야 합니다. iOS 프로젝트 자산도 build12로 동기화했지만 새 서명 IPA는 아직 제작하지 않았습니다. 기존 IPA와 `release-packages`의 build10 ZIP에는 최신 P4 통합 변경 전체가 들어 있지 않습니다. 이어받을 때는 이 브랜치 소스를 사용하세요.
 
 [전체 통합·설치·남은 확인사항](docs/MOBILE_P4_INTEGRATION_2026-10-10.md) · [동시 부하 진단](docs/HANMIR_INTEGRATED_DIAGNOSTICS_2026-10-10.md) · [실시간 방향](docs/MAP_LIVE_HEADING_2026-10-10.md) · [UWB 수동 지도](docs/UWB_MANUAL_XY_ROLLBACK_2026-10-10.md)
 
