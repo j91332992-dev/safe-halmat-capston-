@@ -8,10 +8,12 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 
 static const char *TAG = "hanmir_speaker";
 static i2s_chan_handle_t speaker;
 static bool speaker_enabled;
+static SemaphoreHandle_t playback_lock;
 
 esp_err_t hanmir_speaker_start(void)
 {
@@ -36,6 +38,8 @@ esp_err_t hanmir_speaker_start(void)
     ESP_RETURN_ON_ERROR(i2s_channel_init_std_mode(speaker, &std), TAG, "I2S TX std");
     // Stay silent at boot. Enable TX only while handling a playback command.
     speaker_enabled = true;
+    playback_lock = xSemaphoreCreateMutex();
+    if (!playback_lock) return ESP_ERR_NO_MEM;
     return ESP_OK;
 }
 
@@ -43,7 +47,8 @@ bool hanmir_speaker_ready(void) { return speaker_enabled; }
 
 static bool begin_playback(void)
 {
-    if (i2s_channel_enable(speaker) != ESP_OK) return false;
+    if (xSemaphoreTake(playback_lock, pdMS_TO_TICKS(200)) != pdTRUE) return false;
+    if (i2s_channel_enable(speaker) != ESP_OK) { xSemaphoreGive(playback_lock); return false; }
     hanmir_voice_set_playback(true);
     return true;
 }
@@ -54,7 +59,16 @@ static void end_playback(void)
     vTaskDelay(pdMS_TO_TICKS(120));
     i2s_channel_disable(speaker);
     hanmir_voice_set_playback(false);
+    xSemaphoreGive(playback_lock);
 }
+
+bool hanmir_speaker_call_begin(void) { return speaker_enabled && begin_playback(); }
+bool hanmir_speaker_call_write(const uint8_t *pcm, size_t bytes)
+{
+    size_t written = 0;
+    return i2s_channel_write(speaker, pcm, bytes, &written, 100) == ESP_OK && written == bytes;
+}
+void hanmir_speaker_call_end(void) { end_playback(); }
 
 bool hanmir_speaker_tone(int frequency, int duration_ms)
 {

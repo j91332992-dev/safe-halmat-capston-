@@ -33,6 +33,7 @@ class CallConnectionManager:
         self.tickets: dict[str, tuple[str, float]] = {}
         self.pending_requests: dict[str, PendingCallRequest] = {}
         self.active_request_events: dict[str, str] = {}
+        self.traffic: dict[str, dict[str, int]] = {}
 
     async def begin_call_request(self, device_id: str, worker_id: str, event_id: str) -> None:
         if device_id in self.pending_requests:
@@ -178,6 +179,7 @@ class CallConnectionManager:
             await websocket.close(code=4409)
             return False
         self.operators[device_id].append(websocket)
+        self.traffic[device_id] = {"helmet_packets": 0, "helmet_bytes": 0, "operator_packets": 0, "operator_bytes": 0}
         if self.devices.get(device_id):
             await self.cancel_call_request(device_id, reason="answered")
             await self._send_text(self.devices[device_id], '{"type":"call_start"}')
@@ -198,9 +200,21 @@ class CallConnectionManager:
             await self._resolve_active_request(device_id)
 
     async def relay_device_bytes(self, device_id: str, payload: bytes) -> None:
+        if not payload or len(payload) > 4096 or len(payload) % 2:
+            return
+        stats = self.traffic.get(device_id)
+        if stats is not None:
+            stats["helmet_packets"] += 1
+            stats["helmet_bytes"] += len(payload)
         await self._send_bytes(self.operators.get(device_id, []), payload)
 
     async def relay_operator_bytes(self, device_id: str, payload: bytes) -> None:
+        if not payload or len(payload) > 4096 or len(payload) % 2:
+            return
+        stats = self.traffic.get(device_id)
+        if stats is not None:
+            stats["operator_packets"] += 1
+            stats["operator_bytes"] += len(payload)
         await self._send_bytes(self.devices.get(device_id, []), payload)
 
     async def end_call(self, device_id: str) -> None:

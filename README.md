@@ -4,9 +4,11 @@
 
 최신 작업 브랜치는 `integration/p4-mobile-live-heading-20261010`입니다. ESP32-P4 통신·카메라·BNO 방향 수정, AI/STT/TTS 서버, UWB 수동 지도, 최신 관리자/작업자 앱 및 PC 웹 디자인을 함께 반영했습니다. 최신 웹 원본은 `codex/integrated-worker-app-v1.8-web-ui-20261010` (`51d555c`)입니다.
 
-Android 최신 빌드는 **[v1.8 / build 12](releases/HanmirSafety-p4-mobile-v1.8-build12.apk)**입니다. 기존 build10·build11과 서명이 달라 기존 앱을 삭제하고 설치해야 합니다. iOS 프로젝트 자산도 build12로 동기화했지만 새 서명 IPA는 아직 제작하지 않았습니다. 기존 IPA와 `release-packages`의 build10 ZIP에는 최신 P4 통합 변경 전체가 들어 있지 않습니다. 이어받을 때는 이 브랜치 소스를 사용하세요.
+Android 최신 빌드는 **[v1.8 / build 13](releases/HanmirSafety-p4-mobile-v1.8-build13.apk)**입니다. 통화 서버 주소 및 오류 표시를 수정했습니다. 최종 build12 위에는 업데이트할 수 있으며 기존 build10·build11은 서명이 달라 삭제 후 설치해야 합니다. iOS 프로젝트 자산도 build13으로 동기화했지만 새 서명 IPA는 아직 제작하지 않았습니다. 기존 IPA와 `release-packages`의 build10 ZIP에는 최신 P4 통합 변경 전체가 들어 있지 않습니다. 이어받을 때는 이 브랜치 소스를 사용하세요.
 
 [전체 통합·설치·남은 확인사항](docs/MOBILE_P4_INTEGRATION_2026-10-10.md) · [동시 부하 진단](docs/HANMIR_INTEGRATED_DIAGNOSTICS_2026-10-10.md) · [실시간 방향](docs/MAP_LIVE_HEADING_2026-10-10.md) · [UWB 수동 지도](docs/UWB_MANUAL_XY_ROLLBACK_2026-10-10.md)
+
+[웹·앱 통화 연결 오류 원인 및 P4 수정](docs/P4_CALL_CONNECTION_FIX_2026-10-10.md)
 
 > 모바일 통합판 **v1.8 / build 10**: 관리자·근로자 통합 로그인, 계정별 현장 데이터 분리, 근로자의 누적 작업·휴게시간, 지도·근무 달력·팀 채팅·교육/허가·안전 점검·배터리 경고를 제공합니다. 같은 기능이 반영된 iOS IPA와 Android APK는 [`releases`](releases/)에서 확인할 수 있습니다. [추가 기능 안내](docs/근로자앱_기능확장_2026-10-09.md) · [통합 기록](docs/브랜치_비교_업데이트_2026-10-09.md) · [근로자 앱 실행 안내](docs/근로자앱_실행안내.md)
 

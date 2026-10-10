@@ -123,7 +123,8 @@ static void fetch_task(void *arg)
             vTaskDelay(pdMS_TO_TICKS(20));
             continue;
         }
-        if (playback_active) {
+        if (hanmir_call_active()) hanmir_call_feed(result->data, chunk_samples);
+        if (playback_active || hanmir_call_active()) {
             free(current);
             current = NULL;
             used = 0;
@@ -181,6 +182,7 @@ static void upload_task(void *arg)
     voice_clip_t clip;
     for (;;) {
         if (xQueueReceive(upload_queue, &clip, portMAX_DELAY) != pdTRUE) continue;
+        if (hanmir_call_active()) { free(clip.wav); continue; }
         for (int attempt = 0; attempt < 3; ++attempt) {
             if (hanmir_audio_upload_wav(clip.wav, clip.length)) break;
             ESP_LOGW(TAG, "voice upload retry %d/3", attempt + 1);

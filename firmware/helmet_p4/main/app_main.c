@@ -31,5 +31,6 @@ void app_main(void)
     err = hanmir_voice_start();
     if (err != ESP_OK) ESP_LOGE(TAG, "voice not ready: %s", esp_err_to_name(err));
 #endif
-    ESP_LOGW(TAG, "OV5647 capture, call media, and BNO085 decisions remain gated until board verification");
+    err = hanmir_call_start();
+    if (err != ESP_OK) ESP_LOGE(TAG, "call channel not ready: %s", esp_err_to_name(err));
 }

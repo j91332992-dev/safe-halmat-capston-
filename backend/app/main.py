@@ -151,6 +151,16 @@ def issue_call_ticket(device_id: str, site_id: str = Depends(require_site), db: 
     return {"device_id": device_id, "ticket": call_manager.issue_ticket(device_id), "expires_in": 30}
 
 
+@app.get("/api/calls/{device_id}/status")
+def call_status(device_id: str, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    device = db.get(Device, device_id)
+    if not device or device.site_id != site_id:
+        raise HTTPException(404, "장치를 찾을 수 없습니다.")
+    return {"device_id": device_id, "channel_online": call_manager.device_online(device_id),
+            "operator_connected": bool(call_manager.operators.get(device_id)),
+            "traffic": call_manager.traffic.get(device_id, {})}
+
+
 @app.websocket("/ws/call/device/{device_id}")
 async def call_device_socket(websocket: WebSocket, device_id: str, token: str = ""):
     authorization = websocket.headers.get("authorization", "")
@@ -164,6 +174,8 @@ async def call_device_socket(websocket: WebSocket, device_id: str, token: str = 
             message = await websocket.receive()
             if message["type"] == "websocket.disconnect":
                 break
+            if message.get("text") == '{"type":"call_stop"}':
+                await call_manager.end_call(device_id)
             if message.get("bytes") is not None:
                 await call_manager.relay_device_bytes(device_id, message["bytes"])
     except WebSocketDisconnect:

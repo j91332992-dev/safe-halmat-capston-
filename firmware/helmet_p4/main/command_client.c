@@ -54,6 +54,7 @@ static void command_task(void *arg)
         else if (!strcmp(cmd.kind, "play_ack")) ok = hanmir_speaker_tone(1200, 180);
         else if (!strcmp(cmd.kind, "play_audio")) ok = hanmir_speaker_play_url(cmd.url);
         else if (!strcmp(cmd.kind, "play_alert")) {
+            hanmir_call_interrupt();
             ok = true;
             int n = cmd.repeats > 5 ? 5 : cmd.repeats;
             for (int i = 0; i < n; ++i) {

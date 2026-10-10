@@ -61,6 +61,9 @@ menu "HANMIR P4 integration"
     config HANMIR_ENABLE_VOICE
         bool "Enable INMP441 AFE and server voice clips"
         default n
+    config HANMIR_CALL_DEVICE_TOKEN
+        string "Call device token: match backend CALL_DEVICE_TOKEN (local secret)"
+        default ""
     config HANMIR_SPK_BCLK_GPIO
         int "Verified MAX98357A BCLK GPIO (-1 disables)"
         default -1
