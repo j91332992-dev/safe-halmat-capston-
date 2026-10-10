@@ -126,11 +126,30 @@ static void playback_task(void *arg)
 {
     bool playing = false;
     call_frame_t frame;
+    size_t bytes_received = 0;
+    int peak = 0;
+    TickType_t last_log = 0;
     for (;;) {
-        if (active && !playing) playing = hanmir_speaker_call_begin();
+        if (active && !playing) {
+            playing = hanmir_speaker_call_begin();
+            if (playing) { bytes_received = 0; peak = 0; last_log = xTaskGetTickCount(); }
+        }
         if (!active && playing) { hanmir_speaker_call_end(); playing = false; }
         if (xQueueReceive(receive, &frame, pdMS_TO_TICKS(20)) == pdTRUE && active && playing) {
-            if (!hanmir_speaker_call_write(frame.data, frame.bytes)) active = false;
+            bytes_received += frame.bytes;
+            for (size_t i = 0; i + 1 < frame.bytes; i += 2) {
+                int value = (int16_t)(frame.data[i] | (frame.data[i + 1] << 8));
+                if (value < 0) value = -value;
+                if (value > peak) peak = value;
+            }
+            if (!hanmir_speaker_call_write(frame.data, frame.bytes)) {
+                ESP_LOGE(TAG, "call speaker I2S write failed");
+                active = false;
+            }
+            if (xTaskGetTickCount() - last_log >= pdMS_TO_TICKS(2000)) {
+                ESP_LOGI(TAG, "call RX PCM bytes=%u peak=%d/32768 speaker_write=ok", (unsigned)bytes_received, peak);
+                bytes_received = 0; peak = 0; last_log = xTaskGetTickCount();
+            }
         }
     }
 }

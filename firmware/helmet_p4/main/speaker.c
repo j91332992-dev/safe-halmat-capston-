@@ -23,6 +23,10 @@ esp_err_t hanmir_speaker_start(void)
         return ESP_ERR_INVALID_ARG;
     }
     i2s_chan_config_t channel = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_1, I2S_ROLE_MASTER);
+    // Complete 10 ms DMA blocks when receiving 20 ms call packets.
+    // The default 511-frame blocks can be only partly filled by short packets.
+    channel.dma_frame_num = 160;
+    channel.dma_desc_num = 6;
     channel.auto_clear_after_cb = true;
     ESP_RETURN_ON_ERROR(i2s_new_channel(&channel, &speaker, NULL), TAG, "I2S TX channel");
     i2s_std_config_t std = {
