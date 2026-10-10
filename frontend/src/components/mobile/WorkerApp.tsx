@@ -4,6 +4,7 @@ import type {WorkerAppData} from "../../services/api";
 import {WorkCalendar, duration} from "./WorkCalendar";
 import {WorkerMap} from "./WorkerMap";
 import {TeamChat} from "../TeamChat";
+import {SafetyIcon} from "./SafetyIcon";
 import "./worker-app.css";
 
 type Tab = "home" | "map" | "work" | "chat" | "alerts" | "me";
@@ -12,6 +13,10 @@ const tabs: {id: Tab; icon: string; label: string}[] = [
   {id: "work", icon: "◷", label: "내 작업"}, {id: "chat", icon: "☏", label: "팀 채팅"},
   {id: "alerts", icon: "♧", label: "알림"}, {id: "me", icon: "♙", label: "내 정보"}
 ];
+function WorkerMenuIcon({tab}: {tab: Tab}) {
+  if (tab === "chat") return <svg className="safety-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 4h18v13H9l-6 4Z"/><path d="M7 9h10M7 13h6"/></svg>;
+  return <SafetyIcon name={({home: "grid", map: "map", work: "history", alerts: "bell", me: "worker"} as const)[tab]}/>;
+}
 const dateText = (value: string) => new Date(value).toLocaleString("ko-KR", {timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit"});
 const batteryStage = (battery: number | null | undefined) => typeof battery !== "number" ? 0 : battery <= 5 ? 5 : battery <= 10 ? 10 : battery <= 20 ? 20 : 0;
 const batteryMessage = (stage: number) => stage === 5 ? "긴급: 배터리 5% 이하입니다. 즉시 충전하거나 안전모를 교체하세요." : stage === 10 ? "경고: 배터리 10% 이하입니다. 충전을 준비하고 관리자에게 알려주세요." : "주의: 배터리 20% 이하입니다. 안전모를 충전하세요.";
@@ -71,8 +76,12 @@ export function WorkerApp({onLogout}: {onLogout: () => Promise<void>}) {
   const workLabel = state === "working" ? "현재 작업 중" : state === "break" ? "현재 휴게 중" : "작업 전·종료";
   const actions = <div className="worker-actions">{state === "off" ? <button disabled={busy || !data?.eligibility.can_work} onClick={() => {setChecks({helmet: false, vest: false, glove: false}); setChecklist(true);}}>작업 시작</button> : <>{state === "working" ? <button disabled={busy} onClick={() => void workAction("break_start")}>휴게 시작</button> : <button disabled={busy || !data?.eligibility.can_work} onClick={() => void workAction("break_end")}>작업 재개</button>}<button disabled={busy} onClick={() => void workAction("end")}>작업 종료</button></>}</div>;
   const eligibility = data && <section className="worker-card"><h3>교육·작업 허가</h3><strong className={data.eligibility.can_work ? "eligible" : "ineligible"}>{data.eligibility.can_work ? "등록된 조건 충족 · 작업 가능" : "작업 조건 확인 필요"}</strong>{!data.eligibility.items.length && <p>관리자가 등록한 교육·허가 조건이 없습니다.</p>}{data.eligibility.reasons.map(reason => <p className="ineligible" key={reason}>{reason}</p>)}<ul className="worker-list">{data.eligibility.items.map((q, i) => <li key={q.qualification_id ?? i}><span><b>{q.kind === "education" ? "교육" : "작업 허가"} · {q.name}</b><small>{q.required ? "필수" : "선택"} · {q.expires_on ? `유효기간 ${q.expires_on}` : "기한 없음"}</small></span><b className={q.valid ? "eligible" : "ineligible"}>{q.valid ? q.kind === "education" ? "이수 완료" : "승인 완료" : !q.completed ? q.kind === "education" ? "미이수" : "미승인" : "만료"}</b></li>)}</ul><p>이수·승인 정보 변경은 현장 관리자에게 요청하세요.</p></section>;
-  return <div className={`worker-app state-${state} safety-${safetyLevel}`}>
+  return <div className={`worker-app state-${state} safety-${safetyLevel}`} data-tab={tab}>
+    <aside className="worker-sidebar">
     <header className="worker-header"><div className="worker-brand">H</div><div><strong>HANMIR</strong><small>MY SAFETY</small></div><span className="worker-role">근로자</span></header>
+    <nav className="worker-nav" aria-label="근로자 메뉴">{tabs.map(item => <button key={item.id} aria-current={tab === item.id ? "page" : undefined} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}><span><WorkerMenuIcon tab={item.id}/></span>{item.label}</button>)}</nav>
+    </aside>
+    <div className="worker-body">
     {data && <div className={`worker-work-banner state-${state}`} role="status"><b>{emergency ? "⚠ 비상상황 · 즉시 안전 확인" : safetyLevel === "danger" ? "⚠ 위험 · 안전한 곳으로 이동" : workLabel}</b><span>작업시간: {duration(seconds)}{error ? " · 연결 확인 필요" : ""}</span></div>}
     <main className="worker-content">
       {error && <div className="worker-error" role="alert">{error} <button onClick={() => void refresh()}>재시도</button></div>}
@@ -95,7 +104,7 @@ export function WorkerApp({onLogout}: {onLogout: () => Promise<void>}) {
       </>}
     </main>
     <div className="worker-sos"><button onClick={() => void sendSos()} disabled={sosState === "sending"}>SOS <span>긴급 도움 요청</span></button>{sosState !== "idle" && <p role="status">{sosState === "sending" ? "전송 중…" : sosState === "failed" ? "전송 실패 · 관리자에게 전화하거나 다시 시도하세요." : latestSos?.status === "resolved" ? "관리자가 상황을 종료했습니다." : latestSos?.status === "acknowledged" ? "관리자가 확인했습니다." : "서버 접수 완료 · 관리자 확인 대기"}</p>}</div>
-    <nav className="worker-nav" aria-label="근로자 메뉴">{tabs.map(item => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}><span>{item.icon}</span>{item.label}</button>)}</nav>
+    </div>
     {checklist && <div className="worker-modal-backdrop"><section className="worker-checklist" role="dialog" aria-modal="true" aria-labelledby="checklist-title"><h2 id="checklist-title">⚠ 잠깐! 안전장비를 확인하세요</h2><p>작업 시작 전 모두 착용하셨나요?</p>{([['helmet', '안전모 착용·고정 확인'], ['vest', '작업 조끼 착용'], ['glove', '장갑 착용']] as const).map(([key, label], i) => <label key={key}><input autoFocus={i === 0} type="checkbox" checked={checks[key]} onChange={e => setChecks({...checks, [key]: e.target.checked})}/>{label}</label>)}{error && <p role="alert">{error}</p>}<div className="worker-actions"><button disabled={busy || !checks.helmet || !checks.vest || !checks.glove} onClick={() => void workAction("start")}>{busy ? "저장 중" : "확인하고 작업 시작"}</button><button disabled={busy} onClick={() => setChecklist(false)}>취소</button></div></section></div>}
   </div>;
 }

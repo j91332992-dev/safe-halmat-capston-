@@ -1,0 +1,211 @@
+/* Horizon UI light dashboard. Official MIT template tokens and Card/Widget structure. */
+@media (min-width:901px) and (hover:hover) {
+  .app-frame {grid-template-columns:270px minmax(0,1fr);background:#f5f7f5}
+  .sidebar {background:#fff;color:#233b2d;border-right:0;padding:32px 20px 20px;box-shadow:none}
+  .sidebar .brand {padding:10px 8px 30px;border-bottom:1px solid #edf0f7;margin-bottom:22px;gap:12px;justify-content:flex-start}
+  .sidebar .brand-mark {clip-path:none;border-radius:14px;background:#267a47;width:44px;height:44px;flex:0 0 44px;box-shadow:none}
+  .sidebar .brand strong {color:#233b2d;font-size:25px;letter-spacing:-.04em}
+  .sidebar .brand small {color:#607468;font-size:10px;letter-spacing:.12em}
+  .sidebar .nav-caption,.sidebar footer {color:#607468;font-size:12px}
+  .sidebar nav button,.sidebar nav button:not(.active) {color:#607468;font-size:14px;min-height:45px;border-radius:0;justify-content:flex-start;padding:10px 12px;background:transparent;box-shadow:none;font-weight:600}
+  .sidebar nav button i {color:#7482aa;font-size:20px}
+  .sidebar nav button.active {background:#e9f3eb;color:#233b2d;border-radius:10px;box-shadow:inset -4px 0 #267a47;font-weight:800}
+  .sidebar nav button.active i {color:#267a47}
+  .sidebar nav button:hover:not(.active) {background:#f5f7f5;color:#267a47;border-radius:10px}
+  .sidebar .nav-group-toggle {font-size:12px!important;min-height:32px!important;margin-top:12px!important}
+  .sidebar .nav-group-toggle span {color:#607468}
+  .sidebar .nav-group-items {border-color:#edf0f7;margin-left:6px;padding-left:4px}
+  .sidebar .sidebar-system {background:#f5f7f5;border:0;border-radius:20px;padding:18px;margin-top:24px}
+  .sidebar .sidebar-system .status-pill {color:#176943}
+  .sidebar .mode-switch span {color:#607468;font-size:12px}
+  .main-area {padding:16px 28px 32px;background:#f5f7f5;color:#233b2d}
+  .topbar {min-height:90px;margin-bottom:20px;gap:20px;border-bottom:0}
+  .topbar h1 {font-size:32px;letter-spacing:-.05em;color:#233b2d;margin-top:6px}
+  .topbar .eyebrow {font-family:inherit;font-size:12px;letter-spacing:.02em;color:#607468}
+  .top-status {align-items:center;border-radius:99px;background:#fff;padding:12px 15px;box-shadow:0 10px 35px #7090b010;gap:8px}
+  .top-status>div {min-width:80px;padding:0 12px;border-color:#edf0f7}
+  .top-status>div:first-child {border:0}
+  .top-status span {font-family:inherit;font-size:12px;color:#607468}
+  .top-status strong {font-family:inherit;font-size:19px;color:#233b2d}
+  .top-status .critical strong {color:#b42335}
+  .top-status .topbar-control {background:#f5f7f5;color:#267a47;border:0;border-radius:99px;padding:12px 16px;font-size:13px;font-weight:700}
+  .top-status .topbar-control.logout {color:#607468}
+  .desktop-alert-button {background:#f5f7f5;color:#267a47;border:0}
+  .desktop-alert-button.has-alert {background:#fff0f2;color:#b42335}
+  .main-area[data-page=dashboard]>.shared-feature-shortcuts {display:none}
+  .main-area .anchor-status-banner {border-radius:16px;padding:14px 18px}
+  .main-area .anchor-status-banner.unknown {background:#e9eefb;border-color:#d8e0f5;color:#40517a}
+  .main-area .anchor-status-banner.warning {background:#fff4e8;border-color:#eed3b5;color:#944c13}
+  .main-area .anchor-status-banner b {font-size:14px}
+  .main-area .anchor-status-banner span {font-size:12px}
+  .main-area .anchor-status-banner.unknown .anchor-status-chips span.offline {color:#40517a;background:#dae3f5}
+  .control-heading,.control-section-heading {display:flex;align-items:center;justify-content:space-between;gap:18px;margin:26px 0 18px}
+  .control-heading h2,.control-section-heading h2 {font-size:23px;margin:6px 0;color:#233b2d;letter-spacing:-.04em}
+  .control-heading p {font-size:14px;color:#607468;margin:8px 0 0}
+  .control-heading .eyebrow,.control-section-heading .eyebrow {font-family:inherit;color:#607468;font-size:11px;letter-spacing:.06em}
+  .control-live {border:0;background:#fff;border-radius:99px;padding:11px 16px;white-space:nowrap;color:#607468;font-size:13px;font-weight:700}
+  .control-live.is-live {background:#e7f7ed;color:#176943}
+  .control-kpis {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:18px}
+  .horizon-card {position:relative;display:flex;flex-direction:column;border-radius:20px;background:#fff;background-clip:border-box;box-shadow:14px 17px 40px 4px #7090b008}
+  .control-kpi {justify-content:center;gap:14px;min-height:152px;min-width:0;padding:20px 18px;border:1px solid transparent;text-align:left;color:#233b2d;cursor:pointer;transition:box-shadow .15s,border-color .15s}
+  .control-kpi:hover {border-color:#9ebfa6;box-shadow:0 8px 25px #267a4712}
+  .control-kpi:focus-visible,.sidebar button:focus-visible {outline:3px solid #267a47;outline-offset:3px}
+  .horizon-widget-row {display:flex;align-items:center;gap:14px;min-height:76px}
+  .horizon-widget-icon {display:grid;place-items:center;flex:0 0 50px;height:50px;border-radius:50%;background:#f5f7f5;color:#267a47}
+  .horizon-widget-icon svg {width:27px;height:27px}
+  .horizon-widget-content {min-width:0}
+  .control-kpi-label {display:block;font-size:14px;font-weight:500;color:#607468;margin-bottom:7px}
+  .horizon-widget-content strong {display:flex;align-items:baseline;flex-wrap:wrap;gap:6px;font-size:29px;line-height:1.25;letter-spacing:-.04em;color:#233b2d}
+  .horizon-widget-content strong small {font-size:12px;font-weight:600;color:#607468;letter-spacing:0}
+  .control-kpi-footer {display:flex;justify-content:space-between;gap:6px;font-size:12px;color:#607468;line-height:1.5}
+  .control-risk.risk-비상 {border:2px solid #d8374c;background:#fff6f7}
+  .control-risk.risk-비상 strong {color:#b42335}.control-risk.risk-비상 .horizon-widget-icon {background:#ffe3e8;color:#b42335}
+  .control-risk.risk-위험 {border:2px solid #dc7b22;background:#fff9f2}
+  .control-risk.risk-위험 strong {color:#a7480e}.control-risk.risk-위험 .horizon-widget-icon {background:#ffecd8;color:#a7480e}
+  .control-risk.risk-주의,.control-risk.risk-관심 {border-color:#d7a535}
+  .control-risk.risk-정상 strong {color:#176943}.control-risk.risk-정상 .horizon-widget-icon {background:#e7f7ed;color:#176943}
+  .control-chat {background:#267a47;color:#fff}
+  .control-chat .horizon-widget-icon {background:#ffffff20;color:#fff}
+  .control-chat .control-kpi-label,.control-chat .horizon-widget-content strong,.control-chat .control-kpi-footer {color:#fff}
+  .control-chat .horizon-widget-content strong {font-size:25px}
+  .control-worker-picker {display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+  .control-worker-picker button {display:flex;align-items:center;gap:10px;background:#fff;border:0;color:#267a47;border-radius:99px;padding:11px 15px;font-size:13px;cursor:pointer;font-weight:700}
+  .control-worker-picker button.selected {background:#e2eee5;box-shadow:inset 0 0 0 1px #9ebfa6}
+  .dashboard-overview-grid {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:22px;align-items:start}
+  .desktop-dashboard .worker-detail,.desktop-dashboard .events-panel,.shared-operator-controls,.main-area .page-panel {border-radius:20px;background:#fff;border:0;box-shadow:14px 17px 40px 4px #7090b008;padding:24px}
+  .desktop-dashboard .worker-detail {border-top:4px solid #23965e}
+  .desktop-dashboard .worker-detail.worker-risk-비상 {border-top-color:#d8374c}
+  .desktop-dashboard .worker-detail.worker-risk-위험 {border-top-color:#dc7b22}
+  .desktop-dashboard .worker-detail.worker-risk-주의,.desktop-dashboard .worker-detail.worker-risk-관심 {border-top-color:#d7a535}
+  .desktop-dashboard .detail-head h2 {font-size:25px;color:#233b2d}.desktop-dashboard .detail-head p {font-size:12px;color:#607468}
+  .desktop-dashboard .detail-head .eyebrow {font-size:11px;color:#607468}
+  .desktop-dashboard .detail-grid {gap:12px;margin:20px 0;background:transparent}
+  .desktop-dashboard .detail-grid div {background:#f5f7f5;border-radius:12px;padding:14px;min-height:76px}
+  .desktop-dashboard .detail-grid span,.desktop-dashboard .section-title span {font-size:12px;color:#607468}
+  .desktop-dashboard .detail-grid strong {font-size:14px;line-height:1.6;color:#233b2d}
+  .desktop-dashboard .section-title h3 {font-size:15px;color:#233b2d}
+  .desktop-dashboard .desktop-connection-status b {font-size:14px}.desktop-dashboard .desktop-connection-status small {font-size:12px}
+  .desktop-dashboard .desktop-connection-status.is-offline b {color:#b42335}
+  .desktop-dashboard .desktop-connection-status.is-online b {color:#176943}
+  .desktop-dashboard .worker-camera-mini .camera-frame,.desktop-dashboard .worker-camera-mini img {max-height:210px;border-radius:12px}
+  .desktop-dashboard .reason-list,.desktop-dashboard .device-mini {font-size:13px}
+  .desktop-dashboard .events-panel h2 {font-size:23px;color:#233b2d}.desktop-dashboard .events-panel header button {font-size:13px;color:#267a47;background:#f5f7f5;border:0;border-radius:99px;padding:10px 15px}
+  .desktop-dashboard .event-row {grid-template-columns:72px 52px minmax(0,1fr) 90px 74px 44px;gap:10px;padding:17px 0;font-size:12px;color:#233b2d;border-color:#edf0f7}
+  .desktop-dashboard .event-row small {font-size:12px;line-height:1.7;color:#607468}.desktop-dashboard .event-row b {font-size:13px}
+  .desktop-dashboard .event-head {font-size:12px;color:#607468}
+  .shared-operator-controls {margin-top:22px}
+  .shared-operator-controls h2 {font-size:18px;color:#233b2d}
+  @media(max-width:1599px) {
+    .control-kpis {grid-template-columns:repeat(3,minmax(0,1fr))}
+    .control-chat {grid-column:span 2}
+    .control-chat .horizon-widget-row {min-height:60px}
+    .control-kpi {min-height:138px}
+
+  }
+  @media(max-width:1399px) { .dashboard-overview-grid {grid-template-columns:minmax(0,1fr)} }
+  @media(max-width:1200px) {
+    .app-frame {grid-template-columns:235px minmax(0,1fr)}
+    .main-area {padding:12px 20px 26px}
+    .topbar {flex-wrap:wrap;padding:10px 0}
+    .top-status {flex-wrap:wrap;border-radius:20px}
+    .control-kpis {grid-template-columns:repeat(2,minmax(0,1fr))}
+    .control-chat {grid-column:1/-1}
+    .control-heading,.control-section-heading {align-items:flex-start;flex-wrap:wrap}
+  }
+}
+
+
+/* Energy Management System Dashboard reference: green navigation, filters,
+   two-column analytical panels. Actual safety data replaces energy statistics. */
+@media(min-width:901px) and (hover:hover) {
+  .app-frame {grid-template-columns:244px minmax(0,1fr)}
+  .sidebar {background:#31573e;color:#fff;padding:24px 16px}
+  .sidebar .brand {border-color:#ffffff26;padding:12px 8px 26px}
+  .sidebar .brand strong {color:#fff;font-size:23px}
+  .sidebar .brand small,.sidebar .nav-caption,.sidebar footer {color:#d6e6da}
+  .sidebar .brand-mark {background:#f1f6ef;color:#31573e;border-radius:10px}
+  .sidebar .brand-mark span {color:#31573e}
+  .sidebar nav button,.sidebar nav button:not(.active),.sidebar nav button i {color:#e1ede4}
+  .sidebar nav button.active {background:#f0f6ec;color:#294c35;border-radius:8px;box-shadow:none}
+  .sidebar nav button.active i {color:#294c35}
+  .sidebar nav button:hover:not(.active) {background:#ffffff14;color:#fff}
+  .sidebar .nav-group-toggle span {color:#bfd5c5}
+  .sidebar .nav-group-items {border-color:#ffffff24}
+  .sidebar .sidebar-system {background:#284b34;border-radius:10px}
+  .sidebar .sidebar-system .status-pill,.sidebar .mode-switch span {color:#d8eadd}
+  .main-area {padding:12px 28px 32px;background:#f5f7f5}
+  .topbar {margin-bottom:14px;min-height:86px}
+  .topbar h1 {font-size:27px}
+  .top-status {box-shadow:none;border:1px solid #e1e8e1;border-radius:12px}
+  .desktop-dashboard .worker-detail,.desktop-dashboard .events-panel,.shared-operator-controls,.main-area .page-panel {border-radius:12px;border:1px solid #e0e7e0;box-shadow:none}
+  .dashboard-overview-grid {grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:20px}
+  .control-section-heading {margin:24px 0 16px}
+  .control-section-heading h2 {font-size:21px}
+  .energy-overview {color:#243b2c}
+  .energy-toolbar {display:flex;justify-content:space-between;align-items:center;gap:16px;margin:22px 0 18px}
+  .energy-toolbar h2 {font-size:23px;margin:0 0 7px;letter-spacing:-.04em}
+  .energy-toolbar p {margin:0;color:#607468;font-size:14px}
+  .energy-toolbar-actions {display:flex;gap:12px;align-items:center}
+  .energy-toolbar-actions button,.energy-roster header button {background:#fff;color:#2c6240;border:1px solid #d8e3d9;padding:10px 14px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:700}
+  .energy-live {font-size:12px;color:#607468}.energy-live.online {color:#276744}.energy-live.offline {color:#a74928}
+  .energy-counts {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
+  .energy-count {background:#fff;border:1px solid #dce6de;border-radius:12px;min-width:0;padding:20px;text-align:left;color:#243b2c;cursor:pointer;display:flex;flex-direction:column;gap:8px;transition:box-shadow .15s,transform .15s}
+  .energy-count:hover {transform:translateY(-2px);box-shadow:0 5px 18px #25433210}
+  .energy-count.selected {outline:2px solid currentColor;outline-offset:2px}
+  .energy-count-heading {display:flex;justify-content:space-between;align-items:center;font-size:16px;font-weight:700}
+  .energy-count-heading svg {width:26px;height:26px}
+  .energy-count>strong {font-size:37px;line-height:1.2;letter-spacing:-.04em;display:flex;align-items:baseline;gap:8px}
+  .energy-count>strong small {font-size:14px;font-weight:500;letter-spacing:0}
+  .energy-count-detail {font-size:12px;color:#607468;line-height:1.5}
+  .energy-count-link {font-size:12px;font-weight:700;margin-top:6px}
+  .energy-count.tone-danger {background:#fff5f5;border-color:#edc6cc;color:#aa2839}
+  .energy-count.tone-warning {background:#fffaf0;border-color:#e9d7ac;color:#956015}
+  .energy-count.tone-safe {background:#edf7ef;border-color:#c7dfce;color:#236b44}
+  .energy-count.tone-info {background:#fff;color:#355a46}
+  .energy-incident {width:100%;margin:20px 0;display:flex;align-items:center;gap:18px;border:1px solid #c8decf;border-radius:12px;padding:22px 24px;background:#edf7ef;text-align:left;color:#236b44;cursor:pointer}
+  .energy-incident-icon {display:grid;place-items:center;flex:0 0 54px;height:54px;background:#d8eddf;border-radius:50%;font-size:15px;font-weight:800}
+  .energy-incident-icon svg {width:28px;height:28px}
+  .energy-incident>span:nth-child(2) {display:flex;flex-direction:column;gap:5px;min-width:0}
+  .energy-incident small {font-size:12px;font-weight:700;letter-spacing:.02em}
+  .energy-incident strong {font-size:22px;letter-spacing:-.03em;overflow-wrap:anywhere}
+  .energy-incident em {font-size:13px;font-style:normal;line-height:1.5}
+  .energy-incident>b {margin-left:auto;font-size:13px;white-space:nowrap}
+  .energy-incident.tone-danger {background:#fff0f2;border:1px solid #d94a60;color:#aa2839}
+  .energy-incident.tone-danger .energy-incident-icon {background:#be263e;color:#fff;box-shadow:0 0 0 6px #be263e10}
+  .energy-incident.tone-warning {background:#fff8eb;border-color:#ead19d;color:#885713}
+  .energy-incident.tone-warning .energy-incident-icon {background:#f4e5bd}
+  .energy-incident.tone-unknown {background:#edf0ef;border-color:#d2dcd5;color:#4e6357}
+  .energy-panels {display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.3fr);gap:20px}
+  .energy-panel {background:#fff;border:1px solid #e0e7e0;border-radius:12px;padding:22px;min-width:0}
+  .energy-panel header {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}
+  .energy-panel header h3 {font-size:17px;margin:0 0 6px;color:#243b2c}
+  .energy-panel header p {font-size:12px;color:#607468;margin:0}
+  .energy-panel header>span {font-size:14px;color:#607468}
+  .energy-distribution {display:flex;align-items:center;justify-content:center;gap:24px;padding:12px 0 10px}
+  .energy-donut {width:156px;height:156px;border-radius:50%;display:grid;place-items:center;flex-shrink:0}
+  .energy-donut>div {background:#fff;width:112px;height:112px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px}
+  .energy-donut strong {font-size:32px;color:#243b2c}.energy-donut span {font-size:12px;color:#607468}
+  .energy-legend {display:flex;flex-direction:column;gap:14px;min-width:115px}
+  .energy-legend button {display:flex;align-items:center;gap:12px;border:0;background:none;color:#3b5143;font-size:13px;cursor:pointer;padding:0}
+  .energy-legend i {width:9px;height:9px;border-radius:50%;background:#238558}
+  .energy-legend .tone-danger i {background:#c33243}.energy-legend .tone-warning i {background:#d18a19}
+  .energy-legend b {margin-left:auto}.energy-legend small {font-size:11px;color:#607468;line-height:1.5}
+  .energy-filters {display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:-4px 0 15px;padding-bottom:15px;border-bottom:1px solid #e7eee8}
+  .energy-filters label {font-size:12px;color:#607468;display:flex;align-items:center;gap:8px}
+  .energy-filters select {border:1px solid #d4dfd7;border-radius:6px;padding:8px 28px 8px 10px;background:#fff;color:#314f3b;font:inherit}
+  .energy-filters>span {font-size:12px;color:#607468;margin-left:auto}
+  .energy-roster-list {max-height:188px;overflow-y:auto}
+  .energy-roster-list>button {width:100%;display:flex;align-items:center;gap:12px;background:#fff;border:1px solid transparent;border-radius:8px;padding:13px 10px;text-align:left;cursor:pointer;color:#243b2c}
+  .energy-roster-list>button:hover {background:#f5f8f5}.energy-roster-list>button.selected {background:#f0f6f0;border-color:#cadfce}
+  .energy-worker-dot {width:9px;height:9px;border-radius:50%;background:#238558;flex-shrink:0}
+  .energy-worker-dot.tone-danger {background:#c33243}.energy-worker-dot.tone-warning {background:#d18a19}
+  .energy-roster-list b {font-size:14px;display:block}.energy-roster-list small {font-size:12px;color:#607468;display:block;margin-top:5px}
+  .energy-worker-risk {margin-left:auto;font-size:12px;font-weight:700;color:#236b44}
+  .energy-worker-risk.tone-danger {color:#aa2839}.energy-worker-risk.tone-warning {color:#956015}
+  .energy-work-state {font-size:12px;border-radius:6px;background:#ecf0ed;color:#526758;padding:7px 10px;white-space:nowrap}
+  .energy-work-state.state-working {background:#e2efff;color:#1659a1}.energy-work-state.state-break {background:#fff4dd;color:#885713}
+  .energy-empty {font-size:13px;color:#607468;margin:20px 0;padding:12px 0}
+  .energy-overview button:focus-visible,.energy-overview select:focus-visible {outline:3px solid #267a47;outline-offset:3px}
+  @media(max-width:1250px) { .energy-panels,.dashboard-overview-grid {grid-template-columns:1fr}.energy-distribution {justify-content:flex-start}.energy-counts {gap:12px}.energy-count {padding:16px}.energy-incident>b {white-space:normal} }
+  @media(max-width:1050px) { .energy-counts {grid-template-columns:repeat(2,minmax(0,1fr))}.energy-toolbar {align-items:flex-start;flex-wrap:wrap} }
+}

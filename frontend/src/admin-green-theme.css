@@ -1,0 +1,68 @@
+/* Shared administrator desktop theme; loaded after the legacy blue rules.
+   Colors are bound to routes, so every page inherits one green palette. */
+:root {--app-font:"Noto Sans KR Variable","Noto Sans KR","Malgun Gothic",sans-serif;font-family:var(--app-font)}
+body,button,input,select,textarea {font-family:var(--app-font)}
+@media(min-width:901px) and (hover:hover) {
+  .app-frame {--admin-accent:#2d6950;--admin-soft:#e9f3ed;--admin-background:#f5f8f6;--admin-line:#d6e4db;--admin-text:#253c31;--admin-muted:#596e62;font-family:var(--app-font);letter-spacing:-.02em;line-height:1.6}
+  .app-frame:has(.main-area[data-page="map"]),.app-frame:has(.main-area[data-page="history"]),.app-frame:has(.main-area[data-page="layout"]) {--admin-accent:#2e7457;--admin-soft:#e5f2e9;--admin-background:#f1f7f3}
+  .app-frame:has(.main-area[data-page="camera"]),.app-frame:has(.main-area[data-page="assistant"]),.app-frame:has(.main-area[data-page="events"]) {--admin-accent:#386f60;--admin-soft:#e7f2ed;--admin-background:#f2f7f5}
+  .app-frame:has(.main-area[data-page="workers"]),.app-frame:has(.main-area[data-page="permissions"]),.app-frame:has(.main-area[data-page="chat"]),.app-frame:has(.main-area[data-page="zones"]) {--admin-accent:#4b713e;--admin-soft:#edf3e8;--admin-background:#f5f8f1}
+  .app-frame:has(.main-area[data-page="devices"]),.app-frame:has(.main-area[data-page="diagnostics"]) {--admin-accent:#355a46;--admin-soft:#e7eee9;--admin-background:#f0f5f1}
+  .main-area {--cyan:var(--admin-accent);--teal:#23704b;--line:var(--admin-line);--muted:var(--admin-muted);--panel:#fff;--panel-2:var(--admin-soft);--bg:var(--admin-background);background:var(--admin-background);color:var(--admin-text);font-family:var(--app-font)}
+  .main-area :is(h1,h2,h3,h4,label,p,button,input,select,textarea) {font-family:var(--app-font)}
+  .main-area :is(h1,h2,h3,h4) {letter-spacing:-.035em;font-weight:700}
+  .main-area :is(p,label,input,select,textarea) {line-height:1.65}
+  .main-area .page-panel>header h2 {font-size:23px;color:var(--admin-text)}
+  .main-area :is(.page-intro,.admin-team-intro,.worker-hardware-note,.assistant-empty) {font-size:14px;line-height:1.8}
+  .sidebar {border-radius:22px 22px 0 0;background:#2c5f4e;padding:24px 16px}
+  .sidebar .brand strong {font-family:var(--app-font);font-size:24px;letter-spacing:-.03em}
+  .sidebar .brand-mark {border-radius:50%;background:#78d397}.sidebar .brand-mark span {color:#23513d}
+  .sidebar nav button,.sidebar nav button:not(.active) {min-height:46px;font-size:14px;font-weight:500;gap:13px;border-radius:12px}
+  .sidebar nav button>i:not(.nav-chevron) {display:grid;place-items:center;flex:0 0 23px;width:23px;height:23px;color:inherit}
+  .sidebar .nav-icon {width:22px;height:22px;stroke-width:1.8}
+  .sidebar .nav-group-toggle {min-height:43px!important;font-size:13px!important;margin-top:13px!important;gap:11px;background:#ffffff0b!important;border-radius:11px!important}
+  .sidebar .nav-group-toggle span {color:#e5f0e9}
+  .sidebar .nav-group.current>.nav-group-toggle {background:#ffffff18!important}
+  .sidebar .nav-group-items {margin-left:10px;padding-left:6px}
+  .sidebar .nav-group-items::before {background:#ffffff22}
+  .sidebar .nav-group-items button {margin-top:5px;padding-left:12px}
+  .sidebar nav button.active {background:#77cd91;color:#214f37;box-shadow:0 5px 15px #103b2926;border-radius:12px;font-weight:700}
+  .sidebar nav button.active i {color:#214f37}
+  .sidebar nav button:hover:not(.active) {background:#ffffff17;color:#fff}
+  .sidebar .nav-group-toggle .nav-chevron {color:#d9e9df;font-size:18px;flex:0 0 18px}
+  .main-area :is(.map-shell,.worker-detail,.panel,.page-panel,.layout-editor,.replay-page,.zone-grid article,.diag-card,.camera-live-card,.camera-analysis-card,.assistant-command-card,.assistant-response-card,.anchor-diagnostic-summary,.anchor-status-grid article,.worker-manage-list>article,.worker-card,.version-panel) {border-color:var(--admin-line);border-radius:14px}
+  .main-area :is(.map-toolbar,.layout-editor-head,.replay-head,.page-panel>header,.management-page>header,.worker-manage-head) {border-color:var(--admin-line)}
+  .main-area :is(.page-panel>header,.layout-editor-head,.replay-head) {background:linear-gradient(110deg,var(--admin-soft),#fff);padding:18px 20px;border-radius:12px;margin-bottom:18px}
+  .main-area :is(.system-overview-grid button>i,.kpi-icon.blue,.management-overview article>i:not(.warning):not(.success),.worker-avatar) {background:var(--admin-soft);color:var(--admin-accent)}
+  .main-area :is(.topbar-control,.topbar-control.logout,.system-overview-grid button:hover,.worker-hardware-note b,.speaker-test-button,.quick-actions button:not(.fire-manual-button),.map-toolbar-actions button,.editor-actions button,.site-size-form button,.version-create button,.version-list button,.replay-controls button,.assistant-suggestions button,.camera-toolbar button,.worker-manage-head button,.admin-worker-selector select) {background:var(--admin-soft);color:var(--admin-accent);border-color:var(--admin-line)}
+  .main-area :is(.team-chat button,.worker-save,.profile-save,.apply-draft,.version-create button,.worker-actions button,.worker-calendar-controls button) {background:var(--admin-accent);color:#fff;border-color:var(--admin-accent)}
+  .main-area .team-chat button:disabled {opacity:.5}
+  .main-area :is(.team-chat-messages,.worker-hardware-note,.site-size-form,.property-panel,.diag-metrics div,.worker-live-summary span,.worker-permission,.replay-controls) {background:var(--admin-soft);border-color:var(--admin-line)}
+  .main-area .team-chat :is(p,small,time) {color:var(--admin-muted)}
+  .main-area .team-chat-message {background:#fff;color:var(--admin-text);border-color:var(--admin-line)}
+  .main-area :is(.worker-profile-form,.property-form,.version-create,.site-size-form,.camera-toolbar,.assistant-command-card,.replay-filters,.admin-worker-selector,.qualification-editor) :is(input,select,textarea) {background:#fff;border-color:var(--admin-line);color:var(--admin-text);font-size:14px}
+  .main-area :is(input,select,textarea):focus-visible {outline:2px solid var(--admin-accent);outline-offset:2px}
+  .main-area input[type="checkbox"],.main-area input[type="range"] {accent-color:var(--admin-accent)}
+  .main-area :is(button,[role="button"]):focus-visible {outline-color:var(--admin-accent)}
+  .main-area :is(.anchor-node .anchor-symbol,.blueprint-anchor .anchor-symbol) {color:var(--admin-accent)}
+  .main-area .blueprint-anchor circle {stroke:var(--admin-accent)}
+  .main-area :is(.site-map,.blueprint-wrap,.replay-map-wrap,.camera-placeholder) {background:var(--admin-background);border-color:var(--admin-line)}
+  .main-area .desktop-alert-button:not(.has-alert):hover {color:var(--admin-accent);background:var(--admin-soft)}
+  .main-area .energy-work-state.state-working,.main-area .work-status.state-working {background:#dbeede;color:#23603b!important}
+  .main-area .work-status.state-off {background:#ecf1ed;color:#4c6053!important}
+  .main-area :is(.calendar-grid button.selected,.worker-calendar button.selected) {background:var(--admin-accent);color:#fff}
+  .main-area .qualification-editor {background:#fff;border-color:var(--admin-line)}
+  .main-area .qualification-editor legend {color:var(--admin-accent);font-weight:700}
+  .main-area :is(.worker-save,.speaker-test-button,.profile-save):disabled {opacity:.5}
+  .main-area .control-worker-picker button {color:var(--admin-accent)}
+  .main-area .control-worker-picker button.selected {background:var(--admin-soft);box-shadow:inset 0 0 0 1px var(--admin-line)}
+  .main-area .topbar .eyebrow {font-family:var(--app-font);font-size:11px;letter-spacing:.02em}
+}
+@media(min-width:901px) and (hover:hover) {
+  .main-area svg text {font-family:var(--app-font)}
+  .main-area .chat-messages {background:var(--admin-soft);border-color:var(--admin-line)}
+  .main-area .chat-messages article {background:#fff;color:var(--admin-text)}
+  .main-area .team-chat textarea {font-family:var(--app-font);font-size:14px;color:var(--admin-text);border-color:var(--admin-line)}
+  .main-area .worker-save:hover:not(:disabled) {background:#244d39;color:#fff}
+  .main-area :is(.worker-save,.speaker-test-button,.worker-permission,.worker-profile-form label,.replay-filters label) {font-size:13px}
+}

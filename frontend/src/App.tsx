@@ -1,3 +1,4 @@
+import {DesktopSafetyOverview} from "./components/DesktopSafetyOverview";
 import {navigation, navigationGroups} from "./adminNavigation";
 import type {Page, NavigationGroupId} from "./adminNavigation";
 import {AdminTeamPage} from "./components/AdminTeamPage";
@@ -39,7 +40,7 @@ function MenuIcon({page}: {page: Page}) {
     layout: <><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z"/><path d="M17 14v6M14 17h6"/></>,
     history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></>,
     workers: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
-    devices: <><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 6h6M10 18h4"/></>,
+    devices: <><rect x="5" y="5" width="14" height="14" rx="3"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></>,
     events: <><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3" cy="6" r="1"/><circle cx="3" cy="12" r="1"/><circle cx="3" cy="18" r="1"/></>,
     zones: <><path d="M12 3 2.8 20h18.4Z"/><path d="M12 9v5M12 17h.01"/></>,
     chat: <><path d="M3 4h18v13H9l-6 4Z"/><path d="M7 9h10M7 13h6"/></>,
@@ -248,20 +249,7 @@ function App() {
   const uwbTag = data.devices.find(device => device.device_type === "position_device");
   const missingAnchors = data.anchors.filter(anchor => !anchor.online);
   const showAnchorStatus = page === "dashboard" || page === "map" || page === "diagnostics";
-  const overviewItems: {page: Page; value: string; detail: string}[] = [
-    {page: "map", value: `${data.workers.length}명 표시`, detail: `작업자 X ${worker?.x.toFixed(1) ?? "-"} · Y ${worker?.y.toFixed(1) ?? "-"}m`},
-    {page: "layout", value: `${data.anchors.length}개 앵커`, detail: `현장 ${data.site.width}m × ${data.site.height}m`},
-    {page: "history", value: `${worker ? locationHistory[worker.worker_id]?.length ?? 0 : 0}개 좌표`, detail: "최근 위치 기록 재생"},
-    {page: "camera", value: `${data.devices.filter(device => device.device_type === "assistant_device" && device.online).length}대 온라인`, detail: "안전모 카메라 관제"},
-    {page: "chat", value: "팀 대화", detail: "현장 팀 메시지 공유"},
-    {page: "permissions", value: "교육·허가 관리", detail: "이수·승인·작업 조건 설정"},
-    {page: "workers", value: `${data.workers.length}명 등록`, detail: "작업자 상태와 권한"},
-    {page: "devices", value: `${online}/${data.devices.length} 연결`, detail: "AV · UWB 장치 상태"},
-    {page: "events", value: `${critical}건 미처리`, detail: `최근 이벤트 ${data.events.length}건`},
-    {page: "zones", value: `${data.zones.filter(zone => zone.active).length}곳 활성`, detail: "위험구역과 PPE 요건"},
-    {page: "diagnostics", value: `${data.anchors.length - missingAnchors.length}/${data.anchors.length} 수신`, detail: "하드웨어 통합 진단"},
-    {page: "assistant", value: data.devices.some(device => device.device_type === "assistant_device" && device.online) ? "사용 가능" : "오프라인", detail: "음성 · AI 명령 전송"}
-  ];
+
 
   return (
     <div className="app-frame">
@@ -296,7 +284,7 @@ function App() {
           {navigationGroups.map(group => (
             <div className={`nav-group ${group.pages.includes(page) ? "current" : ""}`} key={group.id}>
               <button className="nav-group-toggle" aria-expanded={openGroups[group.id]} onClick={() => setOpenGroups(current => ({...current, [group.id]: !current[group.id]}))}>
-                <span>{group.label}</span><i className="nav-chevron">{openGroups[group.id] ? "−" : "+"}</i>
+                <i className="nav-group-icon"><MenuIcon page={group.pages[0]} /></i><span>{group.label}</span><i className="nav-chevron">{openGroups[group.id] ? "−" : "+"}</i>
               </button>
               <div className={`nav-group-items ${openGroups[group.id] ? "is-open" : ""}`}>
                 {group.pages.map(pageId => {
@@ -405,31 +393,23 @@ function App() {
               onAction={action}
             />
         )}
-        {page === "dashboard" && worker && (
+        {page === "dashboard" && (
           <>
             <div className="desktop-dashboard">
-            <section className="kpi-row">
-              <article><span className="kpi-icon teal"><KpiIcon type="workers" /></span><div><small>실시간 작업자</small><strong>{data.workers.length}<em>명</em></strong></div><StatusPill active /></article>
-              <article><span className="kpi-icon blue"><KpiIcon type="location" /></span><div><small>위치 신뢰도</small><strong>{Math.round(worker.confidence * 100)}<em>%</em></strong></div><span className="trend">UWB 4 anchor</span></article>
-              <article><span className={`kpi-icon risk-${worker.risk_level}`}><KpiIcon type="risk" /></span><div><small>최고 위험도</small><strong>{worker.risk_score}<em>점</em></strong></div><span className={`level level-${worker.risk_level}`}>{worker.risk_level}</span></article>
-              <article><span className="kpi-icon teal"><KpiIcon type="battery" /></span><div><small>안전모 배터리</small><strong>{averageBattery ?? "—"}<em>{averageBattery === null ? "측정 대기" : "%"}</em></strong></div><StatusPill active={batteryReports.length > 0} activeText={`${batteryReports.length}/${helmetDevices.length}대 수신`} inactiveText="신호 없음" /></article>
-            </section>
-            <section className="system-overview-grid" aria-label="주요 관제 기능 요약">
-              {overviewItems.map(item => {
-                const navigationItem = navigation.find(entry => entry.id === item.page)!;
-                return <button key={item.page} onClick={() => navigate(navigationItem.path)}><i><MenuIcon page={item.page} /></i><span><small>{navigationItem.label}</small><strong>{item.value}</strong><em>{item.detail}</em></span><b>→</b></button>;
-              })}
-            </section>
+            <DesktopSafetyOverview data={data} serverReachable={serverReachable} selectedId={worker?.worker_id ?? ""} onSelect={setSelectedId} onAlerts={() => setAlertsOpen(true)} />
+            {worker && <>
+            <div className="control-section-heading"><div><span className="eyebrow">WORKER MONITORING</span><h2>실시간 작업자</h2></div><div className="control-worker-picker">{data.workers.map(item => <button key={item.worker_id} aria-pressed={worker.worker_id === item.worker_id} className={worker.worker_id === item.worker_id ? "selected" : ""} onClick={() => setSelectedId(item.worker_id)}>{item.worker_name}<span className={`level level-${item.risk_level}`}>{item.risk_level}</span></button>)}<button onClick={() => navigate("/workers")}>전체 관리 →</button></div></div>
             <section className="dashboard-overview-grid">
               <WorkerDetail worker={worker} devices={data.devices.filter(device => device.worker_id === worker.worker_id)} onRefresh={refresh} />
               <div className="dashboard-side-stack">
                 <article className="panel events-panel">
                   <header><div><span className="eyebrow">RECENT EVENTS</span><h2>최근 이벤트</h2></div><button onClick={() => navigate("/event")}>전체 보기 →</button></header>
-                  <EventLog events={data.events.slice(0, 5)} onRefresh={refresh} />
+                  <EventLog events={[...data.events].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)).slice(0, 5)} onRefresh={refresh} />
                 </article>
 
               </div>
             </section>
+            </>}
             </div>
           </>
         )}

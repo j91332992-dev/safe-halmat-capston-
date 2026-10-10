@@ -18,8 +18,8 @@ export const navigation: {id: Page; path: string; label: string}[] = [
   {id: "assistant", path: "/assistant", label: "음성·AI"}
 ];
 export const navigationGroups: {id: NavigationGroupId; label: string; pages: Page[]; icon: "map" | "voice" | "shield" | "settings"}[] = [
-  {id: "location", label: "위치 관제", pages: ["map", "history", "layout"], icon: "map"},
-  {id: "media", label: "영상·AI 관제", pages: ["camera", "assistant"], icon: "voice"},
-  {id: "safety", label: "안전 관리", pages: ["workers", "chat", "permissions", "zones", "events"], icon: "shield"},
+  {id: "location", label: "위치 관제", pages: ["map", "history", "layout", "zones"], icon: "map"},
+  {id: "media", label: "영상·AI 관제", pages: ["camera", "assistant", "events"], icon: "voice"},
+  {id: "safety", label: "안전 관리", pages: ["permissions", "workers", "chat"], icon: "shield"},
   {id: "system", label: "장치·시스템", pages: ["devices", "diagnostics"], icon: "settings"}
 ];
