@@ -2,6 +2,18 @@
 
 작성일: 2026-10-10. 실제 휴대폰 검증은 진행 중이며 완료된 항목과 구분한다.
 
+## 최신 추가 반영: PC 웹 디자인 및 build12
+
+- 사용자가 추가로 지정한 최신 웹 브랜치 `codex/integrated-worker-app-v1.8-web-ui-20261010` (`51d555c`)를 통합했다. 병합 커밋 `a62f7a7`.
+- PC 안전 현황 요약 `DesktopSafetyOverview`, 실시간 작업자 선택, 메뉴 아이콘, 최근 이벤트 정렬, PC 전용 CSS를 반영했다.
+- 충돌 1건은 `safetyPresentation.ts`의 동일한 안전 요약 함수였다. 최신 웹 버전으로 해결했으며 P4·서버 코드의 추가 변경은 없었다.
+- 이번 병합은 어제·오늘의 카메라 전송, BNO UART/방향, AI/STT/TTS, 수동 UWB 지도, 앱 이미지 로딩 및 작업자 실시간 방향 변경을 유지한다.
+- Android versionCode 및 iOS build number를 **12**로 올리고 `npm run build:mobile`로 TypeScript/Vite 빌드 및 양 플랫폼 자산 동기화에 성공했다.
+- 웹 개발 서버는 `http://localhost:5174`, 다른 PC/휴대폰 브라우저에서는 `http://192.168.0.40:5174`다. 앱의 API 서버 설정은 계속 `http://192.168.0.40:8000`이다.
+- P4/앵커 펌웨어는 이번 웹 디자인 병합으로 바뀌지 않았다. 연결된 장치에 다시 업로드할 필요가 없다.
+- 기존 build10 웹 UI ZIP은 원본 참고 자료다. 최신 통합 소스는 위 통합 브랜치에서 받는다.
+- 아래 build11 진단·해시 기록은 당시 결과로 유지한다. 신규 배포용은 build12다. iOS 신규 서명 IPA와 실제 휴대폰 기능 확인은 여전히 별도다.
+
 ## 1. 소스 기준
 
 - 통합 브랜치: `integration/p4-mobile-live-heading-20261010`
