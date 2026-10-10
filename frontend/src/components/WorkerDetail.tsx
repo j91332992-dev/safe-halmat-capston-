@@ -13,7 +13,7 @@ export function WorkerDetail({worker, devices, onRefresh}: Props) {
   const locationOffline = Boolean(uwb && !uwb.online);
   const sendAlert = async () => {await api.sendAlert(av?.device_id); await onRefresh();};
   return (
-    <aside className="worker-detail">
+    <aside className={`worker-detail worker-risk-${worker.risk_level}`}>
       <div className="detail-head">
         <div><span className="eyebrow">WORKER STATUS</span><h2>{worker.worker_name}</h2><p>{worker.worker_id} · {worker.helmet_id}</p></div>
         <div className={`risk-orb risk-${worker.risk_level}`}><strong>{worker.risk_score}</strong><span>{worker.risk_level}</span></div>

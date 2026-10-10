@@ -28,3 +28,15 @@ export function siteCondition(data: Snapshot, reachable: boolean) {
     return {tone: "warning", title: "주의 · 현장 점검", detail: "주의 알림과 작업자 상태를 확인하세요"};
   return {tone: "safe", title: "안전 · 정상 관제", detail: "수신된 정보 기준 · 위험 알림 없음"};
 }
+
+export function safetySummary(data: Snapshot) {
+  const events = pendingEvents(data.events);
+  return {
+    emergencyWorkers: data.workers.filter(worker => workerTone(worker) === "danger").length,
+    warningWorkers: data.workers.filter(worker => workerTone(worker) === "warning").length,
+    safeWorkers: data.workers.filter(worker => workerTone(worker) === "safe").length,
+    urgentEvents: events.filter(event => priority(event) < 2).length,
+    onlineDevices: data.devices.filter(device => device.online).length,
+    totalDevices: data.devices.length,
+  };
+}

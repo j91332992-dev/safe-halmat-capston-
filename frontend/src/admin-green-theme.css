@@ -1,9 +1,7 @@
 /* Shared administrator desktop theme; loaded after the legacy blue rules.
    Colors are bound to routes, so every page inherits one green palette. */
-:root {--app-font:"Noto Sans KR Variable","Noto Sans KR","Malgun Gothic",sans-serif;font-family:var(--app-font)}
-body,button,input,select,textarea {font-family:var(--app-font)}
 @media(min-width:901px) and (hover:hover) {
-  .app-frame {--admin-accent:#2d6950;--admin-soft:#e9f3ed;--admin-background:#f5f8f6;--admin-line:#d6e4db;--admin-text:#253c31;--admin-muted:#596e62;font-family:var(--app-font);letter-spacing:-.02em;line-height:1.6}
+  .app-frame {--app-font:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;--admin-accent:#2d6950;--admin-soft:#e9f3ed;--admin-background:#f5f8f6;--admin-line:#d6e4db;--admin-text:#253c31;--admin-muted:#596e62;font-family:var(--app-font);letter-spacing:-.02em;line-height:1.6}
   .app-frame:has(.main-area[data-page="map"]),.app-frame:has(.main-area[data-page="history"]),.app-frame:has(.main-area[data-page="layout"]) {--admin-accent:#2e7457;--admin-soft:#e5f2e9;--admin-background:#f1f7f3}
   .app-frame:has(.main-area[data-page="camera"]),.app-frame:has(.main-area[data-page="assistant"]),.app-frame:has(.main-area[data-page="events"]) {--admin-accent:#386f60;--admin-soft:#e7f2ed;--admin-background:#f2f7f5}
   .app-frame:has(.main-area[data-page="workers"]),.app-frame:has(.main-area[data-page="permissions"]),.app-frame:has(.main-area[data-page="chat"]),.app-frame:has(.main-area[data-page="zones"]) {--admin-accent:#4b713e;--admin-soft:#edf3e8;--admin-background:#f5f8f1}
