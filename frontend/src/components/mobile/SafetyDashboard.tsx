@@ -3,7 +3,7 @@ import {useEffect, useRef, useState} from "react";
 import type {Snapshot, Worker} from "../../types";
 import {api} from "../../services/api";
 import {SafetyIcon} from "./SafetyIcon";
-import {pendingEvents, priority, priorityLabels, safetySummary, siteCondition, workerTone} from "./safetyPresentation";
+import {pendingEvents, priority, priorityLabels, siteCondition, workerTone} from "./safetyPresentation";
 import {elapsedTime} from "../../utils/elapsedTime";
 
 interface Props {
@@ -24,7 +24,7 @@ export function MobileDashboard({data, selectedWorker, serverReachable, onAlerts
     ? `${focused?.current_zone ?? "현재 위치 확인"} · 알림에서 즉시 대응하세요`
     : condition.detail;
   const summaryItems = [
-    {tone: "danger", label: "긴급", value: safetySummary(data).emergencyWorkers, icon: "alert" as const},
+    {tone: "danger", label: "긴급", value: Math.max(data.workers.filter(w => workerTone(w) === "danger").length, events.filter(e => priority(e) < 2).length), icon: "alert" as const},
     {tone: "warning", label: "주의", value: data.workers.filter(w => workerTone(w) === "warning").length, icon: "alert" as const},
     {tone: "safe", label: "안전", value: data.workers.filter(w => workerTone(w) === "safe").length, icon: "shield" as const},
     {tone: "info", label: "장치", value: data.devices.filter(d => d.online).length, icon: "signal" as const}
@@ -40,10 +40,10 @@ export function MobileDashboard({data, selectedWorker, serverReachable, onAlerts
   }, [offlineKey, data.devices]);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   return <section className="ops-home" aria-label="현장 안전 대시보드">
-    <section className="ops-card"><header><h3>작업자 근무 현황</h3><button onClick={() => navigate('/workers')}>배정·작업 조건 관리</button></header><div className="admin-work-roster">{data.workers.map(worker => <div key={worker.worker_id}><span><b>{worker.worker_name}</b><small> · 오늘 {Math.floor((worker.work?.today_seconds ?? 0) / 3600)}시간 {Math.floor((worker.work?.today_seconds ?? 0) % 3600 / 60)}분</small></span><span className={`work-status state-${worker.work?.state ?? 'off'}`}>{{working: '작업 중', break: '휴게 중', off: '작업 전·종료'}[worker.work?.state ?? 'off']}</span></div>)}</div></section>
+    <section className="ops-card"><header><h3>작업자 근무 현황</h3><button onClick={() => navigate('/workers')}>배정·작업 조건 관리</button></header><div className="admin-work-roster">{data.workers.map(worker => <div key={worker.worker_id}><span><b>{worker.worker_name}</b><small> · 작업 {Math.floor((worker.work?.today_seconds ?? 0) / 3600)}시간 {Math.floor((worker.work?.today_seconds ?? 0) % 3600 / 60)}분 · 휴게 {Math.floor((worker.work?.today_break_seconds ?? 0) / 3600)}시간 {Math.floor((worker.work?.today_break_seconds ?? 0) % 3600 / 60)}분</small></span><span className={`work-status state-${worker.work?.state ?? 'off'}`}>{{working: '작업 중', break: '휴게 중', off: '작업 전·종료'}[worker.work?.state ?? 'off']}</span></div>)}</div></section>
     <div className="ops-counts" aria-label="현장 안전 요약">
       {summaryItems.map(item =>
-        <button key={item.tone} className={`tone-${item.tone}`} onClick={() => item.tone === "info" ? navigate('/device') : navigate('/workers')}><SafetyIcon name={item.icon}/><span>{item.label}</span><strong>{item.value}<small>{item.tone === "info" ? "대" : "명"}</small></strong></button>)}
+        <button key={item.tone} className={`tone-${item.tone}`} onClick={() => item.tone === "info" ? navigate('/device') : navigate('/workers')}><SafetyIcon name={item.icon}/><span>{item.label}</span><strong>{item.value}<small>{item.tone === "info" ? "대" : item.tone === "danger" ? "건" : "명"}</small></strong></button>)}
     </div>
     <section className={`ops-condition tone-${condition.tone}`} aria-label="현장 안전도">
       <button className="ops-condition-main" onClick={onAlerts}>

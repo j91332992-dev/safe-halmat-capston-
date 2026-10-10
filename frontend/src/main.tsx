@@ -4,14 +4,10 @@ import {BrowserRouter} from "react-router-dom";
 import {StatusBar, Style} from "@capacitor/status-bar";
 import {Capacitor} from "@capacitor/core";
 import App from "./App";
-import "@fontsource-variable/noto-sans-kr";
 import "./styles.css";
 import "./mobile-theme.css";
 import "./mobile-operations.css";
 import "./contrast.css";
-import "./control-room.css";
-import "./admin-green-theme.css";
-import "./worker-blue-theme.css";
 
 // Let the browser calculate the actual mobile viewport.  Hard-coding a
 // visualViewport value here can be stale during iOS Home Screen startup and

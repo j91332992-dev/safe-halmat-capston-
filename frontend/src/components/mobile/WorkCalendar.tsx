@@ -32,10 +32,11 @@ export function WorkCalendar({revision}: {revision: number}) {
   const offset = new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay();
   return <section className="worker-card work-calendar"><h3>근로시간 달력</h3><div className="calendar-toolbar"><button onClick={() => move(-1)} aria-label="이전 달">‹</button><input aria-label="월 선택" type="month" value={month} onChange={e => {if (e.target.value) {setMonth(e.target.value); setSelected(e.target.value + "-01");}}}/><button onClick={() => move(1)} aria-label="다음 달">›</button></div>
     {error && <p role="alert">{error}</p>}
-    <p>월 합계 · {duration(data?.days.reduce((sum, row) => sum + row.seconds, 0) ?? 0)} · 한국 시간</p>
+    <p>월 작업 {duration(data?.days.reduce((sum, row) => sum + row.seconds, 0) ?? 0)} · 휴게 {duration(data?.days.reduce((sum, row) => sum + row.break_seconds, 0) ?? 0)} · 한국 시간</p>
     <div className="calendar-grid">{["일", "월", "화", "수", "목", "금", "토"].map(d => <b key={d}>{d}</b>)}{Array.from({length: offset}, (_, i) => <span key={`blank-${i}`}/>)}{data?.days.map(row => <button key={row.date} aria-pressed={selected === row.date} className={selected === row.date ? "selected" : ""} onClick={() => setSelected(row.date)}><b>{Number(row.date.slice(-2))}</b><small>{row.seconds ? `${Math.floor(row.seconds / 3600)}h ${Math.floor(row.seconds % 3600 / 60)}m` : "—"}</small></button>)}</div>
-    <h3>{selected} · {duration(day?.seconds ?? 0)}</h3><ul className="worker-list">{day?.records.map((r, i) => <li key={i}><span>{labels[r.kind] ?? r.kind}</span><time>{clock(r.created_at)}</time></li>)}</ul>
+    <h3>{selected} · 작업 {duration(day?.seconds ?? 0)} · 휴게 {duration(day?.break_seconds ?? 0)}</h3><ul className="worker-list">{day?.records.map((r, i) => <li key={i}><span>{labels[r.kind] ?? r.kind}</span><time>{clock(r.created_at)}</time></li>)}</ul>
     {!!day?.intervals.length && <><h4>실제 작업 구간 · 휴게 제외</h4>{day.intervals.map((r, i) => <p key={i}>{clock(r.start)} ~ {clock(r.end)} · {duration((Date.parse(r.end) - Date.parse(r.start)) / 1000)}</p>)}</>}
-    {day && !day.records.length && !day.intervals.length && <p>이 날짜의 작업 기록이 없습니다.</p>}
+    {!!day?.break_intervals.length && <><h4>휴게 구간 · 누적 {duration(day.break_seconds)}</h4>{day.break_intervals.map((r, i) => <p key={i}>{clock(r.start)} ~ {clock(r.end)} · {duration((Date.parse(r.end) - Date.parse(r.start)) / 1000)}</p>)}</>}
+    {day && !day.records.length && !day.intervals.length && !day.break_intervals.length && <p>이 날짜의 작업 기록이 없습니다.</p>}
   </section>;
 }

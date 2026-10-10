@@ -5,7 +5,7 @@ import {ServerSettingsModal} from "./ServerSettingsModal";
 
 type Mode = "login" | "register" | "worker";
 export function LoginScreen({onLoggedIn}: {onLoggedIn: (role: string) => void}) {
-  const [entry, setEntry] = useState<"admin" | "worker" | null>(null);
+  const [entry, setEntry] = useState<"admin" | "worker">("admin");
   const [mode, setMode] = useState<Mode>("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -18,6 +18,9 @@ export function LoginScreen({onLoggedIn}: {onLoggedIn: (role: string) => void}) 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const changeMode = (next: Mode) => {
     setMode(next); setPassword(""); setPasswordConfirm(""); setError(""); setAvailable(null);
+  };
+  const selectEntry = (next: "admin" | "worker") => {
+    setEntry(next); setUsername(""); setInviteCode(""); changeMode("login");
   };
   const checkUsername = async () => {
     try {
@@ -57,9 +60,13 @@ export function LoginScreen({onLoggedIn}: {onLoggedIn: (role: string) => void}) 
       <button className="admin-login-settings" type="button" onClick={() => setSettingsOpen(true)} aria-label="관제 서버 설정">⚙</button>
       <div className="admin-login-mark">H</div>
       <span className="admin-login-eyebrow">HANMIR SMART SAFETY</span>
-      <h1>{!entry ? "한미르 안전관리" : mode === "login" ? `${entry === "admin" ? "관리자" : "근로자"} 로그인` : mode === "register" ? "관리자 회원가입" : "근로자 회원가입"}</h1>
-      <p>{!entry ? "이용할 메뉴를 선택하세요." : mode === "login" ? "선택한 메뉴의 계정으로 로그인하세요." : mode === "register" ? "회사·현장 계정을 만들면 독립된 관제 공간이 생성됩니다." : "관리자가 전달한 초대 코드로 내 안전 계정을 만드세요."}</p>
-      {!entry ? <div className="login-role-options"><button type="button" onClick={() => {setEntry("admin"); changeMode("login");}}>관리자<small>현장 관제·안전 관리</small></button><button type="button" onClick={() => {setEntry("worker"); changeMode("login");}}>근로자<small>내 작업·내 안전</small></button></div> : <><form onSubmit={submit}>
+      <h1>{mode === "login" ? "로그인" : mode === "register" ? "관리자 회원가입" : "근로자 회원가입"}</h1>
+      <p>{mode === "login" ? "계정 종류를 선택하고 로그인하세요." : mode === "register" ? "회사·현장 계정을 만들면 독립된 관제 공간이 생성됩니다." : "관리자가 전달한 초대 코드로 내 안전 계정을 만드세요."}</p>
+      <div className="login-role-tabs" role="tablist" aria-label="로그인 종류 선택">
+        <button type="button" role="tab" aria-selected={entry === "admin"} className={entry === "admin" ? "active" : ""} onClick={() => selectEntry("admin")}>관리자 로그인</button>
+        <button type="button" role="tab" aria-selected={entry === "worker"} className={entry === "worker" ? "active" : ""} onClick={() => selectEntry("worker")}>근로자 로그인</button>
+      </div>
+      <form onSubmit={submit}>
         {mode === "register" && <label>회사 또는 현장명 <span className="admin-optional-label">(선택)</span><input value={siteName} onChange={event => setSiteName(event.target.value)} autoComplete="organization" maxLength={100} placeholder="비워두면 ID로 생성됩니다" /></label>}
         <label>ID <span className="admin-id-field"><input value={username} onChange={event => {setUsername(event.target.value); setAvailable(null);}} autoComplete="username" autoCapitalize="none" autoCorrect="off" minLength={mode === "login" ? undefined : 4} maxLength={30} required placeholder="ID" />{mode !== "login" && <button className="admin-id-check" type="button" onClick={() => void checkUsername()}>중복 확인</button>}</span>{mode !== "login" && available === true && <em className="admin-id-status available">사용 가능한 ID입니다.</em>}</label>
         <label>비밀번호<input type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={event => setPassword(event.target.value)} minLength={mode === "worker" ? 8 : mode === "register" ? 4 : undefined} maxLength={72} required placeholder={mode === "worker" ? "8자 이상 비밀번호" : "비밀번호"} /></label>
@@ -69,8 +76,7 @@ export function LoginScreen({onLoggedIn}: {onLoggedIn: (role: string) => void}) 
         <button disabled={submitting} type="submit">{submitting ? "처리 중…" : mode === "login" ? "로그인" : "회원가입 후 시작"}</button>
       </form>
       {mode === "login" ? <button className="admin-signup-link" onClick={() => changeMode(entry === "admin" ? "register" : "worker")}>{entry === "admin" ? "관리자" : "근로자"} 회원가입</button> : <button className="admin-signup-link" onClick={() => changeMode("login")}>로그인으로 돌아가기</button>}
-      <button type="button" className="admin-signup-link" onClick={() => {setEntry(null); setUsername(""); changeMode("login");}}>관리자·근로자 선택으로 돌아가기</button></>}
-      <span className="admin-login-version">v1.7 · 관리자·근로자 통합 앱</span>
+      <span className="admin-login-version">v1.8 · 관리자·근로자 통합 앱</span>
     </section>
     <ServerSettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onSaved={() => setSettingsOpen(false)} />
   </main>;

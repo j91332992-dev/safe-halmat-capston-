@@ -1529,3 +1529,4 @@ html, body {
 .login-role-options button {min-height:120px;border:1px solid #c9d9ec;border-radius:18px;background:#eff6ff;color:#15385d;font-size:24px;font-weight:700;cursor:pointer}
 .login-role-options button:last-child {background:#e8f7f4;color:#08756e}
 .login-role-options small {display:block;margin-top:12px;font-size:13px;font-weight:400}
+.login-role-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 17px;padding:4px;border:1px solid #344052;border-radius:12px;background:#111722}.login-role-tabs button{min-height:38px;border:0;border-radius:8px;background:transparent;color:#8795a8;font-size:11px;font-weight:800;cursor:pointer}.login-role-tabs button.active{background:#2f72dd;color:#fff;box-shadow:0 3px 10px #0b1d3f66}.login-role-tabs button:last-child.active{background:#087f76}.login-role-tabs button:focus-visible{outline:2px solid #8bb8ff;outline-offset:1px}

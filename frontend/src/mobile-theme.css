@@ -81,6 +81,9 @@
   .admin-login-card input { background: #fff; border-color: #cbd9e8; color: #14243d; }
   .admin-login-card form button { background: #145db7; color: #fff; }
   .admin-login-error { background: #fff1f2; color: #b4232d; }
+  .login-role-tabs { background: #edf3fa; border-color: #d2deec; }
+  .login-role-tabs button { color: #64758b; }
+  .login-role-tabs button.active { color: #fff; }
 
   /* Fixed overlays are based on the visible screen, never the wider layout viewport. */
   .alerts-modal-backdrop,

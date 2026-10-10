@@ -15,17 +15,6 @@ export function workerTone(worker: Worker) {
   return worker.emergency || ["위험", "비상"].includes(worker.risk_level) ? "danger"
     : ["관심", "주의"].includes(worker.risk_level) ? "warning" : "safe";
 }
-export function safetySummary(data: Snapshot) {
-  const events = pendingEvents(data.events);
-  return {
-    emergencyWorkers: data.workers.filter(w => workerTone(w) === "danger").length,
-    warningWorkers: data.workers.filter(w => workerTone(w) === "warning").length,
-    safeWorkers: data.workers.filter(w => workerTone(w) === "safe").length,
-    urgentEvents: events.filter(e => priority(e) < 2).length,
-    onlineDevices: data.devices.filter(d => d.online).length,
-    totalDevices: data.devices.length,
-  };
-}
 export function siteCondition(data: Snapshot, reachable: boolean) {
   const events = pendingEvents(data.events);
   const danger = data.workers.some(w => workerTone(w) === "danger") || events.some(e => priority(e) < 2)

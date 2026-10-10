@@ -22,3 +22,5 @@
 .worker-app.safety-warning .worker-hero{background:linear-gradient(125deg,#92400e,#b45309);color:#fff}
 .worker-emergency-notice{padding:16px;margin-bottom:14px;border:2px solid #dc2626;border-radius:14px;background:#fee2e2;color:#991b1b}
 .worker-emergency-notice b{font-size:18px}.worker-emergency-notice p{margin:8px 0 0;font-size:14px;line-height:1.6}
+
+.worker-time-summary{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin:14px 0}.worker-time-summary>div{min-width:0;padding:14px 10px;border:1px solid #dbe5ec;border-radius:14px;background:#f7fafc}.worker-time-summary>div.active{border-color:#d6a525;background:#fff8dc;box-shadow:0 0 0 2px #f5d76e33}.worker-time-summary small{display:block;margin-bottom:7px;color:#647a8c;font-size:12px}.worker-time-summary strong{display:block;color:#173a53;font-size:clamp(17px,4.8vw,23px);line-height:1.3;white-space:normal;word-break:keep-all}.worker-time-summary>div.active small,.worker-time-summary>div.active strong{color:#805b00}

@@ -54,13 +54,13 @@ export const auth = {
   }
 };
 
-export interface WorkSummary {state: "off" | "working" | "break"; today_seconds: number; server_now: string; history: {kind: string; created_at: string}[]}
+export interface WorkSummary {state: "off" | "working" | "break"; today_seconds: number; today_break_seconds: number; server_now: string; history: {kind: string; created_at: string}[]}
 export interface Qualification {qualification_id?: string; kind: "education" | "permit"; name: string; required: boolean; completed: boolean; expires_on: string | null; valid?: boolean}
 export interface Eligibility {items: Qualification[]; can_work: boolean; reasons: string[]}
 export interface Operations {organization: string; team: string; job_title: string; eligibility: Eligibility; work: WorkSummary}
 export interface ChatMessage {message_id: number; sender_id: string; sender_name: string; content: string; created_at: string}
 export interface ChatData {team: string; messages: ChatMessage[]}
-export interface CalendarDay {date: string; seconds: number; records: {kind: string; created_at: string}[]; intervals: {start: string; end: string}[]}
+export interface CalendarDay {date: string; seconds: number; break_seconds: number; records: {kind: string; created_at: string}[]; intervals: {start: string; end: string}[]; break_intervals: {start: string; end: string}[]}
 export interface WorkerCalendar {month: string; timezone: string; days: CalendarDay[]}
 export interface WorkerMapData {site: {name: string; width: number; height: number}; obstacles: {name: string; object_type: string; x: number; y: number; width: number; height: number}[]; zones: {zone_name: string; coordinates: {x: number; y: number; width?: number; height?: number; radius?: number; points?: {x: number; y: number}[]}; zone_category: string; zone_type: string; active: boolean}[]}
 export interface WorkerAppData {

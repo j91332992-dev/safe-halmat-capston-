@@ -16,21 +16,41 @@ def aware(moment):
     return moment.replace(tzinfo=timezone.utc) if moment.tzinfo is None else moment
 
 
-def intervals(rows, now=None):
+def activity_spans(rows, now=None):
+    """Return state and all accumulated work and break intervals."""
     now = now or datetime.now(timezone.utc)
-    state, start, spans = "off", None, []
+    state = "off"
+    work_start = None
+    break_start = None
+    work_spans = []
+    break_spans = []
     for row in rows:
         moment = aware(row.created_at)
-        if row.kind == "start" and state == "off" or row.kind == "break_end" and state == "break":
-            state, start = "working", moment
-        elif row.kind in {"break_start", "end"} and state == "working":
-            spans.append((start, moment))
-            state, start = ("break" if row.kind == "break_start" else "off"), None
+        if row.kind == "start" and state == "off":
+            state, work_start = "working", moment
+        elif row.kind == "break_start" and state == "working":
+            work_spans.append((work_start, moment))
+            state, work_start, break_start = "break", None, moment
+        elif row.kind == "break_end" and state == "break":
+            break_spans.append((break_start, moment))
+            state, break_start, work_start = "working", None, moment
+        elif row.kind == "end" and state == "working":
+            work_spans.append((work_start, moment))
+            state, work_start = "off", None
         elif row.kind == "end" and state == "break":
-            state = "off"
-    if start:
-        spans.append((start, now))
-    return state, spans
+            break_spans.append((break_start, moment))
+            state, break_start = "off", None
+    if state == "working" and work_start:
+        work_spans.append((work_start, now))
+    elif state == "break" and break_start:
+        break_spans.append((break_start, now))
+    return state, work_spans, break_spans
+
+
+def intervals(rows, now=None):
+    """Backward-compatible helper returning work intervals only."""
+    state, work_spans, _ = activity_spans(rows, now)
+    return state, work_spans
 
 
 def day_seconds(spans, day):
@@ -42,8 +62,9 @@ def day_seconds(spans, day):
 def work_summary(db: Session, worker):
     now = datetime.now(timezone.utc)
     rows = activities(db, worker)
-    state, spans = intervals(rows, now)
-    return {"state": state, "today_seconds": day_seconds(spans, now.astimezone(KST).date()), "server_now": now.isoformat(),
+    state, spans, break_spans = activity_spans(rows, now)
+    return {"state": state, "today_seconds": day_seconds(spans, now.astimezone(KST).date()),
+            "today_break_seconds": day_seconds(break_spans, now.astimezone(KST).date()), "server_now": now.isoformat(),
             "history": [{"kind": r.kind, "created_at": aware(r.created_at).isoformat()} for r in rows[-30:]]}
 
 

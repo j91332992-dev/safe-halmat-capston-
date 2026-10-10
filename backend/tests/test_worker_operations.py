@@ -5,7 +5,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.worker_operations import day_seconds, intervals
+from app.services.worker_operations import activity_spans, day_seconds, intervals
 
 
 def accounts(client):
@@ -83,12 +83,38 @@ def test_calendar_splits_overnight_shift_and_excludes_breaks():
     assert day_seconds(spans, date(2026, 1, 3)) == 0
 
 
+def test_repeated_breaks_accumulate_until_work_ends():
+    rows = [SimpleNamespace(kind=kind, created_at=datetime.fromisoformat(moment)) for kind, moment in [
+        ('start', '2026-01-03T09:00:00+00:00'),
+        ('break_start', '2026-01-03T09:50:00+00:00'),
+        ('break_end', '2026-01-03T10:20:00+00:00'),
+        ('break_start', '2026-01-03T11:00:00+00:00'),
+        ('break_end', '2026-01-03T11:15:00+00:00'),
+        ('end', '2026-01-03T12:00:00+00:00'),
+    ]]
+    state, work_spans, break_spans = activity_spans(rows, datetime(2026, 1, 3, 13, tzinfo=timezone.utc))
+    assert state == 'off'
+    assert sum((end - start).total_seconds() for start, end in work_spans) == 135 * 60
+    assert sum((end - start).total_seconds() for start, end in break_spans) == 45 * 60
+
+
+def test_active_break_keeps_counting():
+    rows = [SimpleNamespace(kind=kind, created_at=datetime.fromisoformat(moment)) for kind, moment in [
+        ('start', '2026-01-03T09:00:00+00:00'),
+        ('break_start', '2026-01-03T09:50:00+00:00'),
+    ]]
+    state, work_spans, break_spans = activity_spans(rows, datetime(2026, 1, 3, 10, 20, tzinfo=timezone.utc))
+    assert state == 'break'
+    assert sum((end - start).total_seconds() for start, end in work_spans) == 50 * 60
+    assert sum((end - start).total_seconds() for start, end in break_spans) == 30 * 60
+
+
 def test_calendar_map_and_registration_conditions_are_not_public():
     with TestClient(app) as client:
         _, worker, _ = accounts(client)
         calendar = client.get('/api/worker-app/calendar', headers=worker, params={'month': '2026-02'}).json()
         assert len(calendar['days']) == 28
-        assert all('records' in day and 'intervals' in day for day in calendar['days'])
+        assert all('records' in day and 'intervals' in day and 'break_seconds' in day and 'break_intervals' in day for day in calendar['days'])
         assert client.get('/api/worker-app/calendar', headers=worker, params={'month': 'invalid'}).status_code == 400
         map_data = client.get('/api/worker-app/map', headers=worker).json()
         assert map_data['site']['name'] == '배정 현장'

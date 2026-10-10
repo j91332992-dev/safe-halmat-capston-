@@ -13,12 +13,12 @@ export function WorkerDetail({worker, devices, onRefresh}: Props) {
   const locationOffline = Boolean(uwb && !uwb.online);
   const sendAlert = async () => {await api.sendAlert(av?.device_id); await onRefresh();};
   return (
-    <aside className={`worker-detail worker-risk-${worker.risk_level}`}>
+    <aside className="worker-detail">
       <div className="detail-head">
         <div><span className="eyebrow">WORKER STATUS</span><h2>{worker.worker_name}</h2><p>{worker.worker_id} · {worker.helmet_id}</p></div>
         <div className={`risk-orb risk-${worker.risk_level}`}><strong>{worker.risk_score}</strong><span>{worker.risk_level}</span></div>
       </div>
-      <p className={`work-status state-${worker.work?.state ?? "off"}`}>{{working: "작업 중", break: "휴게 중", off: "작업 전·종료"}[worker.work?.state ?? "off"]} · 오늘 {Math.floor((worker.work?.today_seconds ?? 0) / 3600)}시간 {Math.floor((worker.work?.today_seconds ?? 0) % 3600 / 60)}분</p>
+      <p className={`work-status state-${worker.work?.state ?? "off"}`}>{{working: "작업 중", break: "휴게 중", off: "작업 전·종료"}[worker.work?.state ?? "off"]} · 작업 {Math.floor((worker.work?.today_seconds ?? 0) / 3600)}시간 {Math.floor((worker.work?.today_seconds ?? 0) % 3600 / 60)}분 · 휴게 {Math.floor((worker.work?.today_break_seconds ?? 0) / 3600)}시간 {Math.floor((worker.work?.today_break_seconds ?? 0) % 3600 / 60)}분</p>
       <div className="detail-grid">
         <div><span>현재 위치</span><strong>X {worker.x.toFixed(1)} · Y {worker.y.toFixed(1)}m</strong></div>
         <div><span>위치 신뢰도</span><strong>{Math.round(worker.confidence * 100)}%</strong></div>

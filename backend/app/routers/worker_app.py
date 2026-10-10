@@ -15,7 +15,7 @@ from ..services.risk_service import recalculate_risk
 from ..services.serializers import worker_to_dict
 from ..websocket import manager, call_manager
 from .auth import require_worker
-from ..services.worker_operations import activities, assignment, aware, day_seconds, intervals, KST, qualifications, work_summary
+from ..services.worker_operations import activities, activity_spans, assignment, aware, day_seconds, KST, qualifications, work_summary
 from .layout import applied_design
 
 router = APIRouter(prefix="/api/worker-app", tags=["worker-app"])
@@ -88,15 +88,16 @@ def work_calendar(month: str, identity: dict[str, object] = Depends(require_work
     if not 1900 <= first.year <= 2100:
         raise HTTPException(400, "조회 가능한 연도는 1900~2100입니다.")
     rows = activities(db, worker)
-    _, spans = intervals(rows)
+    _, spans, break_spans = activity_spans(rows)
     days = []
     for offset in range(calendar.monthrange(first.year, first.month)[1]):
         day = first + timedelta(days=offset)
         beginning = datetime.combine(day, datetime.min.time(), KST)
         end = beginning + timedelta(days=1)
-        days.append({"date": day.isoformat(), "seconds": day_seconds(spans, day),
+        days.append({"date": day.isoformat(), "seconds": day_seconds(spans, day), "break_seconds": day_seconds(break_spans, day),
                      "records": [{"kind": r.kind, "created_at": aware(r.created_at).isoformat()} for r in rows if aware(r.created_at).astimezone(KST).date() == day],
-                     "intervals": [{"start": max(start, beginning).isoformat(), "end": min(finish, end).isoformat()} for start, finish in spans if start < end and finish > beginning]})
+                     "intervals": [{"start": max(start, beginning).isoformat(), "end": min(finish, end).isoformat()} for start, finish in spans if start < end and finish > beginning],
+                     "break_intervals": [{"start": max(start, beginning).isoformat(), "end": min(finish, end).isoformat()} for start, finish in break_spans if start < end and finish > beginning]})
     return {"month": month, "timezone": "Asia/Seoul", "days": days}
 
 

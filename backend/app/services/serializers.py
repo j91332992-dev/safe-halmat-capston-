@@ -45,7 +45,7 @@ def worker_to_dict(worker) -> dict:
     from .worker_operations import work_summary
     db = object_session(worker)
     return {
-        "work": work_summary(db, worker) if db else {"state": "off", "today_seconds": 0},
+        "work": work_summary(db, worker) if db else {"state": "off", "today_seconds": 0, "today_break_seconds": 0},
         "worker_id": worker.worker_id,
         "site_id": worker.site_id,
         "worker_name": worker.worker_name,
