@@ -67,6 +67,11 @@
 - Windows에는 Android SDK/Java 21 구성이 없어 `.github/workflows/android-p4-integration.yml`로 GitHub Actions APK를 빌드한다.
 - CI에서 Linux용 esbuild optional lock 항목, SDK manager 설치, 폐기된 `tools` 패키지 요청을 수정했다.
 - APK 서명 비교 정보를 함께 생성한다. 기존 APK와 새 APK 서명이 다르면 직접 덮어쓰기 설치가 안 된다. 기존 서명 키로 재빌드하거나 사용자가 기존 앱 삭제를 승인해야 한다. 임의로 기존 앱을 삭제하지 않는다.
+- GitHub Actions 실행 `38027873833` 빌드 성공. APK: `releases/HanmirSafety-p4-mobile-v1.8-build11.apk`.
+- APK SHA-256: `3ed94a14516954c86050c0a3de0a96e307aea93a90585760ea7b9606065ca2d3`.
+- 현재 APK 인증서 SHA-256: `e653b766387b2e8670f7dbb5a585b9375cc9e5127d4f689106bb55fec87c6db4`.
+- 기존 build10 인증서 SHA-256: `dcb416fbd939530d54660095ec6d1c1a00cf74b679ad340987756d5c484a9c00`.
+- 사용자 선택은 **기존 제작자의 서명 키로 재빌드**다. 기존 앱 삭제를 요청하지 않는다. 위 APK는 빌드 검증용이며 기존 앱에 덮어쓰기 설치할 수 없다. 원래 `debug.keystore`/`.jks`를 확보한 뒤 인증서 일치 확인 및 재서명이 필요하다. APK에서 원래 개인 서명 키를 추출할 수는 없다.
 - iOS 프로젝트 자산은 동기화했지만 신규 서명 IPA는 아직 만들지 않았다. 기존 Mac/Xcode와 인증서·프로비저닝 환경이 필요하다. 기존 build10 IPA는 이번 변경을 포함하지 않는다.
 
 ## 7. 병합 후 실제 서버 관측
@@ -97,4 +102,4 @@
 8. 작업자 계정에서 본인 지도/방향/배터리 확인, 다른 현장·작업자 데이터가 섞이지 않는지 확인.
 9. Android 확인 후 신규 IPA를 원래 iOS 서명 환경에서 생성하고 동일 항목 검증.
 
-현재 미완료: 새 APK 실제 휴대폰 설치 및 카메라 성공 확인, 작업자 앱 실제 회전 확인, 신규 iOS IPA 빌드 및 iPhone 검증.
+현재 미완료: 기존 Android 개인 서명 키 확보와 동일 서명 APK 제작, 새 APK 실제 휴대폰 설치 및 카메라 성공 확인, 작업자 앱 실제 회전 확인, 신규 iOS IPA 빌드 및 iPhone 검증.
