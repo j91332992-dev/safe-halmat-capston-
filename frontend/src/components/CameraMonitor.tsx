@@ -1,4 +1,5 @@
 import {CameraFrame} from "./CameraFrame";
+import {LiveCameraFrame} from "./LiveCameraFrame";
 import {useEffect, useMemo, useState} from "react";
 import {api} from "../services/api";
 import type {Device, Worker} from "../types";
@@ -67,7 +68,7 @@ export function CameraMonitor({workers, devices}: Props) {
         <div className="camera-monitor-grid">
           <article className="camera-live-card">
             <div className="camera-card-head"><b>실시간 원본 영상</b><StatusPill active={Boolean(live?.received && (live.age_ms ?? Infinity) < 3000)} activeText="새 프레임 수신 중" inactiveText="영상 정지" /></div>
-            {live?.received && (live.age_ms ?? Infinity) < 3000 ? <img src={api.liveCameraStreamUrl(selected.device_id)} alt="안전모 카메라 원본 영상" /> : <div className="camera-placeholder"><strong>NO LIVE FRAME</strong><span>최근 3초 동안 새 원본 프레임이 없습니다.</span></div>}
+            {live?.received && (live.age_ms ?? Infinity) < 3000 ? <LiveCameraFrame deviceId={selected.device_id} /> : <div className="camera-placeholder"><strong>NO LIVE FRAME</strong><span>최근 3초 동안 새 원본 프레임이 없습니다.</span></div>}
             <small>원본 프레임 {live?.frame_id ?? "확인 불가"} · 수신 후 {live?.age_ms ?? "-"}ms</small>
           </article>
           <article className="camera-live-card">

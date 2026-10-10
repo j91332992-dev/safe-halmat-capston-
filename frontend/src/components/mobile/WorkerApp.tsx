@@ -1,5 +1,6 @@
 import {useCallback, useEffect, useRef, useState} from "react";
-import {workerApi} from "../../services/api";
+import {getWsBaseUrl} from "../../services/config";
+import {auth, workerApi} from "../../services/api";
 import type {WorkerAppData} from "../../services/api";
 import {WorkCalendar, duration} from "./WorkCalendar";
 import {WorkerMap} from "./WorkerMap";
@@ -30,7 +31,12 @@ export function WorkerApp({onLogout}: {onLogout: () => Promise<void>}) {
   const lastStage = useRef(0);
   const [sosState, setSosState] = useState<"idle" | "sending" | "received" | "failed">("idle");
   const refresh = useCallback(async () => {
-    try {const value = await workerApi.me(); fetchedAt.current = Date.now(); setData(value); setError("");}
+    try {const value = await workerApi.me(); fetchedAt.current = Date.now(); setData(current => ({...value, devices: value.devices.map(device => {
+      const live = current?.devices.find(item => item.device_id === device.device_id);
+      return live?.heading_at && Date.parse(live.heading_at) > Date.parse(device.heading_at ?? "1970-01-01")
+        ? {...device, heading_deg: live.heading_deg, heading_at: live.heading_at,
+          component_status: {...device.component_status, ...live.component_status}} : device;
+    })})); setError("");}
     catch {setError("서버에 연결할 수 없습니다. 표시된 정보는 마지막 수신값입니다.");}
   }, []);
   useEffect(() => {
@@ -38,6 +44,42 @@ export function WorkerApp({onLogout}: {onLogout: () => Promise<void>}) {
     const clock = window.setInterval(() => setNow(Date.now()), 1000);
     return () => {window.clearInterval(poll); window.clearInterval(clock);};
   }, [refresh]);
+  useEffect(() => {
+    let active = true;
+    let socket: WebSocket | null = null;
+    let retry: ReturnType<typeof setTimeout>;
+    const connect = () => {
+      if (!active || !auth.getToken()) return;
+      socket = new WebSocket(`${getWsBaseUrl()}/ws/worker?token=${encodeURIComponent(auth.getToken()!)}`);
+      socket.onmessage = event => {
+        if (!active) return;
+        try {
+          const message = JSON.parse(event.data);
+          const sample = message.data;
+          if (message.type === "orientation" && typeof sample?.imu_yaw_deg === "number" && sample.heading_at) {
+            setData(current => current ? {...current, devices: current.devices.map(device => {
+              if (device.device_id !== sample.device_id || Date.parse(sample.heading_at) <= Date.parse(device.heading_at ?? "1970-01-01")) return device;
+              const offset = (device.component_status.heading_calibration as {offset_deg?: number} | undefined)?.offset_deg;
+              return {...device, online: true, heading_at: sample.heading_at,
+                heading_deg: typeof offset === "number" ? ((sample.imu_yaw_deg + offset) % 360 + 360) % 360 : null,
+                component_status: {...device.component_status, imu: "ready", imu_yaw_deg: sample.imu_yaw_deg,
+                  imu_received_at: sample.heading_at, heading_transport: "websocket"}};
+            })} : current);
+          } else if (message.type === "location" && sample?.worker && sample.location) {
+            const received = new Date().toISOString();
+            setData(current => current && current.worker.worker_id === sample.worker.worker_id ? {...current,
+              worker: {...current.worker, x: sample.location.x, y: sample.location.y, confidence: sample.location.confidence,
+                current_zone: sample.worker.current_zone, risk_level: sample.worker.risk_level, emergency: sample.worker.emergency},
+              devices: current.devices.map(device => device.device_type === "position_device" ? {...device, online: true, last_uwb_at: received} : device)} : current);
+          }
+        } catch { /* Polling remains available if an event is malformed. */ }
+      };
+      socket.onclose = () => { if (active) retry = setTimeout(connect, 2000); };
+      socket.onerror = () => socket?.close();
+    };
+    connect();
+    return () => { active = false; clearTimeout(retry); socket?.close(); };
+  }, []);
   useEffect(() => {
     if (!checklist) return;
     const escape = (e: KeyboardEvent) => {if (e.key === "Escape" && !busy) setChecklist(false);};

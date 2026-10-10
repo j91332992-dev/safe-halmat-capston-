@@ -12,7 +12,7 @@ from ..database import get_db
 from ..models.entities import Device, Event, SiteLayout, WorkerActivity, WorkerState, TeamMessage
 from ..services.event_service import event_to_dict
 from ..services.risk_service import recalculate_risk
-from ..services.serializers import worker_to_dict
+from ..services.serializers import worker_to_dict, device_to_dict
 from ..websocket import manager, call_manager
 from .auth import require_worker
 from ..services.worker_operations import activities, activity_spans, assignment, aware, day_seconds, KST, qualifications, work_summary
@@ -39,8 +39,7 @@ def me(identity: dict[str, object] = Depends(require_worker), db: Session = Depe
         "worker": {"worker_id": worker.worker_id, "worker_name": worker.worker_name, "site_name": layout.name if layout else worker.site_id, **assignment(db, worker),
                    "current_zone": worker.current_zone, "x": worker.x, "y": worker.y, "confidence": worker.confidence,
                    "risk_level": worker.risk_level, "emergency": worker.emergency, "updated_at": worker.updated_at.isoformat() + "Z"},
-        "devices": [{"device_id": d.device_id, "device_type": d.device_type, "online": d.online, "battery": d.battery,
-                     "last_seen": d.last_seen.isoformat() + "Z", "last_uwb_at": d.last_uwb_at.isoformat() + "Z" if d.last_uwb_at else None} for d in devices],
+        "devices": [device_to_dict(d) for d in devices],
         "events": [event_to_dict(e) for e in events],
         "work": work, "eligibility": qualifications(db, worker),
     }

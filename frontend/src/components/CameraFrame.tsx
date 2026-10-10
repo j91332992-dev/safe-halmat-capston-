@@ -1,5 +1,6 @@
 import {useEffect, useState} from "react";
 import {api} from "../services/api";
+import {loadCameraImage, releaseCameraImage} from "../services/cameraImage";
 
 // Metadata requests remain active while NO FRAME is displayed. Image requests
 // only happen for a new frame, so a stopped helmet cannot cause a 404 loop.
@@ -12,6 +13,8 @@ export function CameraFrame({deviceId, alt}: {deviceId?: string; alt: string}) {
     let token = "";
     let misses = 0;
     let pending: HTMLImageElement | null = null;
+    let visibleSrc = "";
+    let pendingSrc = "";
     const miss = () => {
       if (++misses >= 3 && active) {
         setFrame(null);
@@ -29,9 +32,19 @@ export function CameraFrame({deviceId, alt}: {deviceId?: string; alt: string}) {
         if (pending) { pending.onload = null; pending.onerror = null; }
         const image = new Image();
         pending = image;
-        image.onload = () => { if (active && pending === image) setFrame({deviceId, src: image.src}); };
-        image.onerror = () => { if (active && pending === image) setFrame(null); };
-        image.src = api.cameraImageUrl(deviceId, next);
+        const src = await loadCameraImage(api.cameraImageUrl(deviceId, next));
+        if (!active) { releaseCameraImage(src); return; }
+        releaseCameraImage(pendingSrc);
+        pendingSrc = src;
+        image.onload = () => { if (active && pending === image) {
+          const oldSrc = visibleSrc;
+          visibleSrc = src;
+          pendingSrc = "";
+          setFrame({deviceId, src});
+          releaseCameraImage(oldSrc);
+        } };
+        image.onerror = () => { if (active && pending === image) { releaseCameraImage(src); pendingSrc = ""; setFrame(null); } };
+        image.src = src;
       } catch { if (active) miss(); }
     };
     // Schedule after completion to avoid overlapping requests on a slow server.
@@ -42,6 +55,8 @@ export function CameraFrame({deviceId, alt}: {deviceId?: string; alt: string}) {
       active = false;
       clearTimeout(timer);
       if (pending) { pending.onload = null; pending.onerror = null; }
+      releaseCameraImage(visibleSrc);
+      releaseCameraImage(pendingSrc);
     };
   }, [deviceId]);
   return frame && frame.deviceId === deviceId

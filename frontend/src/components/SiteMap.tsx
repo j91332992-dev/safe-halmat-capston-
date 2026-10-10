@@ -33,7 +33,7 @@ function timestamp(value: string | null) {
   return new Date(normalized).getTime();
 }
 
-function HeadingArrow({angle, label}: {angle: number; label: string}) {
+export function HeadingArrow({angle, label}: {angle: number; label: string}) {
   const [display, setDisplay] = useState(angle);
   const current = useRef(angle);
   useEffect(() => {

@@ -87,11 +87,31 @@ async def dashboard_socket(websocket: WebSocket, token: str = ""):
         manager.disconnect(websocket)
 
 
+@app.websocket("/ws/worker")
+async def worker_socket(websocket: WebSocket, token: str = ""):
+    try:
+        identity = session_identity(f"Bearer {token}")
+        if identity.get("role") != "worker" or not identity.get("worker_id"):
+            raise HTTPException(403, "근로자 권한이 필요합니다.")
+    except HTTPException:
+        await websocket.close(code=4401)
+        return
+    await manager.connect_worker(str(identity["site_id"]), str(identity["worker_id"]), websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        manager.disconnect(websocket)
+
+
 @app.websocket("/ws/device/{device_id}")
 async def device_socket(websocket: WebSocket, device_id: str):
     await manager.connect_device(device_id, websocket)
     known_device = False
     device_site_id = None
+    device_worker_id = None
     checked_at = -10.0
     try:
         while True:
@@ -110,9 +130,12 @@ async def device_socket(websocket: WebSocket, device_id: str):
                     device = db.get(Device, device_id)
                     known_device = bool(device and device.device_type == "assistant_device")
                     device_site_id = device.site_id if known_device else None
+                    device_worker_id = device.worker_id if known_device else None
             if known_device:
                 sample = record_orientation(device_id, message)
                 if sample:
+                    sample["worker_id"] = device_worker_id
+                    sample["site_id"] = device_site_id
                     await manager.broadcast("orientation", sample, site_id=device_site_id)
     except WebSocketDisconnect:
         pass

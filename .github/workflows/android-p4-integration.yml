@@ -27,13 +27,15 @@ jobs:
           npm ci
           npm run build:mobile
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
           key: hanmir-p4-debug-signing-v1
       - name: Install required Android SDK packages
         run: |
-          yes | sdkmanager --licenses > /dev/null
           sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - name: Build APK
         working-directory: frontend/android

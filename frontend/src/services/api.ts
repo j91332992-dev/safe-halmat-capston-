@@ -65,7 +65,7 @@ export interface WorkerCalendar {month: string; timezone: string; days: Calendar
 export interface WorkerMapData {site: {name: string; width: number; height: number}; obstacles: {name: string; object_type: string; x: number; y: number; width: number; height: number}[]; zones: {zone_name: string; coordinates: {x: number; y: number; width?: number; height?: number; radius?: number; points?: {x: number; y: number}[]}; zone_category: string; zone_type: string; active: boolean}[]}
 export interface WorkerAppData {
   worker: {worker_id: string; worker_name: string; site_name: string; organization: string; team: string; job_title: string; current_zone: string | null; x: number; y: number; confidence: number; risk_level: string; emergency: boolean; updated_at: string};
-  devices: {device_id: string; device_type: string; online: boolean; battery: number | null; last_seen: string; last_uwb_at: string | null}[];
+  devices: Device[];
   events: {event_id: string; event_type: string; message: string; severity: string; status: string; created_at: string}[];
   work: WorkSummary;
   eligibility: Eligibility;
