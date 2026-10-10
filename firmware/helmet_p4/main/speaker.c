@@ -44,6 +44,8 @@ esp_err_t hanmir_speaker_start(void)
     speaker_enabled = true;
     playback_lock = xSemaphoreCreateMutex();
     if (!playback_lock) return ESP_ERR_NO_MEM;
+    ESP_LOGI(TAG, "I2S TX ready port=1 BCLK=%d WS=%d DATA=%d rate=16000 bits=16 mono=left",
+             CONFIG_HANMIR_SPK_BCLK_GPIO, CONFIG_HANMIR_SPK_WS_GPIO, CONFIG_HANMIR_SPK_DATA_GPIO);
     return ESP_OK;
 }
 
@@ -51,8 +53,14 @@ bool hanmir_speaker_ready(void) { return speaker_enabled; }
 
 static bool begin_playback(void)
 {
-    if (xSemaphoreTake(playback_lock, pdMS_TO_TICKS(200)) != pdTRUE) return false;
-    if (i2s_channel_enable(speaker) != ESP_OK) { xSemaphoreGive(playback_lock); return false; }
+    if (xSemaphoreTake(playback_lock, pdMS_TO_TICKS(200)) != pdTRUE) {
+        ESP_LOGE(TAG, "playback lock timeout"); return false;
+    }
+    esp_err_t err = i2s_channel_enable(speaker);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "I2S enable failed: %s", esp_err_to_name(err));
+        xSemaphoreGive(playback_lock); return false;
+    }
     hanmir_voice_set_playback(true);
     return true;
 }
@@ -81,6 +89,8 @@ bool hanmir_speaker_tone(int frequency, int duration_ms)
     int16_t pcm[320];
     int total = 16 * duration_ms;
     int produced = 0;
+    size_t total_written = 0;
+    ESP_LOGI(TAG, "tone start frequency=%d duration_ms=%d samples=%d", frequency, duration_ms, total);
     bool ok = true;
     while (produced < total) {
         int count = total - produced > 320 ? 320 : total - produced;
@@ -88,12 +98,16 @@ bool hanmir_speaker_tone(int frequency, int duration_ms)
             pcm[i] = (int16_t)(sin(2.0 * 3.141592653589793 * frequency * (produced + i) / 16000.0) * 9000.0);
         }
         size_t written = 0;
-        if (i2s_channel_write(speaker, pcm, count * 2, &written, 1000) != ESP_OK || written != count * 2) {
+        esp_err_t err = i2s_channel_write(speaker, pcm, count * 2, &written, 1000);
+        total_written += written;
+        if (err != ESP_OK || written != count * 2) {
+            ESP_LOGE(TAG, "tone write failed err=%s bytes=%u expected=%d", esp_err_to_name(err), (unsigned)written, count * 2);
             ok = false; break;
         }
         produced += count;
     }
     end_playback();
+    ESP_LOGI(TAG, "tone complete ok=%d bytes=%u expected=%d", ok, (unsigned)total_written, total * 2);
     return ok;
 }
 

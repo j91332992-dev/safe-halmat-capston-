@@ -49,6 +49,7 @@ static void command_task(void *arg)
     command_t cmd;
     for (;;) {
         if (xQueueReceive(commands, &cmd, portMAX_DELAY) != pdTRUE) continue;
+        ESP_LOGI(TAG, "execute kind=%s id=%s", cmd.kind, cmd.id);
         bool ok = false;
         if (!strcmp(cmd.kind, "play_tone")) ok = hanmir_speaker_tone(cmd.frequency, cmd.duration);
         else if (!strcmp(cmd.kind, "play_ack")) ok = hanmir_speaker_tone(1200, 180);
@@ -69,6 +70,7 @@ static void command_task(void *arg)
         else {
             ESP_LOGW(TAG, "command %s needs P4 hardware integration", cmd.kind);
         }
+        ESP_LOGI(TAG, "complete kind=%s id=%s ok=%d", cmd.kind, cmd.id, ok);
         if (cmd.id[0]) hanmir_report_speaker(cmd.id, ok);
     }
 }
