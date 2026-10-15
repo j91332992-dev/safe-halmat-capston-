@@ -62,6 +62,15 @@ def init_database() -> None:
 
     Base.metadata.create_all(bind=engine)
 
+    worker_columns = {column["name"] for column in inspect(engine).get_columns("worker_states")}
+    with engine.begin() as connection:
+        if "last_valid_location_at" not in worker_columns:
+            connection.execute(text("ALTER TABLE worker_states ADD COLUMN last_valid_location_at DATETIME"))
+        if "last_valid_location_json" not in worker_columns:
+            connection.execute(text("ALTER TABLE worker_states ADD COLUMN last_valid_location_json TEXT NOT NULL DEFAULT 'null'"))
+        if "position_status_json" not in worker_columns:
+            connection.execute(text("ALTER TABLE worker_states ADD COLUMN position_status_json TEXT NOT NULL DEFAULT '{}'"))
+
     if "allowed_worker_ids_json" not in {column["name"] for column in inspect(engine).get_columns("zones")}:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE zones ADD COLUMN allowed_worker_ids_json TEXT NOT NULL DEFAULT '[]'"))
@@ -146,6 +155,8 @@ def init_database() -> None:
         # 이후 실제 heartbeat/프레임/음성/UWB 수신이 온 장치만 온라인이 됩니다.
         db.query(Device).update({Device.online: False}, synchronize_session=False)
         db.query(Anchor).update({Anchor.online: False}, synchronize_session=False)
+        db.query(WorkerState).update({WorkerState.position_status_json: json.dumps({
+            "mode": settings.uwb_speed_mode, "accepted": None, "applied": False, "reason": "server_restart_acquisition"})}, synchronize_session=False)
         db.query(Event).filter(Event.event_type.like("MOCK_%")).delete(synchronize_session=False)
         db.query(EvacuationIncident).filter(EvacuationIncident.source == "mock").delete(synchronize_session=False)
 

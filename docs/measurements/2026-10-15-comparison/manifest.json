@@ -1,0 +1,35 @@
+{
+  "scope": [
+    "distance_2m_before",
+    "distance_2m_after_median5",
+    "position_p4",
+    "position_modified"
+  ],
+  "sources": [
+    {
+      "filename": "raw/uwb-exact-2m-20261015-r2.jsonl.gz",
+      "rows": 386,
+      "original_sha256": "8281fff3e8c63b9b1073d33dd2713851f49b93bdb2b75b7feec04d852695243e",
+      "shared_sha256": "1c5ef47fb0e3b7a106d36883e313f034d77c4e8742ccce5f8ca2e92b3947c967"
+    },
+    {
+      "filename": "raw/uwb-position-center-server-20261015-r2.jsonl.gz",
+      "rows": 382,
+      "original_sha256": "d7c3c6b014960fe4c131bbe6e906e8bfc6c70e5293d7d32191c09fd0c1e46166",
+      "shared_sha256": "3ed69d3fe31dbf24fb5ce9b24cce813b11f55dfd27a72a4943f50594a3ab3d53"
+    }
+  ],
+  "p4_commit": "722c9fd327997b8d4bdd59ae088928d9285eba40",
+  "transformations": [
+    "hardware identifiers and local paths redacted consistently",
+    "distance: firmware wire only; obsolete bridge processing omitted",
+    "position: original input, diagnostics and actual outputs preserved"
+  ],
+  "limitations": [
+    "Distance before/after is same-capture replay with calibration OFF; not separate firmware trials",
+    "P4 positions are historical numerical replay; modified positions are actual live output",
+    "2x1m geometry is experiment metadata only; no deployment map settings are included",
+    "Position reference is approximate, not surveyed ground truth"
+  ],
+  "private_p4_replay_trace_sha256": "3143a9b10dcf7f6029143beeb5d5203e843fe16ab8a21a870bff54761206cde6"
+}

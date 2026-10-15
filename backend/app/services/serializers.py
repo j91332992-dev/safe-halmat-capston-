@@ -40,6 +40,12 @@ def device_to_dict(device) -> dict:
 
 
 def worker_to_dict(worker) -> dict:
+    from ..database import utcnow
+    position_status = parse_json(worker.position_status_json, {})
+    position_status.update(age_basis="server_acceptance", last_valid_at=iso(worker.last_valid_location_at),
+                           last_valid_position=parse_json(worker.last_valid_location_json, None),
+                           last_valid_age_seconds=max(0.0, (utcnow()-worker.last_valid_location_at).total_seconds())
+                           if worker.last_valid_location_at else None)
     return {
         "worker_id": worker.worker_id,
         "worker_name": worker.worker_name,
@@ -49,6 +55,7 @@ def worker_to_dict(worker) -> dict:
         "x": worker.x,
         "y": worker.y,
         "confidence": worker.confidence,
+        "position_status": position_status,
         "current_zone": worker.current_zone,
         "risk_score": worker.risk_score,
         "risk_level": worker.risk_level,

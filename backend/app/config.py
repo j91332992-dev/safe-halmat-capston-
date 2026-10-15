@@ -1,4 +1,6 @@
 from pathlib import Path
+from typing import Literal
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +18,47 @@ class Settings(BaseSettings):
     site_height_m: float = 8.2
     device_offline_seconds: int = 20
     location_ema_alpha: float = 0.65
+    uwb_log_path: str = str(BASE_DIR / "logs" / "uwb-observations.jsonl")
+    uwb_log_max_bytes: int = 10 * 1024 * 1024
+    uwb_log_backups: int = 4
+    uwb_log_retention_days: float = 7
+    uwb_calibration_enabled: bool = False
+    uwb_median_enabled: bool = True
+    uwb_median_window: int = Field(default=5, ge=1, le=101)
+    uwb_median_sample_ttl_seconds: float = Field(default=3.0, gt=0)
+    uwb_filter_reset_seconds: float = Field(default=15.0, gt=0)
+    uwb_frame_max_age_seconds: float = Field(default=5.0, gt=0)
+    uwb_filter_state_ttl_seconds: float = Field(default=3600, ge=60)
+    uwb_filter_max_tags: int = Field(default=1000, ge=1, le=100000)
+    uwb_filter_state_path: str = str(BASE_DIR / "logs" / "uwb-distance-state.sqlite3")
+    # Trial assumptions, not validated human-motion or safety limits.
+    uwb_speed_mode: Literal["observe", "enforce"] = "observe"
+    uwb_max_speed_mps: float = Field(default=3.0, gt=0, allow_inf_nan=False)
+    uwb_speed_margin_m: float = Field(default=1.0, ge=0, allow_inf_nan=False)
+    uwb_speed_min_dt_seconds: float = Field(default=0.02, gt=0)
+    uwb_speed_max_gap_seconds: float = Field(default=10.0, gt=0)
+    uwb_speed_acquire_samples: int = Field(default=3, ge=2, le=100)
+    uwb_speed_acquire_span_seconds: float = Field(default=0.6, gt=0)
+    uwb_speed_acquire_margin_m: float = Field(default=0.75, ge=0)
+    uwb_speed_reacquire_rejections: int = Field(default=5, ge=2)
+    uwb_speed_reacquire_span_seconds: float = Field(default=2.0, gt=0)
+    uwb_speed_state_ttl_seconds: float = Field(default=3600, ge=60)
+    # Provisional Ipatov rules; no labelled LOS/NLOS calibration dataset yet.
+    uwb_quality_mode: Literal["observe", "enforce"] = "observe"
+    uwb_quality_gap_warn_db: float = Field(default=6, ge=0, allow_inf_nan=False)
+    uwb_quality_gap_bad_db: float = Field(default=12, ge=0, allow_inf_nan=False)
+    uwb_quality_path_warn_samples: float = Field(default=4, ge=0, allow_inf_nan=False)
+    uwb_quality_path_bad_samples: float = Field(default=10, ge=0, allow_inf_nan=False)
+    uwb_quality_rx_weak_dbm: float = Field(default=-90, allow_inf_nan=False)
+    uwb_quality_fp_weak_dbm: float = Field(default=-95, allow_inf_nan=False)
+    uwb_quality_gap_tolerance_db: float = Field(default=0.5, ge=0, allow_inf_nan=False)
+    uwb_quality_suspect_weight: float = Field(default=0.35, ge=0.05, lt=1)
+    uwb_quality_unknown_weight: float = Field(default=0.2, ge=0.05, lt=1)
+    uwb_quality_unknown_policy: Literal["downweight", "exclude"] = "downweight"
+    uwb_quality_recovery_samples: int = Field(default=3, ge=2, le=100)
+    uwb_quality_recovery_span_seconds: float = Field(default=0.6, gt=0)
+    uwb_solver_min_geometry_ratio: float = Field(default=1e-6, gt=0, lt=0.25)
+    uwb_solver_max_rmse_m: float = Field(default=1.0, gt=0, allow_inf_nan=False)
     location_stationary_radius_m: float = 0.15
     # Keep receiving positions continuously, but leave a stationary marker fixed
     # until movement from the last accepted position reaches 30 cm twice.
@@ -75,6 +118,12 @@ class Settings(BaseSettings):
     yolo_smoke_confidence: float = 0.45
     yolo_smoke_confirm_frames: int = 2
     model_config = SettingsConfigDict(env_file=BASE_DIR / ".env", extra="ignore")
+
+    @model_validator(mode="after")
+    def ordered_uwb_quality_thresholds(self):
+        if self.uwb_quality_gap_bad_db <= self.uwb_quality_gap_warn_db or self.uwb_quality_path_bad_samples <= self.uwb_quality_path_warn_samples:
+            raise ValueError("bad signal thresholds must be greater than warning thresholds")
+        return self
 
     @property
     def wake_word_alias_list(self) -> list[str]:

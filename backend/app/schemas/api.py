@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
 class DeviceRegister(BaseModel):
@@ -45,10 +45,53 @@ class ButtonEventIn(BaseModel):
     occurred_at: datetime | None = None
 
 
+class UwbDiagnostics(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False, extra="allow")
+    status: Literal["valid", "missing", "invalid"] = "missing"
+    reason: str | None = Field(default=None, max_length=128)
+    direction: Literal["anchor_to_tag"] = "anchor_to_tag"
+    sequence: Literal["ipatov"] = "ipatov"
+    rx_power_dbm: float | None = None
+    first_path_power_dbm: float | None = None
+    power_difference_db: float | None = None
+    peak_minus_first_path_samples: float | None = None
+    clock_offset_ppm: float | None = None
+    raw: dict[str, int | float | bool | None] = Field(default_factory=dict, max_length=32)
+
+    @model_validator(mode="after")
+    def explicit_validity(self):
+        derived = (self.rx_power_dbm, self.first_path_power_dbm,
+                   self.power_difference_db, self.peak_minus_first_path_samples, self.clock_offset_ppm)
+        if self.status == "valid" and any(value is None for value in derived):
+            raise ValueError("valid diagnostics require all derived values")
+        if self.status != "valid" and any(value is not None for value in derived[:4]):
+            raise ValueError("missing/invalid power diagnostics must use null")
+        return self
+
+
+class RangeObservation(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+    anchor_id: str = Field(max_length=64)
+    anchor_hw_id: int | None = None
+    status: Literal["valid", "missing", "invalid"]
+    raw_distance_m: float | None = None
+    legacy_range_cm: int | None = None
+    measured_uptime_us: int | None = Field(default=None, ge=0)
+    rx_timestamp_dtu: int | None = Field(default=None, ge=0, lt=2**40)
+    diagnostics: UwbDiagnostics = Field(default_factory=UwbDiagnostics)
+
+
 class DistanceMeasurement(BaseModel):
-    anchor_id: str
+    model_config = ConfigDict(allow_inf_nan=False)
+    anchor_id: str = Field(max_length=64)
     distance_m: float = Field(gt=0, lt=100)
     quality: float = Field(default=1.0, ge=0, le=1)
+    raw_distance_m: float | None = None
+    median_distance_m: float | None = None
+    calibration_offset_m: float | None = None
+    held: bool = False
+    source_measurement_id: str | None = Field(default=None, max_length=192)
+    diagnostics: UwbDiagnostics = Field(default_factory=UwbDiagnostics)
 
 
 class UwbDistancesIn(BaseModel):
@@ -57,9 +100,35 @@ class UwbDistancesIn(BaseModel):
     worker_id: str
     helmet_id: str
     device_id: str
-    uwb_tag_id: str
+    uwb_tag_id: str = Field(max_length=128)
     distances_calibrated: bool = True
-    measurements: list[DistanceMeasurement] = Field(min_length=3)
+    schema_version: int = 1
+    firmware_version: str | None = Field(default=None, max_length=128)
+    source_revision: str | None = Field(default=None, max_length=128)
+    session_id: str | None = Field(default=None, max_length=128)
+    measurement_id: str | None = Field(default=None, max_length=192)
+    cycle_id: int | None = Field(default=None, ge=0)
+    sequence: int | None = Field(default=None, ge=0, le=255)
+    tag_hw_id: int | None = None
+    measured_uptime_us: int | None = Field(default=None, ge=0)
+    measured_at: datetime | None = None
+    time_basis: str | None = Field(default=None, max_length=64)
+    firmware_dropped_cycles: int = Field(default=0, ge=0)
+    transport: Literal["usb", "wifi", "legacy"] = "legacy"
+    bridge_received_at: datetime | None = None
+    bridge_capture_id: str | None = Field(default=None, max_length=64)
+    observations: list[RangeObservation] = Field(default_factory=list, max_length=16)
+    measurements: list[DistanceMeasurement] = Field(max_length=16)
+
+    @model_validator(mode="after")
+    def distinct_anchors(self):
+        for rows in (self.observations, self.measurements):
+            if len({row.anchor_id for row in rows}) != len(rows):
+                raise ValueError("duplicate anchor_id in frame")
+        if self.schema_version >= 2 and not all(value is not None for value in
+                (self.session_id, self.measurement_id, self.cycle_id, self.measured_uptime_us)):
+            raise ValueError("schema v2 requires session, measurement, cycle and device uptime")
+        return self
 
 
 class AnchorIn(BaseModel):
