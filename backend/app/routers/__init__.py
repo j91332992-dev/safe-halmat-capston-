@@ -1,6 +1,8 @@
 from . import anchors, audio, auth, button, camera, dashboard, devices, diagnostics, evacuation, events, layout, risk, system, uwb, workers, zones, worker_app
+from . import operating_policy
 
 ALL_ROUTERS = [
+    operating_policy.router,
     auth.router,
     worker_app.router,
     devices.router,

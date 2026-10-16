@@ -26,6 +26,8 @@ def packet(cycle, **extra):
 
 @pytest.fixture
 def rig(monkeypatch):
+    from app.routers.auth import require_site
+    monkeypatch.setitem(app.dependency_overrides, require_site, lambda: "site-001")
     rows = []
     monkeypatch.setattr(uwb, "record_observation", lambda row: rows.append(copy.deepcopy(row)) or True)
     original = DistanceFilter.process

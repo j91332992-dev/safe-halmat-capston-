@@ -37,6 +37,8 @@ def payload(cycle=0, bad=()):
 
 @pytest.fixture
 def rig(monkeypatch):
+    from app.routers.auth import require_site
+    monkeypatch.setitem(app.dependency_overrides, require_site, lambda: "site-001")
     from app.services import uwb_distance_filter
     monkeypatch.setattr(uwb_distance_filter, "calibration_offsets", lambda: {})
     original = DistanceFilter.process

@@ -3,6 +3,7 @@ import json
 import math
 from typing import Any
 from .orientation_service import live_status
+from .operating_policy import data_health, policy
 
 
 def parse_json(value: str | None, fallback: Any) -> Any:
@@ -49,6 +50,15 @@ def device_to_dict(device) -> dict:
         "last_uwb_at": iso(device.last_uwb_at),
         "last_speaker_status": device.last_speaker_status,
         "last_speaker_at": iso(device.last_speaker_at),
+        "data_health": {
+            "heartbeat": data_health(device.last_seen, policy.heartbeat),
+            "camera": data_health(device.last_camera_at, policy.camera),
+            "heading": data_health(status.get("imu_received_at"), policy.heading,
+                                   available=status.get("imu") == "ready"),
+            # A heartbeat is not proof of a successful battery read or YOLO inference.
+            "battery": data_health(None, policy.battery),
+            "yolo": data_health(None, policy.yolo),
+        },
     }
 
 
@@ -74,6 +84,10 @@ def worker_to_dict(worker) -> dict:
         "y": worker.y,
         "confidence": worker.confidence,
         "position_status": position_status,
+        "data_health": {
+            "uwb": data_health(worker.last_valid_location_at, policy.uwb,
+                               age_basis="server_acceptance"),
+        },
         "current_zone": worker.current_zone,
         "risk_score": worker.risk_score,
         "risk_level": worker.risk_level,
