@@ -82,11 +82,17 @@ menu "HANMIR P4 integration"
     config HANMIR_MIC_DATA_GPIO
         int "Verified INMP441 DATA GPIO"
         default -1
+    config HANMIR_MIC_RIGHT_SLOT
+        bool "Select right microphone slot (L/R HIGH); default left (L/R GND)"
+        default n
     config HANMIR_ENABLE_NS
         bool "ESP-SR WebRTC noise suppression"
         default y
     config HANMIR_ENABLE_WAKENET
         bool "Log WakeNet hits (requires verified model; does not bypass server gate)"
+        default n
+    config HANMIR_LOCAL_WAKE_SHADOW
+        bool "Experimental Tutus local model score logging only (no wake action)"
         default n
     config HANMIR_CAMERA_MAX_BYTES
         int "Maximum JPEG bytes queued for stream"

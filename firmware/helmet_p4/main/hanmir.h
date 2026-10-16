@@ -39,3 +39,5 @@ void hanmir_sensors_init(void);
 bool hanmir_battery_percent(float *percent);
 bool hanmir_imu_ready(void);
 bool hanmir_imu_orientation(float *yaw, float *pitch, float *roll);
+
+bool hanmir_speaker_ack(void);

@@ -9,7 +9,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 
-typedef struct { char kind[32]; char id[64]; char url[192]; int frequency; int duration; int repeats; int send_timeout_ms; } command_t;
+typedef struct { bool local_ack; char kind[32]; char id[64]; char url[192]; int frequency; int duration; int repeats; int send_timeout_ms; } command_t;
 static const char *TAG = "hanmir_command";
 static QueueHandle_t commands;
 static esp_websocket_client_handle_t client;
@@ -28,6 +28,8 @@ static void command_event(void *arg, esp_event_base_t base, int32_t id, void *ev
     cJSON *payload = cJSON_GetObjectItem(root, "payload");
     if (cJSON_IsString(kind)) strlcpy(command.kind, kind->valuestring, sizeof(command.kind));
     if (cJSON_IsString(id_field)) strlcpy(command.id, id_field->valuestring, sizeof(command.id));
+    cJSON *asset = cJSON_GetObjectItem(payload, "local_asset");
+    command.local_ack = cJSON_IsString(asset) && !strcmp(asset->valuestring, "acknowledgement");
     cJSON *url = cJSON_GetObjectItem(payload, "audio_url");
     cJSON *frequency = cJSON_GetObjectItem(payload, "frequency");
     cJSON *duration = cJSON_GetObjectItem(payload, "duration");
@@ -52,8 +54,8 @@ static void command_task(void *arg)
         ESP_LOGI(TAG, "execute kind=%s id=%s", cmd.kind, cmd.id);
         bool ok = false;
         if (!strcmp(cmd.kind, "play_tone")) ok = hanmir_speaker_tone(cmd.frequency, cmd.duration);
-        else if (!strcmp(cmd.kind, "play_ack")) ok = hanmir_speaker_tone(1200, 180);
-        else if (!strcmp(cmd.kind, "play_audio")) ok = hanmir_speaker_play_url(cmd.url);
+        else if (!strcmp(cmd.kind, "play_ack")) ok = hanmir_speaker_ack();
+        else if (!strcmp(cmd.kind, "play_audio")) ok = cmd.local_ack ? hanmir_speaker_ack() : hanmir_speaker_play_url(cmd.url);
         else if (!strcmp(cmd.kind, "play_alert")) {
             hanmir_call_interrupt();
             ok = true;

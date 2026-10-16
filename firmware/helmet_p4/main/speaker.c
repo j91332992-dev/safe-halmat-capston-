@@ -6,6 +6,8 @@
 #include "esp_check.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -111,54 +113,108 @@ bool hanmir_speaker_tone(int frequency, int duration_ms)
     return ok;
 }
 
+static uint16_t read_u16(const uint8_t *p) { return p[0] | ((uint16_t)p[1] << 8); }
+static uint32_t read_u32(const uint8_t *p) { return read_u16(p) | ((uint32_t)read_u16(p + 2) << 16); }
+
 bool hanmir_speaker_play_url(const char *path)
 {
     if (!speaker_enabled || !path || strncmp(path, "/tts/", 5) != 0 || strlen(path) > 160) return false;
-    char url[320];
-    snprintf(url, sizeof(url), "http://%s:%d%s", CONFIG_HANMIR_SERVER_HOST,
-             CONFIG_HANMIR_SERVER_PORT, path);
-    esp_http_client_config_t config = {.url = url, .timeout_ms = 5000};
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (!client) return false;
-    bool ok = esp_http_client_open(client, 0) == ESP_OK;
-    if (ok) {
-        esp_http_client_fetch_headers(client);
-        ok = esp_http_client_get_status_code(client) == 200;
-    }
-    if (!ok || !begin_playback()) {
-        esp_http_client_cleanup(client);
+    // Download short TTS completely before enabling I2S. Network stalls must
+    // not drain the 60 ms DMA queue in the middle of a spoken sentence.
+    const size_t capacity = 512 * 1024;
+    int64_t started = esp_timer_get_time();
+    uint8_t *wav = heap_caps_malloc(capacity, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!wav) {
+        ESP_LOGE(TAG, "tts buffer allocation failed psram_free=%u heap_free=%u",
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
         return false;
     }
-    uint8_t buf[1024];
-    uint8_t header[44];
-    size_t header_read = 0;
-    while (ok) {
-        int n = esp_http_client_read(client, (char *)buf, sizeof(buf));
+    char url[320];
+    snprintf(url, sizeof(url), "http://%s:%d%s", CONFIG_HANMIR_SERVER_HOST, CONFIG_HANMIR_SERVER_PORT, path);
+    esp_http_client_config_t config = {.url = url, .timeout_ms = 5000};
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    bool ok = client && esp_http_client_open(client, 0) == ESP_OK;
+    int64_t expected = -1;
+    if (ok) {
+        expected = esp_http_client_fetch_headers(client);
+        ok = esp_http_client_get_status_code(client) == 200 && expected >= 0 && expected <= (int64_t)capacity;
+    }
+    size_t used = 0;
+    while (ok && used < capacity) {
+        int n = esp_http_client_read(client, (char *)wav + used, capacity-used > 4096 ? 4096 : capacity-used);
         if (n < 0) { ok = false; break; }
         if (n == 0) break;
-        int offset = 0;
-        if (header_read < sizeof(header)) {
-            size_t take = sizeof(header) - header_read;
-            if (take > (size_t)n) take = n;
-            memcpy(header + header_read, buf, take);
-            header_read += take;
-            offset = take;
-            if (header_read == sizeof(header) &&
-                (memcmp(header, "RIFF", 4) || memcmp(header + 8, "WAVE", 4) ||
-                 header[22] != 1 || header[23] != 0 ||
-                 header[24] != 0x80 || header[25] != 0x3e ||
-                 header[34] != 16 || header[35] != 0)) {
-                ESP_LOGE(TAG, "TTS must be mono 16 kHz 16-bit PCM WAV");
-                ok = false; break;
-            }
+        used += n;
+    }
+    if (ok) ok = esp_http_client_is_complete_data_received(client) && (expected == 0 || used == (size_t)expected);
+    if (client) esp_http_client_cleanup(client);
+    int64_t download_us = esp_timer_get_time()-started;
+    size_t pcm_offset=0, pcm_bytes=0;
+    bool fmt_ok=false;
+    if (ok) ok = used>=12 && !memcmp(wav,"RIFF",4) && !memcmp(wav+8,"WAVE",4)
+                 && (uint64_t)read_u32(wav+4)+8 <= used;
+    size_t riff_end = ok ? (size_t)read_u32(wav+4)+8 : 0;
+    for (size_t offset=12; ok && offset+8<=riff_end;) {
+        uint32_t length=read_u32(wav+offset+4);
+        if (length > riff_end-offset-8) { ok=false; break; }
+        const uint8_t *chunk=wav+offset+8;
+        if (!memcmp(wav+offset,"fmt ",4)) {
+            fmt_ok=length>=16 && read_u16(chunk)==1 && read_u16(chunk+2)==1 && read_u32(chunk+4)==16000
+                   && read_u16(chunk+12)==2 && read_u16(chunk+14)==16;
+        } else if (!memcmp(wav+offset,"data",4)) {
+            pcm_offset=offset+8;pcm_bytes=length;
         }
-        if (offset < n) {
-            size_t written = 0;
-            if (i2s_channel_write(speaker, buf + offset, n - offset, &written, 1000) != ESP_OK ||
-                written != n - offset) { ok = false; break; }
+        offset+=8+(size_t)length+(length&1);
+    }
+    ok = ok && fmt_ok && pcm_bytes>0 && !(pcm_bytes&1);
+    ESP_LOGI(TAG, "tts preload ok=%d bytes=%u pcm=%u download_ms=%ld heap_free=%u psram_free=%u",
+             ok,(unsigned)used,(unsigned)pcm_bytes,(long)(download_us/1000),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    size_t written_total=0;
+    int64_t max_write_us=0, playback_started=esp_timer_get_time();
+    if (ok) {
+        ok=begin_playback();
+        if (ok) {
+            for (size_t offset=0;offset<pcm_bytes;) {
+                size_t bytes=pcm_bytes-offset>2048?2048:pcm_bytes-offset,written=0;
+                int64_t before=esp_timer_get_time();
+                esp_err_t err=i2s_channel_write(speaker,wav+pcm_offset+offset,bytes,&written,1000);
+                int64_t elapsed=esp_timer_get_time()-before;
+                if (elapsed>max_write_us)max_write_us=elapsed;
+                written_total+=written;
+                if (err!=ESP_OK || written!=bytes) { ok=false;break; }
+                offset+=bytes;
+            }
+            end_playback();
+        }
+    }
+    heap_caps_free(wav);
+    ESP_LOGI(TAG,"tts buffered complete ok=%d written=%u expected=%u playback_ms=%ld max_write_ms=%ld heap_free=%u psram_free=%u",
+             ok,(unsigned)written_total,(unsigned)pcm_bytes,(long)((esp_timer_get_time()-playback_started)/1000),
+             (long)(max_write_us/1000),(unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    return ok;
+}
+
+// Fixed wake acknowledgement, PCM16 mono 16 kHz, generated once and embedded.
+extern const uint8_t wake_ack_start[] asm("_binary_wake_ack_pcm_start");
+extern const uint8_t wake_ack_end[] asm("_binary_wake_ack_pcm_end");
+bool hanmir_speaker_ack(void)
+{
+    if (!speaker_enabled || !begin_playback()) return false;
+    size_t length = wake_ack_end - wake_ack_start;
+    bool ok = true;
+    ESP_LOGI(TAG, "local acknowledgement start bytes=%u", (unsigned)length);
+    for (size_t offset = 0; offset < length; offset += 640) {
+        size_t count = length - offset > 640 ? 640 : length - offset;
+        size_t written = 0;
+        if (i2s_channel_write(speaker, wake_ack_start + offset, count, &written, 1000) != ESP_OK || written != count) {
+            ok = false; break;
         }
     }
     end_playback();
-    esp_http_client_cleanup(client);
-    return ok && header_read == sizeof(header);
+    ESP_LOGI(TAG, "local acknowledgement complete ok=%d", ok);
+    return ok;
 }

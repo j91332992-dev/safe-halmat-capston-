@@ -1,6 +1,7 @@
 import logging
 
 from ..config import settings
+from .speech_service import normalize
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +54,19 @@ def build_response(intent: str, worker: dict) -> tuple[str, str | None]:
     return responses.get(intent, ("다시 한 번 말씀해 주세요.", "play_tone"))
 
 
+def is_explanation_request(text: str) -> bool:
+    """Only explicit explanation/advice requests may use the LLM fallback."""
+    value = normalize(text)
+    return any(phrase in value for phrase in (
+        "설명해", "설명좀", "정리해", "분석해", "판단해", "추천해",
+        "어떻게해야", "어떻게하면", "뭘해야", "무엇을해야", "왜위험",
+        "어떤위험", "위험요소", "주의사항", "작업방법", "대처방법",
+    ))
+
+
 async def build_response_smart(intent: str, worker: dict, user_text: str = "") -> tuple[str, str | None]:
     fallback = build_response(intent, worker)
-    if intent in FAST_INTENTS:
+    if intent in FAST_INTENTS or (intent == "unknown" and not is_explanation_request(user_text)):
         return fallback
     freshness = worker.get("data_freshness")
     if freshness is not None and not freshness.get("vision") and not freshness.get("location"):

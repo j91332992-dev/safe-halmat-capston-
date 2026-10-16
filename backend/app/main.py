@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 import json
 from time import monotonic
@@ -28,9 +29,13 @@ async def lifespan(_: FastAPI):
     reset_location_filter()
     init_database()
     await start_camera_processor()
+    from .services.evacuation_navigation import run_navigation
+    navigation_task = asyncio.create_task(run_navigation())
     try:
         yield
     finally:
+        navigation_task.cancel()
+        await asyncio.gather(navigation_task, return_exceptions=True)
         await stop_camera_processor()
 
 
@@ -162,7 +167,8 @@ def call_status(device_id: str, site_id: str = Depends(require_site), db: Sessio
         raise HTTPException(404, "장치를 찾을 수 없습니다.")
     return {"device_id": device_id, "channel_online": call_manager.device_online(device_id),
             "operator_connected": bool(call_manager.operators.get(device_id)),
-            "traffic": call_manager.traffic.get(device_id, {})}
+            "traffic": call_manager.traffic.get(device_id, {}),
+            "relay": call_manager.diagnostics(device_id)}
 
 
 @app.websocket("/ws/call/device/{device_id}")

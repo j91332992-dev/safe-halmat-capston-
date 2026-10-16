@@ -1,6 +1,7 @@
 import {useEffect, useMemo, useRef, useState} from "react";
 import type {Anchor, Device, EvacuationRoute, FireZone, LocationPoint, Obstacle, Worker, Zone} from "../types";
 import {api} from "../services/api";
+import {SmoothPosition} from "./SmoothPosition";
 import {AnchorSymbol} from "./AnchorSymbol";
 
 interface Props {
@@ -154,6 +155,9 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, devi
           <text x="55" y="55">A 구역 · 조립/이동 통로</text>
           <text x="730" y="550">화기 작업 구역</text>
         </g>
+        {evacuationRoute?.navigation_enabled && evacuationRoute.available && evacuationRoute.path.length > 1 && <polyline
+          points={evacuationRoute.path.map(p => `${scaleX(p.x)},${scaleY(p.y)}`).join(" ")}
+          fill="none" stroke="#06b6d4" strokeWidth="5" strokeDasharray="10 6" aria-label="등록 지도 기준 대피 경로" />}
         {obstacles.map(obstacle => (
           <g key={obstacle.obstacle_id} className={"map-obstacle " + (obstacle.object_type ?? "obstacle")}>
             <rect
@@ -207,26 +211,28 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, devi
           // Account for the map's unequal X/Y scale and inverted screen Y.
           const screenAngle = Math.atan2(-Math.sin(angle) * 520 / height, Math.cos(angle) * 900 / width) * 180 / Math.PI;
           return (
-            <g
+            <SmoothPosition
               key={worker.worker_id}
-              transform={`translate(${scaleX(worker.x)}, ${scaleY(worker.y)})`}
+              x={scaleX(worker.x)} y={scaleY(worker.y)} resetKey={`${worker.worker_id}:${width}:${height}`}
               className={`worker-node ${selected ? "selected" : ""} ${worker.emergency ? "emergency" : ""}`}
               onClick={() => onSelect(worker)}
               role="button"
               tabIndex={0}
               onKeyDown={event => event.key === "Enter" && onSelect(worker)}
             >
+              <g transform="scale(.75)">
               <circle r={38 + (1 - worker.confidence) * 25} fill="none" stroke={color} opacity=".16" strokeWidth="12" />
               {hasHeading && <HeadingArrow angle={screenAngle} label={`${worker.worker_name} 바라보는 방향 ${device!.heading_deg!.toFixed(0)}도`} />}
               <circle r="25" fill={color} filter="url(#glow)" />
               <path d="M-8-4 A8 8 0 1 1 8-4 M-13 15 C-11 4 11 4 13 15" fill="none" stroke="#06101a" strokeWidth="4" strokeLinecap="round" />
+              </g>
               {worker.emergency && <g className="worker-sos-badge" transform="translate(-28,-62)"><rect x="0" y="0" width="56" height="24" rx="12" /><text x="28" y="16" textAnchor="middle">SOS</text></g>}
               <g transform="translate(32,-29)">
                 <rect x="0" y="0" width="128" height="52" rx="11" className="worker-label-bg" />
                 <text x="12" y="20" className="worker-label-name">{worker.worker_name}</text>
                 <text x="12" y="39" className="worker-label-risk">{worker.emergency ? "긴급 도움 요청" : `${worker.risk_score}점 · ${worker.risk_level}`}</text>
               </g>
-            </g>
+            </SmoothPosition>
           );
         })}
       </svg>

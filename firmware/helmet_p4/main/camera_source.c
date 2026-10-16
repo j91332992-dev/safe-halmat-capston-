@@ -11,6 +11,9 @@ bool hanmir_camera_source_ready(void) { return capturing; }
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include "esp_video_init.h"
+#include "esp_video_ioctl.h"
+#include "esp_timer.h"
+#include <errno.h>
 #include "esp_video_device.h"
 #include "linux/videodev2.h"
 #include "driver/jpeg_encode.h"
@@ -47,25 +50,50 @@ static void release_camera(void)
 
 static void capture_task(void *arg)
 {
-    unsigned frames = 0;
+    unsigned frames = 0, recoveries = 0;
+    int64_t logged = esp_timer_get_time();
+    uint32_t max_dq_ms = 0, max_encode_ms = 0;
     for (;;) {
         struct v4l2_buffer frame = {.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
                                   .memory = V4L2_MEMORY_MMAP};
+        int64_t begin = esp_timer_get_time();
         if (ioctl(camera_fd, VIDIOC_DQBUF, &frame) != 0) {
-            ESP_LOGE(TAG, "camera dequeue failed; capture stopped");
-            break;
+            ESP_LOGE(TAG, "camera dequeue timeout/error errno=%d; stream recovery=%u", errno, ++recoveries);
+            int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+            if (ioctl(camera_fd, VIDIOC_STREAMOFF, &type) != 0) break;
+            bool queued = true;
+            for (unsigned i = 0; i < 2; ++i) {
+                struct v4l2_buffer buf = {.index=i, .type=V4L2_BUF_TYPE_VIDEO_CAPTURE,
+                                         .memory=V4L2_MEMORY_MMAP};
+                if (ioctl(camera_fd, VIDIOC_QBUF, &buf) != 0) queued = false;
+            }
+            if (!queued || ioctl(camera_fd, VIDIOC_STREAMON, &type) != 0) break;
+            ESP_LOGW(TAG, "camera stream recovered; settings retained");
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
         }
+        uint32_t dq_ms = (esp_timer_get_time() - begin) / 1000;
+        if (dq_ms > max_dq_ms) max_dq_ms = dq_ms;
         if (frame.index < 2 && (frame.flags & V4L2_BUF_FLAG_DONE)) {
             uint32_t size = 0;
+            begin = esp_timer_get_time();
             esp_err_t err = jpeg_encoder_process(encoder, &encoding,
                 buffers[frame.index], frame.bytesused,
                 jpeg_buffer, jpeg_capacity, &size);
+            uint32_t encode_ms = (esp_timer_get_time() - begin) / 1000;
+            if (encode_ms > max_encode_ms) max_encode_ms = encode_ms;
             if (err == ESP_OK) {
                 hanmir_camera_submit_jpeg(jpeg_buffer, size, encoding.width, encoding.height);
                 if (++frames % 100 == 0) ESP_LOGI(TAG, "captured %u JPEG frames; transport drops=%lu", frames, (unsigned long)hanmir_camera_dropped());
             } else ESP_LOGW(TAG, "JPEG encoding: %s", esp_err_to_name(err));
         }
         if (ioctl(camera_fd, VIDIOC_QBUF, &frame) != 0) break;
+        if (esp_timer_get_time() - logged > 5000000) {
+            ESP_LOGI(TAG, "capture stats frames=%u dq_max_ms=%lu encode_max_ms=%lu recoveries=%u stack_free=%u",
+                     frames, (unsigned long)max_dq_ms, (unsigned long)max_encode_ms, recoveries,
+                     (unsigned)uxTaskGetStackHighWaterMark(NULL));
+            max_dq_ms = max_encode_ms = 0; logged = esp_timer_get_time();
+        }
         vTaskDelay(pdMS_TO_TICKS(1000 / CONFIG_HANMIR_CAMERA_TARGET_FPS));
     }
     release_camera();
@@ -86,6 +114,8 @@ esp_err_t hanmir_camera_source_start(void)
     if (err != ESP_OK) return err;
     camera_fd = open(ESP_VIDEO_MIPI_CSI_DEVICE_NAME, O_RDWR);
     if (camera_fd < 0) return ESP_FAIL;
+    struct timeval dq_timeout = {.tv_sec = 2};
+    if (ioctl(camera_fd, VIDIOC_S_DQBUF_TIMEOUT, &dq_timeout) != 0) goto failed;
     struct v4l2_format format = {.type = V4L2_BUF_TYPE_VIDEO_CAPTURE};
     if (ioctl(camera_fd, VIDIOC_G_FMT, &format) != 0) goto failed;
     format.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB565;

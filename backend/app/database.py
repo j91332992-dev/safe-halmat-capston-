@@ -2,7 +2,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 
-from sqlalchemy import create_engine, event, inspect, text
+from sqlalchemy import create_engine, event, inspect, text, Index
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import NullPool
 
@@ -233,6 +233,15 @@ def init_database() -> None:
         if not db.get(Zone, "b-zone-storage"):
             db.add(Zone(zone_id="b-zone-storage", site_id="site-002", zone_name="B현장 장비 적재 주의구역", zone_type="rectangle", zone_category="controlled", coordinates_json=json.dumps({"x": 7.6, "y": 4.8, "width": 2.4, "height": 2.2}), required_ppe_json=json.dumps(["vest", "helmet"]), risk_weight=20, warning_message="B현장 장비 적재 주의구역에 진입했습니다.", max_stay_seconds=120, active=True))
 
+    ensure_runtime_indexes()
 
 
-
+def ensure_runtime_indexes():
+    from .models.entities import Location, Event
+    for name, table, columns in (
+        ('ix_locations_site_worker_created', Location.__table__, ('site_id','worker_id','created_at')),
+        ('ix_events_site_created', Event.__table__, ('site_id','created_at')),
+    ):
+        existing=next((i for i in table.indexes if i.name==name),None)
+        index=existing if existing is not None else Index(name,*(table.c[c] for c in columns))
+        index.create(bind=engine,checkfirst=True)

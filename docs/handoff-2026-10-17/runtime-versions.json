@@ -1,0 +1,16 @@
+{
+  "fastapi": "0.142.2",
+  "uvicorn": "0.40.0",
+  "numpy": "2.5.3",
+  "opencv-python": "5.0.0.93",
+  "opencv-python-headless": "not installed under this distribution name",
+  "ultralytics": "8.4.174",
+  "openvino": "2026.4.1",
+  "onnx": "1.23.2",
+  "onnxruntime": "1.31.0",
+  "openai": "2.54.0",
+  "edge-tts": "7.3.1",
+  "miniaudio": "1.71",
+  "rapidfuzz": "not installed under this distribution name",
+  "torch": "2.14.1"
+}

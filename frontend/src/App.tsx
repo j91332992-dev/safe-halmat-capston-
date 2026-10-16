@@ -395,6 +395,11 @@ function App() {
           </>
         )}
 
+        {evacuationIncident && <section className="panel"><h3>실시간 대피 방향 안내 · 현장 검증 필요</h3><p>등록된 벽·통로·비상구와 방향 보정을 확인한 뒤 시작하세요. 연기 속 통행 가능 여부는 자동 확인되지 않습니다.</p><button disabled={busy} onClick={() => {
+          const enabled = !evacuationIncident.details.navigation_enabled;
+          if (enabled && !window.confirm("지도에 실제 벽·통로·비상구가 반영되어 있고, 지도 방향과 안전모 방향 보정을 확인했습니까? 먼저 안전한 장소에서 모의 대피로 검증하세요.")) return;
+          void action(() => api.setNavigation(evacuationIncident.incident_id, enabled));
+        }}>{evacuationIncident.details.navigation_enabled ? "방향 안내 중지" : "지도 확인 후 방향 안내 시작"}</button></section>}
         {page === "dashboard" && worker && <article className="panel shared-operator-controls"><header><h2>관리자 빠른 제어</h2><span>{worker.worker_name}</span></header><div className="quick-actions">{data.devices.filter(device => device.worker_id === worker.worker_id && device.device_type === "assistant_device").map(device => <HelmetCall key={device.device_id} deviceId={device.device_id} workerName={worker.worker_name} disabled={busy || !serverReachable}/>)}<button disabled={busy || !data.devices.some(device => device.worker_id === worker.worker_id && device.device_type === "assistant_device" && device.online)} onClick={() => void action(() => api.sendAlert(data.devices.find(device => device.worker_id === worker.worker_id && device.device_type === "assistant_device")?.device_id))}>스피커 경고</button><button className="fire-manual-button" disabled={busy || !!evacuationIncident} onClick={() => void action(() => api.triggerFire(worker.worker_id))}>화재 수동발령</button>{evacuationIncident?.status === "active" && <button disabled={busy} onClick={() => void action(() => api.cancelFire(evacuationIncident.incident_id, "resolved"))}>화재 종료</button>}</div></article>}
 
         {page === "map" && worker && (

@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdatomic.h>
 #include "hanmir.h"
 #include "cJSON.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_websocket_client.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -18,6 +20,7 @@ static uint8_t incoming[4096];
 static bool binary_message;
 static bool receiving;
 static size_t incoming_used;
+static atomic_uint tx_queue_drop_bytes, rx_queue_drop_bytes;
 
 bool hanmir_call_active(void) { return active; }
 
@@ -38,7 +41,7 @@ void hanmir_call_feed(const int16_t *pcm, size_t samples)
         memcpy(frame.data, pcm, frame.bytes);
         if (xQueueSend(transmit, &frame, 0) != pdTRUE) {
             call_frame_t stale;
-            xQueueReceive(transmit, &stale, 0);
+            if (xQueueReceive(transmit, &stale, 0) == pdTRUE) atomic_fetch_add(&tx_queue_drop_bytes, stale.bytes);
             xQueueSend(transmit, &frame, 0);
         }
         pcm += count;
@@ -49,6 +52,7 @@ void hanmir_call_feed(const int16_t *pcm, size_t samples)
 static void call_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     if (id == WEBSOCKET_EVENT_DISCONNECTED || id == WEBSOCKET_EVENT_ERROR) {
+        ESP_LOGW(TAG, "call transport event=%ld; auto reconnect", (long)id);
         active = false;
         receiving = false;
         return;
@@ -81,7 +85,7 @@ static void call_event(void *arg, esp_event_base_t base, int32_t id, void *data)
             memcpy(frame.data, incoming + offset, bytes);
             if (xQueueSend(receive, &frame, 0) != pdTRUE) {
                 call_frame_t stale;
-                xQueueReceive(receive, &stale, 0);
+                if (xQueueReceive(receive, &stale, 0) == pdTRUE) atomic_fetch_add(&rx_queue_drop_bytes, stale.bytes);
                 xQueueSend(receive, &frame, 0);
             }
             offset += bytes;
@@ -108,16 +112,37 @@ static void call_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 static void transmit_task(void *arg)
 {
     call_frame_t frame;
+    uint32_t sent = 0, failed = 0, max_us = 0;
+    int64_t logged = esp_timer_get_time();
     for (;;) {
         if (xQueueReceive(transmit, &frame, pdMS_TO_TICKS(100)) == pdTRUE && active &&
             esp_websocket_client_is_connected(client)) {
-            if (esp_websocket_client_send_bin(client, (char *)frame.data, frame.bytes,
-                    pdMS_TO_TICKS(20)) != frame.bytes) {
-                // A partial audio frame cannot be replayed without corrupting its timing.
-                active = false;
-                esp_websocket_client_stop(client);
-                esp_websocket_client_start(client);
+            int64_t begin = esp_timer_get_time();
+            int result = esp_websocket_client_send_bin(client, (char *)frame.data, frame.bytes,
+                                                      pdMS_TO_TICKS(1500));
+            uint32_t elapsed = (uint32_t)(esp_timer_get_time() - begin);
+            if (elapsed > max_us) max_us = elapsed;
+            if (result == frame.bytes) {
+                sent++;
+            } else {
+                failed++;
+                xQueueReset(transmit); // Drop stale audio; never replay an uncertain frame.
+                ESP_LOGW(TAG, "call TX failed result=%d expected=%u elapsed_us=%lu connected=%d",
+                         result, (unsigned)frame.bytes, (unsigned long)elapsed,
+                         esp_websocket_client_is_connected(client));
+                // The websocket library aborts/reconnects actual transport failures.
+                // A lock timeout must not trigger a second stop/start race here.
             }
+        }
+        if (esp_timer_get_time() - logged >= 5000000) {
+            ESP_LOGI(TAG, "call TX stats sent=%lu failed=%lu max_us=%lu active=%d connected=%d stack_free_min=%u",
+                     (unsigned long)sent, (unsigned long)failed, (unsigned long)max_us,
+                     active, esp_websocket_client_is_connected(client),
+                     (unsigned)uxTaskGetStackHighWaterMark(NULL));
+            ESP_LOGI(TAG, "call queue drops tx_bytes=%u rx_bytes=%u",
+                     (unsigned)atomic_load(&tx_queue_drop_bytes), (unsigned)atomic_load(&rx_queue_drop_bytes));
+            sent = failed = max_us = 0;
+            logged = esp_timer_get_time();
         }
     }
 }
@@ -169,11 +194,11 @@ esp_err_t hanmir_call_start(void)
              CONFIG_HANMIR_SERVER_PORT, CONFIG_HANMIR_DEVICE_ID);
     snprintf(headers, sizeof(headers), "Authorization: Bearer %s\r\n", CONFIG_HANMIR_CALL_DEVICE_TOKEN);
     esp_websocket_client_config_t config = {.uri = uri, .headers = headers,
-        .reconnect_timeout_ms = 2000, .buffer_size = 4096, .task_stack = 6144};
+        .reconnect_timeout_ms = 1000, .network_timeout_ms = 1000, .buffer_size = 4096, .task_stack = 6144};
     client = esp_websocket_client_init(&config);
     if (!client) return ESP_ERR_NO_MEM;
     esp_websocket_register_events(client, WEBSOCKET_EVENT_ANY, call_event, NULL);
-    if (xTaskCreate(transmit_task, "call_tx", 4096, NULL, 4, NULL) != pdPASS ||
+    if (xTaskCreate(transmit_task, "call_tx", 8192, NULL, 4, NULL) != pdPASS ||
         xTaskCreate(playback_task, "call_rx", 4096, NULL, 4, NULL) != pdPASS) return ESP_ERR_NO_MEM;
     return esp_websocket_client_start(client);
 }

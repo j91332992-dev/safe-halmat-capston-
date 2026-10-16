@@ -44,6 +44,31 @@ async def send_helmet_guidance(
         return {"sent": False, "reason": "throttled"}
 
     audio_path = await generate_tts(message)
+    if route.get("navigation_enabled"):
+        # Recheck current incident and sensor ages after potentially slow synthesis.
+        from ..database import SessionLocal
+        from .evacuation_service import current_incident
+        from .evacuation_navigation import latest_route, age
+        with SessionLocal() as db:
+            from ..models.entities import WorkerState
+            worker = db.get(WorkerState, worker_id)
+            current = current_incident(db, worker.site_id) if worker else None
+            import json
+            enabled = bool(current and current.incident_id == incident_id and
+                           json.loads(current.details_json or "{}").get("navigation_enabled"))
+        live = latest_route(worker_id)
+        directional = route.get("action") not in {"map_unverified", "no_route", "location_stale", "heading_stale"}
+        if directional:
+            from .orientation_service import live_status
+            with SessionLocal() as db:
+                device = db.get(Device, device_id)
+                status = live_status(device_id, json.loads(device.component_status_json or "{}")) if device else {}
+            if status.get("imu") != "ready" or age(status.get("imu_received_at")) > 1:
+                return {"sent": False, "reason": "heading_expired_during_synthesis"}
+        if directional and (not worker or age(worker.last_valid_location_at) > 1.5):
+            return {"sent": False, "reason": "location_expired_during_synthesis"}
+        if not enabled or not live or live.get("action") != route.get("action"):
+            return {"sent": False, "reason": "superseded_navigation"}
     command_type = "play_audio" if audio_path else "play_alert"
     payload = {"message": message}
     if audio_path:

@@ -1,6 +1,7 @@
 import json
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -22,11 +23,15 @@ def snapshot(site_id: str = Depends(require_site), db: Session = Depends(get_db)
     workers = db.query(WorkerState).filter(WorkerState.site_id == site_id).all()
     layout = db.get(SiteLayout, site_id)
     zones = db.query(Zone).filter(Zone.site_id == site_id).all()
-    recent_events = db.query(Event).filter(Event.site_id == site_id).order_by(Event.created_at.desc()).limit(50).all()
-    unresolved_events = db.query(Event).filter(Event.site_id == site_id, Event.status != "resolved").order_by(Event.created_at.desc()).all()
+    # Read immutable rows instead of constructing thousands of tracked ORM
+    # entities on every refresh. Same columns, site scope and event selection.
+    recent_events = db.query(*Event.__table__.columns).filter(Event.site_id == site_id).order_by(Event.created_at.desc()).limit(50).all()
+    unresolved_events = db.query(*Event.__table__.columns).filter(Event.site_id == site_id, Event.status != "resolved").order_by(Event.created_at.desc()).all()
     events_by_id = {row.event_id: row for row in [*unresolved_events, *recent_events]}
     events = sorted(events_by_id.values(), key=lambda row: row.created_at, reverse=True)
-    return {
+    # Render in this synchronous endpoint's worker thread. Returning a large
+    # dict makes FastAPI walk/encode every event on the shared async loop.
+    return JSONResponse({
         "mode": settings.operation_mode,
         "site": {
             "site_id": site_id,
@@ -56,7 +61,7 @@ def snapshot(site_id: str = Depends(require_site), db: Session = Depends(get_db)
         ],
         "events": [event_to_dict(row) for row in events],
         "evacuation": evacuation_snapshot(db, site_id),
-    }
+    })
 
 
 

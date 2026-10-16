@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api/evacuation", tags=["evacuation"])
 
 async def _send_all_guidance(db: Session, snapshot: dict, force: bool) -> list[dict]:
     incident = snapshot.get("incident")
-    if not incident:
+    if not incident or incident.get("details", {}).get("navigation_enabled"):
         return []
     deliveries = []
     for worker_id, route in snapshot.get("routes", {}).items():
@@ -131,3 +131,49 @@ async def cancel(incident_id: str, payload: FireCancelIn, site_id: str = Depends
     result = {"incident": incident_to_dict(incident), "routes": {}, "event": event_to_dict(event)}
     await manager.broadcast("evacuation_cancelled", result)
     return result
+
+
+from pydantic import BaseModel
+
+
+class NavigationControl(BaseModel):
+    enabled: bool
+    map_verified: bool = False
+
+
+@router.post("/{incident_id}/navigation")
+async def navigation_control(incident_id: str, payload: NavigationControl, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    from ..services.evacuation_navigation import map_signature, clear_navigation
+    incident = db.get(EvacuationIncident, incident_id)
+    if not incident or incident.site_id != site_id or incident.status not in ("pending_manager", "active"):
+        raise HTTPException(404, "진행 중인 대피 사건이 없습니다.")
+    if payload.enabled and not payload.map_verified:
+        raise HTTPException(400, "실제 벽·통로·비상구와 지도 및 방향 보정을 확인해야 합니다.")
+    details = json.loads(incident.details_json or "{}")
+    details.update(navigation_enabled=payload.enabled,
+                   navigation_map_signature=map_signature(db, site_id) if payload.enabled else None)
+    incident.details_json = json.dumps(details, ensure_ascii=False)
+    db.commit()
+    clear_navigation()
+    clear_guidance()
+    result = evacuation_snapshot(db, site_id)
+    await manager.broadcast("evacuation_navigation", result, site_id=site_id)
+    return result
+
+
+@router.put("/navigation-policy")
+def set_navigation_policy(payload: NavigationControl, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
+    from ..models.entities import EvacuationNavigationPolicy, Obstacle
+    from ..services.evacuation_navigation import map_signature
+    if payload.enabled and not payload.map_verified:
+        raise HTTPException(400, "지도 확인이 필요합니다.")
+    if payload.enabled and not db.query(Obstacle).filter(Obstacle.site_id == site_id, Obstacle.object_type == "emergency_exit").first():
+        raise HTTPException(400, "비상구를 먼저 등록하세요.")
+    row = db.get(EvacuationNavigationPolicy, site_id)
+    if not row:
+        row = EvacuationNavigationPolicy(site_id=site_id)
+        db.add(row)
+    row.enabled = payload.enabled
+    row.map_signature = map_signature(db, site_id)
+    db.commit()
+    return {"enabled": row.enabled, "map_signature": row.map_signature}

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "hanmir.h"
+#include "local_wake.h"
 #include "driver/i2s_std.h"
 #include "esp_afe_config.h"
 #include "esp_afe_sr_iface.h"
@@ -11,6 +12,7 @@
 #include "esp_log.h"
 #include "esp_wn_iface.h"
 #include "esp_ns.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -22,13 +24,16 @@
 #ifndef CONFIG_HANMIR_ENABLE_WAKENET
 #define CONFIG_HANMIR_ENABLE_WAKENET 0
 #endif
+#ifndef CONFIG_HANMIR_MIC_RIGHT_SLOT
+#define CONFIG_HANMIR_MIC_RIGHT_SLOT 0
+#endif
 
 #define SAMPLE_RATE 16000
 #define MAX_CLIP_BYTES (SAMPLE_RATE * 2 * 5)
-#define END_SILENCE_MS 500
+#define END_SILENCE_MS 160 // Additional silence after AFE VAD; total target about 350 ms.
 #define PRE_ROLL_BYTES (SAMPLE_RATE * 2 * 300 / 1000)
 
-typedef struct { uint8_t *wav; size_t length; } voice_clip_t;
+typedef struct { uint8_t *wav; size_t length; int64_t queued_us; } voice_clip_t;
 static const char *TAG = "hanmir_voice";
 static i2s_chan_handle_t mic;
 static const esp_afe_sr_iface_t *afe;
@@ -59,13 +64,15 @@ static void wav_header(uint8_t *p, size_t pcm_bytes)
 static void feed_task(void *arg)
 {
     int samples = afe->get_feed_chunksize(afe_data);
-    int32_t *raw = heap_caps_malloc(samples * 4, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    // Receive both physical slots; select one explicitly for mono AFE input.
+    int32_t *raw = heap_caps_malloc(samples * 8, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     int16_t *pcm = heap_caps_malloc(samples * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!raw || !pcm) { ESP_LOGE(TAG, "feed allocation failed"); vTaskDelete(NULL); }
     ns_handle_t ns = NULL;
     int16_t ns_input[160], ns_output[160];
     int ns_fill = 0, afe_fill = 0;
     int peak = 0;
+    int left_peak = 0, right_peak = 0;
     TickType_t last_level = xTaskGetTickCount();
     if (CONFIG_HANMIR_ENABLE_NS) {
         ns = ns_pro_create(10, 0, SAMPLE_RATE);
@@ -74,8 +81,15 @@ static void feed_task(void *arg)
     }
     for (;;) {
         size_t read = 0;
-        if (i2s_channel_read(mic, raw, samples * 4, &read, pdMS_TO_TICKS(1000)) == ESP_OK &&
-            read == samples * 4) {
+        if (i2s_channel_read(mic, raw, samples * 8, &read, pdMS_TO_TICKS(1000)) == ESP_OK &&
+            read == samples * 8) {
+            for (int i = 0; i < samples; ++i) {
+                int left = (int16_t)(raw[2 * i] >> 16);
+                int right = (int16_t)(raw[2 * i + 1] >> 16);
+                if (abs(left) > left_peak) left_peak = abs(left);
+                if (abs(right) > right_peak) right_peak = abs(right);
+                raw[i] = raw[2 * i + (CONFIG_HANMIR_MIC_RIGHT_SLOT ? 1 : 0)];
+            }
             for (int i = 0; i < samples; ++i) {
                 int value = (int16_t)(raw[i] >> 16);
                 if (value < 0) value = -value;
@@ -83,6 +97,9 @@ static void feed_task(void *arg)
             }
             if (xTaskGetTickCount() - last_level >= pdMS_TO_TICKS(5000)) {
                 ESP_LOGI(TAG, "mic PCM peak=%d/32768", peak);
+                ESP_LOGI(TAG, "mic slots left_peak=%d right_peak=%d selected=%s",
+                         left_peak, right_peak, CONFIG_HANMIR_MIC_RIGHT_SLOT ? "right" : "left");
+                left_peak = right_peak = 0;
                 peak = 0;
                 last_level = xTaskGetTickCount();
             }
@@ -124,6 +141,7 @@ static void fetch_task(void *arg)
             continue;
         }
         if (hanmir_call_active()) hanmir_call_feed(result->data, chunk_samples);
+        hanmir_local_wake_feed(result->data, chunk_samples, !playback_active && !hanmir_call_active());
         if (playback_active || hanmir_call_active()) {
             free(current);
             current = NULL;
@@ -138,6 +156,7 @@ static void fetch_task(void *arg)
         }
         bool speech = result->vad_state == VAD_SPEECH;
         if (speech && !current) {
+            ESP_LOGI(TAG, "VAD clip start; pre_roll_bytes=%u", (unsigned)pre_count);
             current = heap_caps_malloc(MAX_CLIP_BYTES + 44, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
             used = 0;
             silence_ms = 0;
@@ -166,7 +185,11 @@ static void fetch_task(void *arg)
         if (silence_ms < END_SILENCE_MS && used + bytes <= MAX_CLIP_BYTES) continue;
         if (used >= SAMPLE_RATE * 2 / 5) {
             wav_header(current, used);
-            voice_clip_t clip = {.wav = current, .length = used + 44};
+            ESP_LOGI(TAG, "VAD clip end; duration_ms=%u reason=%s queue=%u",
+                     (unsigned)(used * 1000 / (SAMPLE_RATE * 2)),
+                     silence_ms >= END_SILENCE_MS ? "silence" : "max_length",
+                     (unsigned)uxQueueMessagesWaiting(upload_queue));
+            voice_clip_t clip = {.wav = current, .length = used + 44, .queued_us = esp_timer_get_time()};
             if (xQueueSend(upload_queue, &clip, 0) != pdTRUE) {
                 ESP_LOGE(TAG, "voice queue full; clip not delivered");
                 free(current);
@@ -183,11 +206,15 @@ static void upload_task(void *arg)
     for (;;) {
         if (xQueueReceive(upload_queue, &clip, portMAX_DELAY) != pdTRUE) continue;
         if (hanmir_call_active()) { free(clip.wav); continue; }
+        int64_t upload_started = esp_timer_get_time();
+        ESP_LOGI(TAG, "voice upload start queue_wait_ms=%ld bytes=%u",
+                 (long)((upload_started - clip.queued_us) / 1000), (unsigned)clip.length);
         for (int attempt = 0; attempt < 3; ++attempt) {
             if (hanmir_audio_upload_wav(clip.wav, clip.length)) break;
             ESP_LOGW(TAG, "voice upload retry %d/3", attempt + 1);
             vTaskDelay(pdMS_TO_TICKS(1000 * (attempt + 1)));
         }
+        ESP_LOGI(TAG, "voice upload roundtrip_ms=%ld", (long)((esp_timer_get_time() - upload_started) / 1000));
         free(clip.wav);
     }
 }
@@ -203,14 +230,14 @@ esp_err_t hanmir_voice_start(void)
     ESP_RETURN_ON_ERROR(i2s_new_channel(&channel, NULL, &mic), TAG, "I2S channel");
     i2s_std_config_t std = {
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),
-        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO),
         .gpio_cfg = {.mclk = I2S_GPIO_UNUSED,
                      .bclk = (gpio_num_t)CONFIG_HANMIR_MIC_BCLK_GPIO,
                      .ws = (gpio_num_t)CONFIG_HANMIR_MIC_WS_GPIO,
                      .dout = I2S_GPIO_UNUSED,
                      .din = (gpio_num_t)CONFIG_HANMIR_MIC_DATA_GPIO},
     };
-    std.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
+    std.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
     ESP_RETURN_ON_ERROR(i2s_channel_init_std_mode(mic, &std), TAG, "I2S std mode");
     ESP_RETURN_ON_ERROR(i2s_channel_enable(mic), TAG, "I2S enable");
     srmodel_list_t *models = NULL;
@@ -223,6 +250,10 @@ esp_err_t hanmir_voice_start(void)
     config->aec_init = false; // Requires a real MAX98357A PCM playback reference.
     config->vad_init = true;
     config->vad_model_name = NULL;
+    ESP_LOGI(TAG, "VAD original noise_ms=%d speech_ms=%d delay_ms=%d",
+             config->vad_min_noise_ms, config->vad_min_speech_ms, config->vad_delay_ms);
+    config->vad_min_noise_ms = 192;
+    ESP_LOGI(TAG, "VAD endpoint AFE noise_ms=%d extra_ms=%d", config->vad_min_noise_ms, END_SILENCE_MS);
     // Use the standalone WebRTC frontend: this AFE build rejects the "WEBRTC" model name.
     config->ns_init = false;
     config->wakenet_init = CONFIG_HANMIR_ENABLE_WAKENET;
@@ -235,6 +266,7 @@ esp_err_t hanmir_voice_start(void)
     if (!afe_data) return ESP_FAIL;
     upload_queue = xQueueCreate(3, sizeof(voice_clip_t));
     if (!upload_queue) return ESP_ERR_NO_MEM;
+    if (hanmir_local_wake_start() != ESP_OK) ESP_LOGW(TAG, "Local wake shadow unavailable; existing voice path retained");
     if (xTaskCreatePinnedToCore(feed_task, "mic_feed", 6144, NULL, 5, NULL, 0) != pdPASS ||
         xTaskCreatePinnedToCore(fetch_task, "voice_vad", 8192, NULL, 5, NULL, 1) != pdPASS ||
         xTaskCreate(upload_task, "voice_upload", 6144, NULL, 4, NULL) != pdPASS) return ESP_ERR_NO_MEM;

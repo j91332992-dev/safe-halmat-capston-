@@ -8,8 +8,8 @@
 #include "uwb_delivery_policy.h"
 #include "uwb_measurement_snapshot.h"
 
-static const char *capture_firmware_version = "uwb-capture-20261015.2";
-static const char *capture_source_revision = "722c9fd+uwb-log-20261015.2";
+static const char *capture_firmware_version = "uwb-net-20261017.3";
+static const char *capture_source_revision = "uwb-10hz-ws-20261017.3";
 
 static LatestQueue<CycleSnapshot, UWB_USB_QUEUE_CAPACITY> usb_queue;
 static LatestQueue<CycleSnapshot, UWB_HTTP_QUEUE_CAPACITY> http_queue;
@@ -21,6 +21,7 @@ struct DeliveryStats {
     uint64_t last_measured_us, interval_us, max_interval_us, ranging_us;
     uint64_t last_http_cycle, http_duration_us, http_age_us;
     int last_http_status;
+    int last_http_error;
     bool beacon_synced;
 };
 static DeliveryStats delivery_stats = {};
@@ -152,13 +153,13 @@ static void usb_telemetry_task(void *) {
             portENTER_CRITICAL(&telemetry_mux);
             s = delivery_stats; usb_depth = usb_queue.size(); http_depth = http_queue.size();
             portEXIT_CRITICAL(&telemetry_mux);
-            Serial.printf("[UWB_DELIVERY] session=%s measured=%lu usb_q=%u http_q=%u usb_drop=%lu http_drop=%lu superseded=%lu expired=%lu offline=%lu attempts=%lu ok=%lu failed=%lu retried=%lu terminal=%lu late=%lu http_status=%d http_cycle=%llu http_duration_us=%llu http_age_us=%llu interval_us=%llu max_interval_us=%llu ranging_us=%llu synced=%u beacon_acquired=%lu beacon_lost=%lu\n",
+            Serial.printf("[UWB_DELIVERY] session=%s measured=%lu usb_q=%u http_q=%u usb_drop=%lu http_drop=%lu superseded=%lu expired=%lu offline=%lu attempts=%lu ok=%lu failed=%lu retried=%lu terminal=%lu late=%lu http_status=%d http_error=%d http_cycle=%llu http_duration_us=%llu http_age_us=%llu interval_us=%llu max_interval_us=%llu ranging_us=%llu synced=%u beacon_acquired=%lu beacon_lost=%lu\n",
                 telemetry_session, (unsigned long)s.measured, (unsigned)usb_depth, (unsigned)http_depth,
                 (unsigned long)s.usb_overflow, (unsigned long)s.http_overflow,
                 (unsigned long)s.superseded, (unsigned long)s.expired, (unsigned long)s.offline,
                 (unsigned long)s.attempts, (unsigned long)s.succeeded, (unsigned long)s.failed,
                 (unsigned long)s.retried, (unsigned long)s.terminal, (unsigned long)s.late_completed,
-                s.last_http_status, (unsigned long long)s.last_http_cycle,
+                s.last_http_status, s.last_http_error, (unsigned long long)s.last_http_cycle,
                 (unsigned long long)s.http_duration_us, (unsigned long long)s.http_age_us,
                 (unsigned long long)s.interval_us, (unsigned long long)s.max_interval_us,
                 (unsigned long long)s.ranging_us, s.beacon_synced,
@@ -170,13 +171,19 @@ static void usb_telemetry_task(void *) {
 }
 
 static void http_telemetry_task(void *) {
+    // Keep the socket alive across measurements; server sends an empty 204 ACK.
+    WiFiClient client;
+    HTTPClient http;
+    http.setReuse(true);
+    String endpoint = HANMIR_SERVER_URL;
+    endpoint += endpoint.indexOf('?') >= 0 ? "&compact_ack=true" : "?compact_ack=true";
     CycleSnapshot snapshot;
     uint32_t last_wifi_attempt = millis();
     for (;;) {
         portENTER_CRITICAL(&telemetry_mux);
         bool available = http_queue.pop_latest(snapshot, delivery_stats.superseded);
         portEXIT_CRITICAL(&telemetry_mux);
-        if (!available) { vTaskDelay(pdMS_TO_TICKS(20)); continue; }
+        if (!available) { vTaskDelay(pdMS_TO_TICKS(2)); continue; }
         if (WiFi.status() != WL_CONNECTED) {
             if (millis() - last_wifi_attempt >= WIFI_RETRY_INTERVAL_MS) {
                 WiFi.disconnect(); WiFi.begin(HANMIR_WIFI_SSID, HANMIR_WIFI_PASSWORD);
@@ -198,16 +205,20 @@ static void http_telemetry_task(void *) {
                 portEXIT_CRITICAL(&telemetry_mux);
                 break;
             }
-            WiFiClient client; HTTPClient http;
             const uint64_t started_us = esp_timer_get_time();
             http.setConnectTimeout(UWB_HTTP_CONNECT_TIMEOUT_MS);
             http.setTimeout(UWB_HTTP_READ_TIMEOUT_MS);
             int code = -1;
-            if (http.begin(client, HANMIR_SERVER_URL)) {
+            if (http.begin(client, endpoint)) {
+                if (client.connected()) client.setNoDelay(true);
                 http.addHeader("Content-Type", "application/json");
                 code = http.POST(payload);
+                if (client.connected()) client.setNoDelay(true);
+                // Drain any non-empty error/legacy response before reusing TCP.
+                if (code > 0 && code != 204) http.getString();
             }
             http.end();
+            if (code <= 0) client.stop();
             const uint64_t completed_us = esp_timer_get_time();
             ++attempts;
             const bool success = code >= 200 && code < 300;
@@ -215,6 +226,7 @@ static void http_telemetry_task(void *) {
             ++delivery_stats.attempts;
             if (attempts > 1) ++delivery_stats.retried;
             delivery_stats.last_http_status = code;
+            if (!success) delivery_stats.last_http_error = code;
             delivery_stats.last_http_cycle = snapshot.cycle_id;
             delivery_stats.http_duration_us = completed_us - started_us;
             delivery_stats.http_age_us = completed_us - snapshot.uptime_us;
@@ -239,6 +251,10 @@ static void http_telemetry_task(void *) {
     }
 }
 
+#if UWB_WS_TELEMETRY
+#include "uwb_ws_transport.h"
+#endif
+
 static void start_telemetry() {
     Preferences prefs;
     uint64_t boot = 0;
@@ -256,7 +272,13 @@ static void start_telemetry() {
                   capture_firmware_version, capture_source_revision, TAG_ID,
                   wifi_is_configured() ? "wifi+usb" : "usb_only", telemetry_session);
     if (xTaskCreatePinnedToCore(usb_telemetry_task, "uwb-usb", 12288, nullptr, 1, nullptr, 0) != pdPASS ||
-        (wifi_is_configured() && xTaskCreatePinnedToCore(http_telemetry_task, "uwb-http", 12288, nullptr, 1, nullptr, 0) != pdPASS)) {
+        (wifi_is_configured() && xTaskCreatePinnedToCore(
+#if UWB_WS_TELEMETRY
+            ws_telemetry_task,
+#else
+            http_telemetry_task,
+#endif
+            "uwb-net", 16384, nullptr, 1, nullptr, 0) != pdPASS)) {
         Serial.println("[UWB_LOG] task/queue allocation failed");
         while (true) delay(1000);
     }

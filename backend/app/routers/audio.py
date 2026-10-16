@@ -10,9 +10,10 @@ from ..config import settings
 from ..database import get_db, utcnow
 from ..models.entities import Device, VoiceCommand, WorkerState
 from ..schemas.api import TextCommandIn
-from ..services.assistant_service import build_response_smart
+from ..services.assistant_service import build_response_smart, is_explanation_request
 from ..services.device_service import mark_device_seen
 from ..services.audio_service import save_audio, stt
+from ..services.voice_trace import record_voice
 from ..services.command_service import queue_command
 from ..services.event_service import create_event, event_to_dict
 from ..services.evacuation_service import calculate_route, current_incident, evacuation_snapshot, trigger_fire
@@ -77,7 +78,8 @@ async def process_text(
     worker_data["battery"] = av.battery if av else None
     incident = current_incident(db, worker.site_id)
     if incident:
-        worker_data["evacuation"] = calculate_route(db, worker, incident)
+        from ..services.evacuation_navigation import latest_route
+        worker_data["evacuation"] = latest_route(worker.worker_id) or calculate_route(db, worker, incident)
     agent_plan = build_safety_action_plan(intent, worker_data, text)
 
     # 위험 상태를 먼저 저장해 외부 AI/TTS 대기 중 SQLite 쓰기 잠금을 잡지 않는다.
@@ -106,7 +108,7 @@ async def process_text(
         )
         feedback.status = "delivered" if feedback_delivered else "queued"
 
-    complex_request = intent == "unknown" and len(normalize(text)) >= 6
+    complex_request = intent == "unknown" and is_explanation_request(text)
     terminal_unknown = intent == "unknown" and not allow_retry and not complex_request
     response_started = perf_counter()
     if terminal_unknown or intent in {"stop_speaking", "hang_up"}:
@@ -215,7 +217,13 @@ async def upload_audio(
     transcript = await stt(path, command_only=wake_detected)
     stt_done = perf_counter()
     try:
-        path.unlink(missing_ok=True)
+        if settings.voice_trace_retain_audio:
+            # Opt-in local diagnosis only; cap files and do not publish recordings.
+            retained = sorted(path.parent.glob("helmet-*.wav"), key=lambda p: p.stat().st_mtime, reverse=True)
+            for old in retained[settings.voice_trace_audio_files:]:
+                old.unlink(missing_ok=True)
+        else:
+            path.unlink(missing_ok=True)
     except OSError:
         pass
 
@@ -226,6 +234,9 @@ async def upload_audio(
         )
     else:
         decision = wake_word_gate.evaluate(device_id, transcript)
+    record_voice("wake_decision", path.name, device_id=device_id, worker_id=worker_id,
+                 status=decision.status, reason=decision.reason, transcript=decision.transcript[:2000],
+                 stt_ms=round((stt_done-saved_at)*1000, 1))
     if decision.status != "command":
         acknowledgement = None
         audio_url = None
@@ -234,9 +245,12 @@ async def upload_audio(
 
         if decision.status == "armed":
             acknowledgement = "네, 말씀하세요."
-            command_type = "play_ack"
+            audio_path = await generate_tts(acknowledgement)
+            audio_url = f"/tts/{audio_path.name}" if audio_path else None
+            command_type = "play_audio" if audio_url else "play_ack"
             payload = {
                 "message": acknowledgement,
+                "audio_url": audio_url,
                 "local_asset": "acknowledgement",
             }
             record = queue_command(db, device_id, command_type, payload)
@@ -270,10 +284,13 @@ async def upload_audio(
             "total_server": round((perf_counter() - received_at) * 1000, 1),
         }
         logger.info("voice_pipeline status=%s reason=%s timings_ms=%s", decision.status, decision.reason, result["timings_ms"])
+        record_voice("response", path.name, status=decision.status, delivered_connections=delivered,
+                     command_id=device_command_id, timings_ms=result["timings_ms"])
         return result
 
     allowed, execution_reason = voice_execution_gate.allow(device_id, decision.command_text)
     if not allowed:
+        record_voice("execution_gate", path.name, status="ignored", reason=execution_reason)
         db.commit()
         return {
             "status": "ignored",
@@ -302,6 +319,8 @@ async def upload_audio(
         "total_server": round((perf_counter() - received_at) * 1000, 1),
     })
     logger.info("voice_pipeline status=command reason=%s timings_ms=%s", decision.reason, result["timings_ms"])
+    record_voice("response", path.name, status="command", intent=result.get("intent"),
+                 delivered_connections=result.get("delivered_connections"), timings_ms=result["timings_ms"])
     db.commit()
     await manager.broadcast("voice_command", result)
     return result

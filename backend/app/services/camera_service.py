@@ -6,6 +6,7 @@ from uuid import uuid4
 from fastapi import UploadFile
 
 from ..config import BASE_DIR
+from .camera_brightness import preview_jpeg
 
 
 CAPTURE_DIR = BASE_DIR / "captures"
@@ -14,12 +15,21 @@ LIVE_CAPTURE_DIR = CAPTURE_DIR / "_live"
 LIVE_CAPTURE_DIR.mkdir(exist_ok=True)
 _raw_lock = Lock()
 _latest_raw: dict[str, tuple[bytes, dict]] = {}
+_latest_preview: dict[str, tuple[bytes, dict]] = {}
 
 
 def remember_raw_frame(device_id: str, jpeg: bytes, frame_id: int | None = None) -> None:
     """Keep a live preview independent of the slower YOLO result."""
+    received = monotonic()
+    preview = preview_jpeg(jpeg)
     with _raw_lock:
-        _latest_raw[device_id] = (jpeg, {"frame_id": frame_id, "received_monotonic": monotonic()})
+        metadata = {"frame_id": frame_id, "received_monotonic": received}
+        _latest_raw[device_id] = (jpeg, metadata)
+        _latest_preview[device_id] = (preview, metadata)
+
+def latest_preview_frame(device_id: str):
+    with _raw_lock:
+        return _latest_preview.get(device_id)
 
 
 def latest_raw_frame(device_id: str) -> tuple[bytes, dict] | None:

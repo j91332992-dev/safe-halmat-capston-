@@ -1,0 +1,6 @@
+# Optional comparison tools, not required by the active PyTorch server.
+# GPU fast lane needs OpenVINO and the tested Ultralytics backend interface.
+ultralytics==8.4.174
+onnx==1.23.2
+onnxruntime==1.31.0
+openvino==2026.4.1

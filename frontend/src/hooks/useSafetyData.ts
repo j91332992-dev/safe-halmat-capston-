@@ -3,7 +3,7 @@ import {App} from "@capacitor/app";
 import {Network} from "@capacitor/network";
 import {api, auth} from "../services/api";
 import {getWsBaseUrl} from "../services/config";
-import type {LocationPoint, Snapshot, Worker} from "../types";
+import type {LocationPoint, Snapshot, Worker, EvacuationSnapshot} from "../types";
 
 export type ConnectionState = "connected" | "connecting" | "reconnecting" | "offline" | "error";
 
@@ -24,9 +24,12 @@ export function useSafetyData(enabled = true) {
   const attemptsRef = useRef<number>(0);
   const disposedRef = useRef<boolean>(false);
   const isConnectingRef = useRef<boolean>(false);
+  const refreshInFlightRef = useRef(false);
+  const historyRefreshAtRef = useRef(0);
 
   const refresh = useCallback(async () => {
-    if (!auth.getToken()) return;
+    if (!auth.getToken() || refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
     try {
       const snapshot = await api.snapshot();
       setData(current => ({...snapshot, devices: snapshot.devices.map(device => {
@@ -39,6 +42,8 @@ export function useSafetyData(enabled = true) {
             imu_received_at: live.heading_at, heading_transport: live.component_status?.heading_transport}};
       })}));
       setServerReachable(true);
+      if (Date.now() - historyRefreshAtRef.current >= 15000) {
+      historyRefreshAtRef.current = Date.now();
       const histories = await Promise.all(
         snapshot.workers.map(async worker => {
           try {
@@ -49,6 +54,7 @@ export function useSafetyData(enabled = true) {
         })
       );
       setLocationHistory(Object.fromEntries(histories));
+      }
       setError(null);
     } catch (cause) {
       const msg = cause instanceof Error ? cause.message : "서버 연결에 실패했습니다.";
@@ -58,6 +64,8 @@ export function useSafetyData(enabled = true) {
       }
       setServerReachable(false);
       setError(msg);
+    } finally {
+      refreshInFlightRef.current = false;
     }
   }, []);
 
@@ -120,9 +128,14 @@ export function useSafetyData(enabled = true) {
         try {
           const message = JSON.parse(event.data) as {
             type: string;
-            data?: {worker?: Worker; location?: {x: number; y: number; confidence: number};
+            data?: Partial<EvacuationSnapshot> & {worker?: Worker; location?: {x: number; y: number; confidence: number};
               device_id?: string; imu_yaw_deg?: number; imu_pitch_deg?: number; imu_roll_deg?: number; heading_at?: string};
           };
+          if (message.type === "evacuation_navigation" && message.data?.routes) {
+            const navigation = message.data as EvacuationSnapshot;
+            setData(current => current ? {...current, evacuation: navigation} : current);
+            return;
+          }
           if (message.type === "pong") {
             return;
           }
@@ -224,6 +237,7 @@ export function useSafetyData(enabled = true) {
       disposedRef.current = true;
       setData(null);
       setLocationHistory({});
+      historyRefreshAtRef.current = 0;
       setConnected(false);
       setServerReachable(false);
       setConnectionState("offline");

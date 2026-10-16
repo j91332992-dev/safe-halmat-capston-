@@ -123,6 +123,7 @@ export const api = {
     request<EvacuationSnapshot>("/api/evacuation/" + encodeURIComponent(incidentId) + "/confirm-zone", {method: "POST", body: JSON.stringify(zone)}),
   cancelFire: (incidentId: string, reason: "false_alarm" | "no_fire" | "resolved") =>
     request<EvacuationSnapshot>("/api/evacuation/" + encodeURIComponent(incidentId) + "/cancel", {method: "POST", body: JSON.stringify({reason})}),
+  setNavigation: (incidentId: string, enabled: boolean) => request<EvacuationSnapshot>("/api/evacuation/" + encodeURIComponent(incidentId) + "/navigation", {method: "POST", body: JSON.stringify({enabled, map_verified: enabled})}),
   triggerFire: (workerId: string, source: "manager" | "voice" | "yolo" = "manager") =>
     request<EvacuationSnapshot>("/api/evacuation/trigger", {method: "POST", body: JSON.stringify({worker_id: workerId, source, details: {manual: source === "manager"}})}),
   callTicket: (deviceId: string) => request<{device_id: string; ticket: string; expires_in: number}>(`/api/calls/${encodeURIComponent(deviceId)}/ticket`, {method: "POST"}),
@@ -140,13 +141,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify({worker_id: workerId, device_id: deviceId, text})
     }),
-  latestCamera: (deviceId: string) => request<CameraLatest>(`/api/camera/${encodeURIComponent(deviceId)}/latest`),
+  cameraPerformance: () => request<{sampled_at_seconds: number; received_frames: number; analysis_completed: number; detail_completed: number; last_inference_ms: number; detail_last_ms: number}>("/api/camera/processor/status"),
+  latestCamera: (deviceId: string, detailed = false, metadataOnly = false) => request<CameraLatest>(`/api/camera/${encodeURIComponent(deviceId)}/latest?detailed=${detailed}&metadata_only=${metadataOnly}`),
   liveCamera: (deviceId: string) => request<{device_id: string; received: boolean; frame_id?: number; age_ms?: number}>(`/api/camera/${encodeURIComponent(deviceId)}/live`),
   liveCameraStreamUrl: (deviceId: string) => `${getServerBaseUrl()}/api/camera/${encodeURIComponent(deviceId)}/live/mjpeg?token=${encodeURIComponent(auth.getToken() ?? "")}`,
   liveCameraImageUrl: (deviceId: string, version: string | number = Date.now()) =>
-    `${getServerBaseUrl()}/api/camera/${encodeURIComponent(deviceId)}/live/image?v=${encodeURIComponent(String(version))}`,
-  cameraImageUrl: (deviceId: string, version: string | number = Date.now()) =>
-    `${getServerBaseUrl()}/api/camera/${encodeURIComponent(deviceId)}/latest/image?v=${encodeURIComponent(String(version))}`,
+    `${getServerBaseUrl()}/api/camera/${encodeURIComponent(deviceId)}/live/image?corrected=true&v=${encodeURIComponent(String(version))}`,
+  cameraImageUrl: (deviceId: string, version: string | number = Date.now(), detailed = false) =>
+    `${getServerBaseUrl()}/api/camera/${encodeURIComponent(deviceId)}/latest/image?detailed=${detailed}&v=${encodeURIComponent(String(version))}`,
   assetUrl: (path: string) => `${getServerBaseUrl()}${path}`,
   acknowledge: (eventId: string) => request(`/api/events/${eventId}/acknowledge`, {method: "POST"}),
   resolve: (eventId: string) => request(`/api/events/${eventId}/resolve`, {method: "POST"}),

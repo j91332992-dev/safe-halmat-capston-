@@ -36,10 +36,15 @@ Board: esp32 2.0.16
 #define FUNC_REPORT         0xE2
 #define FUNC_BEACON         0xE3
 
+#ifndef TDMA_FRAME_MS
 #define TDMA_FRAME_MS       300
+#endif
+#ifndef SLOT_DURATION_MS
 #define SLOT_DURATION_MS    150
+#endif
 #define BEACON_GUARD_MS     20
-#define BEACON_TIMEOUT_MS   (TDMA_FRAME_MS * 3)
+#define BEACON_TIMEOUT_MS   900
+static_assert(BEACON_GUARD_MS + (TAG_ID + 1) * SLOT_DURATION_MS <= TDMA_FRAME_MS, "Tag slot must fit TDMA frame");
 
 const uint32_t anchor_delays[NUM_ANCHORS] = {
     2000, 7000, 12000, 17000

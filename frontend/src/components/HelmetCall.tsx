@@ -61,6 +61,7 @@ function resample(input: Float32Array, inputRate: number, outputRate = 16000): I
 
 export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
   const [status, setStatus] = useState<CallStatus>("idle");
+  const [listenOnly, setListenOnly] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
   const socketRef = useRef<WebSocket | null>(null);
@@ -73,8 +74,19 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
   const nextPlaybackRef = useRef(0);
   const closingRef = useRef(false);
   const callConnectedRef = useRef(false);
+  const reconnectDeadlineRef = useRef<number | null>(null);
+
+  const audioWatchRef = useRef<number | null>(null);
+  const lastAudioRef = useRef(0);
+  const audioStalledRef = useRef(false);
 
   const stop = (playEndTone = true) => {
+    if (audioWatchRef.current !== null) window.clearInterval(audioWatchRef.current);
+    audioWatchRef.current = null;
+    lastAudioRef.current = 0;
+    audioStalledRef.current = false;
+    if (reconnectDeadlineRef.current !== null) window.clearTimeout(reconnectDeadlineRef.current);
+    reconnectDeadlineRef.current = null;
     const context = contextRef.current;
     const shouldPlayEndTone = playEndTone && callConnectedRef.current;
     callConnectedRef.current = false;
@@ -134,39 +146,40 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
     nextPlaybackRef.current = startAt + audioBuffer.duration;
   };
 
-  const start = async () => {
-    if (disabled || status === "requesting" || status === "connecting") return;
+  const start = async (receiveOnly = false) => {
+    if (disabled || status === "requesting") return;
+    if (status === "connecting" && socketRef.current) { stop(false); return; }
     if (status === "connected") {
       stop();
       return;
     }
     closingRef.current = false;
     setErrorMessage("");
+    setListenOnly(receiveOnly);
     setStatus("requesting");
     try {
-      const ticket = await api.callTicket(deviceId);
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error("MIC_INSECURE_CONTEXT");
-      const stream = await navigator.mediaDevices.getUserMedia({
+      if (!receiveOnly && !navigator.mediaDevices?.getUserMedia) throw new Error("MIC_INSECURE_CONTEXT");
+      const stream = receiveOnly ? null : await navigator.mediaDevices.getUserMedia({
         audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true},
         video: false
       });
       streamRef.current = stream;
+      const ticket = await api.callTicket(deviceId);
       const context = new AudioContext();
       contextRef.current = context;
       await context.resume();
-      const source = context.createMediaStreamSource(stream);
-      const processor = context.createScriptProcessor(2048, 1, 1);
-      const mute = context.createGain();
-      mute.gain.value = 0;
-      source.connect(processor);
-      processor.connect(mute);
-      mute.connect(context.destination);
-
-      streamRef.current = stream;
-      contextRef.current = context;
-      sourceRef.current = source;
-      processorRef.current = processor;
-      muteRef.current = mute;
+      const processor = stream ? context.createScriptProcessor(2048, 1, 1) : null;
+      if (stream && processor) {
+        const source = context.createMediaStreamSource(stream);
+        const mute = context.createGain();
+        mute.gain.value = 0;
+        source.connect(processor);
+        processor.connect(mute);
+        mute.connect(context.destination);
+        sourceRef.current = source;
+        processorRef.current = processor;
+        muteRef.current = mute;
+      }
 
       const wsBase = getWsBaseUrl();
       const socket = new WebSocket(`${wsBase}/ws/call/operator/${encodeURIComponent(deviceId)}?ticket=${encodeURIComponent(ticket.ticket)}`);
@@ -174,7 +187,7 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
       socketRef.current = socket;
       setStatus("connecting");
 
-      processor.onaudioprocess = event => {
+      if (processor) processor.onaudioprocess = event => {
         if (socket.readyState !== WebSocket.OPEN || closingRef.current || !callConnectedRef.current) return;
         if (socket.bufferedAmount > 640 * 4) {
           pendingRef.current = new Int16Array(0);
@@ -193,24 +206,68 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
         pendingRef.current = combined.slice(offset);
       };
 
+      // PCM arrives even during silence; OPEN alone does not establish device health.
+      lastAudioRef.current = performance.now();
+      audioWatchRef.current = window.setInterval(() => {
+        if (closingRef.current || socketRef.current !== socket) return;
+        const gap = performance.now() - lastAudioRef.current;
+        if (gap >= 3000 && !audioStalledRef.current) {
+          audioStalledRef.current = true;
+          setStatus("connecting");
+          setErrorMessage("안전모 음성 수신이 3초 이상 멈췄습니다. 연결 복구 중 · 버튼을 누르면 종료");
+          console.warn("Helmet audio stalled", {gapMs: Math.round(gap)});
+        }
+        if (gap >= 10000) {
+          stop(false);
+          setErrorMessage("안전모 음성이 10초 동안 수신되지 않아 통화를 종료했습니다.");
+          setStatus("error");
+        }
+      }, 500);
+
       socket.onmessage = event => {
+        if (socketRef.current !== socket || closingRef.current) return;
         if (typeof event.data !== "string") {
+          if (!(event.data instanceof ArrayBuffer) || event.data.byteLength < 2 || event.data.byteLength % 2) return;
+          lastAudioRef.current = performance.now();
+          if (reconnectDeadlineRef.current !== null) window.clearTimeout(reconnectDeadlineRef.current);
+          reconnectDeadlineRef.current = null;
+          if (audioStalledRef.current) {
+            audioStalledRef.current = false;
+            callConnectedRef.current = true;
+            setStatus("connected");
+            setErrorMessage("");
+            console.info("Helmet audio recovered");
+          }
           playHelmetAudio(event.data as ArrayBuffer);
           return;
         }
         const message = JSON.parse(event.data) as {type?: string; status?: string};
         if (message.type !== "call_status") return;
         if (message.status === "connected") {
+          if (reconnectDeadlineRef.current !== null) window.clearTimeout(reconnectDeadlineRef.current);
+          reconnectDeadlineRef.current = null;
+          pendingRef.current = new Int16Array(0);
+          nextPlaybackRef.current = 0;
+          if (!audioStalledRef.current) setErrorMessage("");
           if (!callConnectedRef.current && contextRef.current) playCallTone(contextRef.current, "connected");
           callConnectedRef.current = true;
-          setStatus("connected");
+          if (!audioStalledRef.current) setStatus("connected");
         }
         else if (message.status === "ended") stop();
-        else if (message.status === "device_offline") { stop(false); setStatus("offline"); }
+        else if (message.status === "device_offline") {
+          callConnectedRef.current = false;
+          pendingRef.current = new Int16Array(0);
+          setStatus("connecting");
+          setErrorMessage("안전모 통화 채널 재연결을 기다립니다. 최대 10초");
+          if (reconnectDeadlineRef.current === null) reconnectDeadlineRef.current = window.setTimeout(() => {
+            stop(false);
+            setStatus("offline");
+          }, 10000);
+        }
         else if (message.status === "busy") { stop(false); setStatus("busy"); }
         else if (message.status === "unauthorized") { stop(false); setErrorMessage("통화 인증이 만료됐습니다. 다시 연결하세요."); setStatus("error"); }
       };
-      socket.onerror = () => { setErrorMessage("통화 서버에 연결하지 못했습니다. 앱의 서버 주소와 Wi-Fi를 확인하세요."); setStatus("error"); };
+      socket.onerror = () => { stop(false); setErrorMessage("통화 서버에 연결하지 못했습니다. 앱의 서버 주소와 Wi-Fi를 확인하세요."); setStatus("error"); };
       socket.onclose = () => {
         if (!closingRef.current) { stop(false); setErrorMessage("통화 연결이 끊겼습니다. 다시 연결하세요."); setStatus("error"); }
       };
@@ -237,10 +294,13 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
         <span>{status === "connected" ? "■" : "☎"}</span>
         {statusText[status]}
       </button>
-      {status === "connected" && <small>{workerName} · {elapsed} · 양방향</small>}
-      {status === "offline" && <small>안전모 통화 채널이 연결되지 않았습니다. 통화 지원 펌웨어와 Wi-Fi를 확인하세요.</small>}
+      {status === "connected" && <small>{workerName} · {elapsed} · {listenOnly ? "듣기 전용 · 내 목소리는 전송되지 않음" : "양방향"}</small>}
+      {status === "error" && errorMessage.includes("마이크") && <button type="button" disabled={disabled} onClick={() => void start(true)}>안전모 소리만 듣기</button>}
+      {status === "connecting" && errorMessage && <small>{errorMessage}</small>}
+      {status === "offline" && <small>안전모 통화 채널이 끊겼습니다. 전원·Wi-Fi를 확인한 뒤 다시 연결하세요.</small>}
       {status === "busy" && <small>현재 다른 관리자와 연결되어 있습니다.</small>}
       {status === "error" && <small>{errorMessage || "통화 연결에 실패했습니다. 다시 연결하세요."}</small>}
     </div>
   );
 }
+

@@ -70,6 +70,16 @@ def trigger_fire(db: Session, source: str, worker_id: str | None, details: dict 
         current.updated_at = datetime.utcnow()
         db.flush()
         return current, False
+    from .evacuation_navigation import map_signature
+    from ..models.entities import EvacuationNavigationPolicy
+    policy = db.get(EvacuationNavigationPolicy, site_id)
+    initial_details = dict(details or {})
+    # Reserved control fields cannot be enabled by an arbitrary fire-report payload.
+    initial_details.pop("navigation_enabled", None)
+    initial_details.pop("navigation_map_signature", None)
+    if policy and policy.enabled and policy.map_signature == map_signature(db, site_id):
+        initial_details.update(navigation_enabled=True, navigation_auto=True,
+                               navigation_map_signature=policy.map_signature)
     item = EvacuationIncident(
         incident_id="fire-" + uuid4().hex,
         site_id=site_id,
@@ -77,7 +87,7 @@ def trigger_fire(db: Session, source: str, worker_id: str | None, details: dict 
         source=source,
         status="pending_manager",
         fire_zone_json="{}",
-        details_json=json.dumps(details or {}, ensure_ascii=False),
+        details_json=json.dumps(initial_details, ensure_ascii=False),
     )
     db.add(item)
     db.flush()
@@ -206,19 +216,38 @@ def calculate_route(db: Session, worker: WorkerState, incident: EvacuationIncide
     if not exits:
         return _alert_result(worker, fire_zone, available=False, reason="지도에 비상구가 지정되지 않았습니다.")
 
-    max_x, max_y = round(width / GRID_M), round(height / GRID_M)
+    max_x, max_y = int(width / GRID_M), int(height / GRID_M)
+    if max_x * max_y > 250000:
+        return _alert_result(worker, fire_zone, available=False, reason="지도 크기가 경로 계산 한도를 초과했습니다.")
     to_cell = lambda x, y: (max(0, min(max_x, round(x / GRID_M))), max(0, min(max_y, round(y / GRID_M))))
     to_point = lambda cell: {"x": round(cell[0] * GRID_M, 2), "y": round(cell[1] * GRID_M, 2)}
     blocked = lambda cell: _blocked(cell[0] * GRID_M, cell[1] * GRID_M, objects, fire_zone)
-    start = _nearest_open(to_cell(worker.x, worker.y), blocked, max_x, max_y)
+    start = to_cell(worker.x, worker.y)
+    correction = {"applied": False, "distance_m": 0.0, "original": {"x": worker.x, "y": worker.y}, "reason": "clear"}
+    if not (0 <= worker.x <= width and 0 <= worker.y <= height) or blocked(start) or _blocked(worker.x, worker.y, objects, fire_zone):
+        from .route_start_service import corrected_start
+        from ..models.entities import Location
+        history_rows = db.query(Location).filter(Location.worker_id == worker.worker_id,
+            Location.site_id == worker.site_id, Location.created_at >= datetime.utcnow()-timedelta(seconds=10)).order_by(Location.created_at.desc()).limit(100).all()
+        history = [(r.x, r.y) for r in history_rows if not _blocked(r.x, r.y, objects, fire_zone)]
+        if fire_zone and _inside_rect(worker.x, worker.y, fire_zone, FIRE_CLEARANCE_M):
+            start, correction = None, {**correction, "reason": "fire_exclusion_no_snap"}
+        else:
+            start, correction = corrected_start(worker.x, worker.y, objects, width, height, GRID_M,
+                WORKER_CLEARANCE_M, lambda x,y: _blocked(x,y,objects,fire_zone), history,
+                lambda x,y,oid: _blocked(x,y,[o for o in objects if o.obstacle_id != oid],fire_zone))
     if start is None:
-        return _alert_result(worker, fire_zone, available=False, reason="현재 위치 주변에 이동 가능한 공간이 없습니다.")
+        result = _alert_result(worker, fire_zone, available=False, reason="현재 위치 주변에 이동 가능한 공간이 없습니다.")
+        result["start_correction"] = correction
+        return result
 
     candidates = []
     for exit_item in exits:
         target_raw = to_cell(exit_item.x + exit_item.width / 2, exit_item.y + exit_item.height / 2)
-        target = _nearest_open(target_raw, blocked, max_x, max_y)
-        if target:
+        target = target_raw if (0 <= exit_item.x + exit_item.width / 2 <= width and
+                                0 <= exit_item.y + exit_item.height / 2 <= height and
+                                not blocked(target_raw)) else None
+        if target is not None:
             candidates.append((exit_item, target))
     if not candidates:
         return _alert_result(worker, fire_zone, available=False, reason="화재구간으로 인해 사용 가능한 비상구가 없습니다.")
@@ -259,7 +288,10 @@ def calculate_route(db: Session, worker: WorkerState, incident: EvacuationIncide
     exit_item = goals[goal]
     total_m = round(cost[goal] * GRID_M, 2)
     result = _alert_result(worker, fire_zone, available=True, exit_name=exit_item.name, distance_m=total_m)
+    result["start_correction"] = correction
+    result["route_origin"] = to_point(start)
     result["exit_id"] = exit_item.obstacle_id
+    result["path"] = _simplify([to_point(cell) for cell in cells])
     return result
 
 
@@ -270,6 +302,7 @@ def evacuation_snapshot(db: Session, site_id: str | None = None) -> dict:
     workers = db.query(WorkerState)
     if site_id:
         workers = workers.filter(WorkerState.site_id == site_id)
-    routes = {worker.worker_id: calculate_route(db, worker, incident) for worker in workers.all()}
+    from .evacuation_navigation import latest_route
+    routes = {worker.worker_id: (latest_route(worker.worker_id) or calculate_route(db, worker, incident)) for worker in workers.all()}
     return {"incident": incident_to_dict(incident), "routes": routes}
 

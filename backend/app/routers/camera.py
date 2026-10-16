@@ -1,13 +1,15 @@
 import asyncio
+from collections import deque
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import ctypes
 import json
 import logging
 import multiprocessing
 import os
 import secrets
+import shutil
 import struct
 from pathlib import Path
 from threading import Lock
@@ -21,7 +23,7 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal, get_db, utcnow
 from ..models.entities import Device, Event, WorkerState
 from ..config import settings
-from ..services.camera_service import CAPTURE_DIR, latest_raw_frame, remember_raw_frame, save_frame, save_frame_bytes
+from ..services.camera_service import CAPTURE_DIR, latest_raw_frame, latest_preview_frame, remember_raw_frame, save_frame, save_frame_bytes
 from ..services.event_service import create_event, event_to_dict
 from ..services.device_service import mark_device_seen
 from ..services.evacuation_service import evacuation_snapshot, trigger_fire
@@ -29,6 +31,9 @@ from ..services.evacuation_guidance_service import assistant_device_id, send_hel
 from ..services.risk_service import recalculate_risk
 from ..services.serializers import worker_to_dict
 from ..services.yolo_service import analyze_frame
+from ..services.camera_trace import record_analysis
+from ..services.detail_merge import merge_detail
+from ..services.frame_pacing import next_deadline, inference_interval
 from ..services.inference_priority import voice_requests_active
 from ..websocket import manager
 from .auth import session_identity
@@ -44,6 +49,7 @@ class CameraJob:
     worker_id: str
     helmet_id: str
     frame_id: int | None = None
+    queued_at: float = field(default_factory=time.monotonic)
 
 
 class MockDetectionIn(BaseModel):
@@ -59,7 +65,16 @@ class MockDetectionIn(BaseModel):
 # allowing a backlog would make fire/PPE decisions describe old video.
 _camera_queue: asyncio.Queue[CameraJob] | None = None
 _camera_worker_task: asyncio.Task | None = None
+_loop_probe_task: asyncio.Task | None = None
+_loop_lag_ms = deque(maxlen=200)
 _inference_executor: ProcessPoolExecutor | None = None
+_detail_executor: ProcessPoolExecutor | None = None
+_detail_task: asyncio.Task | None = None
+_detail_cache: dict[str, dict] = {}
+_detail_image_cache: dict[str, tuple[bytes, dict]] = {}
+_detail_last_submitted: dict[str, float] = {}
+_detail_completed = 0
+_detail_last_ms = 0.0
 _dropped_stale_frames = 0
 _latest_analysis_cache: dict[str, tuple[bytes, dict]] = {}
 _latest_analysis_lock = Lock()
@@ -70,19 +85,30 @@ _last_device_seen_commit: dict[str, float] = {}
 _checkpoint_interval_seconds = 1.0
 _alert_refresh_seconds = 5.0
 _last_inference_ms = 0.0
+_fast_gpu_active = False
 _analysis_completed = 0
 _received_frames = 0
+_received_jpeg_bytes = 0
+_received_payload_bytes = 0
+_last_jpeg_bytes = 0
 _last_analysis_started_at = 0.0
-_normal_inference_interval_seconds = 1.0 / 4.0
+_last_postprocess_ms = 0.0
+_last_queue_age_ms = 0.0
+_paced_skipped_frames = 0
+_normal_inference_interval_seconds = 1.0 / settings.yolo_target_fps
 _voice_inference_interval_seconds = 1.0
 
 
-def _initialize_inference_worker() -> None:
+def _initialize_inference_worker(threads: int = 3, lane: str = 'fast') -> None:
     """Reserve CPU headroom for STT/TTS while YOLO continues at low priority."""
     try:
+        os.environ['HANMIR_YOLO_CPU_THREADS'] = str(threads)
+        os.environ['HANMIR_YOLO_LANE'] = lane
         import torch
+        import cv2
 
-        torch.set_num_threads(3)
+        cv2.setNumThreads(1)
+        torch.set_num_threads(threads)
         torch.set_num_interop_threads(1)
     except Exception:
         logger.exception("Could not limit YOLO worker threads")
@@ -114,7 +140,9 @@ def enqueue_camera_job(job: CameraJob) -> bool:
 
 
 async def start_camera_processor() -> None:
-    global _camera_queue, _camera_worker_task, _inference_executor
+    global _camera_queue, _camera_worker_task, _inference_executor, _detail_executor, _loop_probe_task
+    import cv2
+    cv2.setNumThreads(1)
     if _camera_worker_task is None or _camera_worker_task.done():
         _camera_queue = asyncio.Queue(maxsize=1)
         _inference_executor = ProcessPoolExecutor(
@@ -123,17 +151,42 @@ async def start_camera_processor() -> None:
             initializer=_initialize_inference_worker,
         )
         _camera_worker_task = asyncio.create_task(_camera_worker(), name="camera-yolo-worker")
+        _loop_probe_task = asyncio.create_task(_probe_loop_lag(), name="camera-loop-probe")
+        if settings.yolo_async_detail:
+            _detail_executor = ProcessPoolExecutor(max_workers=1,
+                mp_context=multiprocessing.get_context("spawn"),
+                initializer=_initialize_inference_worker, initargs=(2,'detail'))
+
+
+async def _probe_loop_lag():
+    while True:
+        started=time.monotonic()
+        await asyncio.sleep(.05)
+        _loop_lag_ms.append(max(0.,(time.monotonic()-started-.05)*1000))
 
 
 async def stop_camera_processor() -> None:
-    global _camera_queue, _camera_worker_task, _inference_executor
+    global _camera_queue, _camera_worker_task, _inference_executor, _detail_executor, _detail_task, _loop_probe_task
     if _camera_worker_task is None:
         return
     _camera_worker_task.cancel()
     with suppress(asyncio.CancelledError):
         await _camera_worker_task
     _camera_worker_task = None
+    if _loop_probe_task is not None:
+        _loop_probe_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await _loop_probe_task
+        _loop_probe_task = None
     _camera_queue = None
+    if _detail_task is not None:
+        _detail_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await _detail_task
+        _detail_task = None
+    if _detail_executor is not None:
+        _detail_executor.shutdown(wait=False, cancel_futures=True)
+        _detail_executor = None
     if _inference_executor is not None:
         _inference_executor.shutdown(wait=False, cancel_futures=True)
         _inference_executor = None
@@ -191,21 +244,66 @@ def _merge_detection(worker: WorkerState, analysis: dict) -> None:
     worker.hazard_json = json.dumps(current_hazards, ensure_ascii=False)
 
 
+async def _run_detail(job: CameraJob, filename: str, submitted_at: float) -> None:
+    global _detail_completed, _detail_last_ms
+    try:
+        started=time.perf_counter()
+        analysis=await asyncio.get_running_loop().run_in_executor(_detail_executor, analyze_frame, filename, True)
+        _detail_last_ms=(time.perf_counter()-started)*1000
+        detail_jpeg = analysis.pop('_annotated_jpeg',None)
+        if detail_jpeg:
+            with _latest_analysis_lock:
+                _detail_image_cache[job.device_id] = (detail_jpeg, dict(frame_id=job.frame_id,
+                    analyzed_at=utcnow().isoformat()+'Z', analysis=analysis))
+        _detail_completed+=1
+        if analysis.get('mode')=='real':
+            _detail_cache[job.device_id]=dict(analysis=analysis,frame_id=job.frame_id,submitted_at=submitted_at)
+        if settings.yolo_trace_enabled:
+            record_analysis(lane='detail',device_id=job.device_id,frame_id=job.frame_id,
+                            inference_ms=round(_detail_last_ms,2),analysis=analysis)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.exception('Separate PPE analysis failed')
+    finally:
+        with suppress(OSError):
+            (CAPTURE_DIR/filename).unlink(missing_ok=True)
+
+
 async def _process_camera_job(job: CameraJob) -> None:
-    global _last_inference_ms, _analysis_completed, _last_analysis_started_at
+    global _last_inference_ms, _analysis_completed, _last_analysis_started_at, _detail_task, _fast_gpu_active
     if _inference_executor is None:
         raise RuntimeError("YOLO inference executor is not running")
     _last_analysis_started_at = time.monotonic()
     inference_started = time.perf_counter()
-    # Voice/STT always wins CPU time. Keep a lightweight full-frame pass at
-    # 1 FPS during speech and disable the extra 640px person-crop inference.
-    detail_enabled = voice_requests_active() == 0
+    # Full-frame target stays unchanged during voice. Async detail has its own
+    # opt-in voice policy and keeps at most one job in flight.
+    detail_enabled = voice_requests_active() == 0 and not settings.yolo_async_detail
+    if (settings.yolo_async_detail and _detail_executor is not None and (voice_requests_active()==0 or settings.yolo_detail_during_voice)
+            and (_detail_task is None or _detail_task.done())
+            and time.monotonic()-_detail_last_submitted.get(job.device_id,0)>=settings.yolo_ppe_detail_interval_seconds):
+        # One in-flight detail frame globally; never accumulate old detail jobs.
+        detail_name=f'_detail/{Path(job.filename).name}'
+        (CAPTURE_DIR/'_detail').mkdir(exist_ok=True)
+        shutil.copyfile(CAPTURE_DIR/job.filename,CAPTURE_DIR/detail_name)
+        submitted=time.monotonic()
+        _detail_last_submitted[job.device_id]=submitted
+        _detail_task=asyncio.create_task(_run_detail(job,detail_name,submitted))
     analysis = await asyncio.get_running_loop().run_in_executor(
         _inference_executor, analyze_frame, job.filename, detail_enabled
     )
     _last_inference_ms = (time.perf_counter() - inference_started) * 1000.0
     _analysis_completed += 1
+    _fast_gpu_active = analysis.get('engine') == 'openvino_gpu_fp32'
     annotated_jpeg = analysis.pop("_annotated_jpeg", None)
+    if settings.yolo_async_detail:
+        analysis=merge_detail(analysis,_detail_cache.get(job.device_id),time.monotonic(),settings.yolo_detail_max_age_seconds)
+    if settings.yolo_trace_enabled:
+        record_analysis(lane='fast',device_id=job.device_id, frame_id=job.frame_id,
+                        inference_ms=round(_last_inference_ms, 2),
+                        detail_enabled=detail_enabled, target_fps=settings.yolo_target_fps,
+                        received_frames=_received_frames, analysis_completed=_analysis_completed,
+                        analysis=analysis)
     raw_path = CAPTURE_DIR / job.filename
     if not annotated_jpeg:
         with suppress(OSError):
@@ -247,6 +345,16 @@ async def _process_camera_job(job: CameraJob) -> None:
             raw_path.unlink(missing_ok=True)
         return
 
+    result, guidance = await asyncio.to_thread(_persist_camera_analysis, job, analysis, raw_path, annotated_jpeg, cache_details, hazards, missing, hazard_signature, alert_signature, now, alert_due)
+    if result is None:
+        return
+    if guidance:
+        result["helmet_guidance"] = await send_helmet_guidance(*guidance, force=True)
+    await manager.broadcast("camera_frame", result)
+
+
+def _persist_camera_analysis(job, analysis, raw_path, annotated_jpeg, cache_details, hazards, missing, hazard_signature, alert_signature, now, alert_due):
+    guidance = None
     event: Event | None = None
     evidence_name: str | None = None
     with SessionLocal() as db:
@@ -254,7 +362,7 @@ async def _process_camera_job(job: CameraJob) -> None:
         if worker is None:
             with suppress(OSError):
                 raw_path.unlink(missing_ok=True)
-            return
+            return None, None
         _merge_detection(worker, analysis)
         recalculate_risk(db, worker)
 
@@ -319,37 +427,35 @@ async def _process_camera_job(job: CameraJob) -> None:
         if event and evacuation_created and result["evacuation"]["incident"]:
             route = result["evacuation"]["routes"].get(job.worker_id)
             if route:
-                result["helmet_guidance"] = await send_helmet_guidance(
-                    job.worker_id,
-                    assistant_device_id(db, job.worker_id),
-                    result["evacuation"]["incident"]["incident_id"],
-                    route,
-                    force=True,
-                )
+                guidance = (job.worker_id, assistant_device_id(db, job.worker_id),
+                            result["evacuation"]["incident"]["incident_id"], route)
+
     # Keep raw evidence only when an alert was actually persisted.
     if not event:
         with suppress(OSError):
             raw_path.unlink(missing_ok=True)
-    await manager.broadcast("camera_frame", result)
+    return result, guidance
 
 
 async def _camera_worker() -> None:
+    global _last_postprocess_ms, _last_queue_age_ms, _paced_skipped_frames
     if _camera_queue is None:
         raise RuntimeError("Camera queue was not initialized")
     queue = _camera_queue
+    due = 0.0
+    prior_interval = _normal_inference_interval_seconds
     while True:
         job = await queue.get()
         try:
-            # Pace normal analysis at 4 FPS and all server-side voice work at
-            # 1 FPS. While waiting, continuously replace this job with the
+            # Voice no longer lowers the fast-frame FPS target. Replace waiting jobs with the
             # newest frame so YOLO never analyzes a stale backlog.
             while True:
-                interval = (
-                    _voice_inference_interval_seconds
-                    if voice_requests_active() > 0
-                    else _normal_inference_interval_seconds
-                )
-                remaining = interval - (time.monotonic() - _last_analysis_started_at)
+                interval = inference_interval(_normal_inference_interval_seconds,
+                    voice_requests_active()>0,_fast_gpu_active,settings.yolo_gpu_voice_fps)
+                if interval != prior_interval:
+                    due = time.monotonic()
+                    prior_interval = interval
+                remaining = due - time.monotonic()
                 if remaining <= 0:
                     break
                 try:
@@ -359,8 +465,19 @@ async def _camera_worker() -> None:
                 with suppress(OSError):
                     (CAPTURE_DIR / job.filename).unlink(missing_ok=True)
                 queue.task_done()
+                _paced_skipped_frames += 1
                 job = newer
+            _last_queue_age_ms = (time.monotonic()-job.queued_at)*1000
+            job_started = time.perf_counter()
+            due = next_deadline(due, time.monotonic(), interval)
             await _process_camera_job(job)
+            job_ms = (time.perf_counter()-job_started)*1000
+            _last_postprocess_ms = max(0.0,job_ms-_last_inference_ms)
+            if settings.yolo_trace_enabled:
+                record_analysis(lane='pipeline',device_id=job.device_id,frame_id=job.frame_id,
+                    queue_age_ms=round(_last_queue_age_ms,2),job_ms=round(job_ms,2),
+                    postprocess_ms=round(_last_postprocess_ms,2),inference_ms=round(_last_inference_ms,2),
+                    voice_active=voice_requests_active(),analysis={})
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -411,8 +528,12 @@ async def upload_frame(
     if not worker:
         raise HTTPException(404, "작업자를 찾을 수 없습니다.")
     path = await save_frame(file, device_id)
-    remember_raw_frame(device_id, path.read_bytes(), frame_id)
+    await asyncio.to_thread(remember_raw_frame, device_id, path.read_bytes(), frame_id)
     global _received_frames
+    global _received_jpeg_bytes, _received_payload_bytes, _last_jpeg_bytes
+    _last_jpeg_bytes=path.stat().st_size
+    _received_jpeg_bytes+=_last_jpeg_bytes
+    _received_payload_bytes+=_last_jpeg_bytes
     _received_frames += 1
     now = time.monotonic()
     if now - _last_device_seen_commit.get(device_id, 0.0) >= 1.0:
@@ -430,6 +551,20 @@ async def upload_frame(
         "dropped_stale": dropped_stale,
         "frame_id": frame_id,
     }
+
+
+def _store_received_frame(jpeg, device_id, frame_id):
+    path=save_frame_bytes(jpeg,device_id)
+    remember_raw_frame(device_id,jpeg,frame_id)
+    return path
+
+
+def _touch_camera_device(device_id):
+    with SessionLocal() as db:
+        current=db.get(Device,device_id)
+        if current is not None:
+            mark_device_seen(current,'camera')
+            db.commit()
 
 
 @router.websocket("/stream/{device_id}")
@@ -472,19 +607,18 @@ async def stream_frames(websocket: WebSocket, device_id: str, worker_id: str, he
                 await websocket.close(code=1003, reason="invalid JPEG or frame header")
                 break
             last_frame_id = frame_id
-            path = await asyncio.to_thread(save_frame_bytes, jpeg, device_id)
-            remember_raw_frame(device_id, jpeg, frame_id)
+            global _received_jpeg_bytes, _received_payload_bytes, _last_jpeg_bytes
+            _last_jpeg_bytes=len(jpeg)
+            _received_jpeg_bytes+=len(jpeg)
+            _received_payload_bytes+=len(packet)
+            path = await asyncio.to_thread(_store_received_frame, jpeg, device_id, frame_id)
             relative_name = path.relative_to(CAPTURE_DIR).as_posix()
             dropped = enqueue_camera_job(CameraJob(relative_name, device_id, worker_id, helmet_id, frame_id))
             global _received_frames
             _received_frames += 1
             accepted += 1
             if accepted == 1 or accepted % 8 == 0:
-                with SessionLocal() as db:
-                    current = db.get(Device, device_id)
-                    if current is not None:
-                        mark_device_seen(current, "camera")
-                        db.commit()
+                await asyncio.to_thread(_touch_camera_device, device_id)
                 await websocket.send_json({"type": "frame_ack", "frame_id": frame_id,
                                            "queue_depth": _camera_queue.qsize() if _camera_queue else 0,
                                            "dropped_stale": dropped})
@@ -494,16 +628,41 @@ async def stream_frames(websocket: WebSocket, device_id: str, worker_id: str, he
 
 @router.get("/processor/status")
 def processor_status():
+    from ..services.audio_service import upload_stats
+    lag=sorted(list(_loop_lag_ms))
     return {
+        "event_loop_lag_ms": {"samples":len(lag), "p50":round(lag[len(lag)//2],2) if lag else None,
+            "p95":round(lag[min(len(lag)-1,int(len(lag)*.95))],2) if lag else None,
+            "max":round(max(lag),2) if lag else None},
+        "sampled_at_seconds": time.monotonic(),
+        "audio_upload": upload_stats(),
         "running": _camera_worker_task is not None and not _camera_worker_task.done(),
         "queue_depth": _camera_queue.qsize() if _camera_queue is not None else 0,
         "queue_capacity": _camera_queue.maxsize if _camera_queue is not None else 1,
         "dropped_stale_frames": _dropped_stale_frames,
         "voice_requests_active": voice_requests_active(),
+        "fast_gpu_active": _fast_gpu_active,
+        "voice_target_fps": settings.yolo_target_fps,
+        "received_jpeg_bytes": _received_jpeg_bytes,
+        "received_payload_bytes": _received_payload_bytes,
+        "last_jpeg_bytes": _last_jpeg_bytes,
         "last_inference_ms": round(_last_inference_ms, 1),
         "analysis_completed": _analysis_completed,
         "target_inference_fps": 1.0 / _normal_inference_interval_seconds,
         "received_frames": _received_frames,
+        "paced_skipped_frames": _paced_skipped_frames,
+        "last_postprocess_ms": round(_last_postprocess_ms,1),
+        "last_queue_age_ms": round(_last_queue_age_ms,1),
+        "detail_completed": _detail_completed,
+        "detail_last_ms": round(_detail_last_ms,1),
+        "detail_busy": _detail_task is not None and not _detail_task.done(),
+        "detail_separated": settings.yolo_async_detail,
+        "brightness_gamma": settings.camera_display_gamma,
+        "preview_gamma": settings.camera_preview_gamma or settings.camera_display_gamma,
+        "preview_red_gain": settings.camera_preview_red_gain,
+        "preview_blue_gain": settings.camera_preview_blue_gain,
+        "sharpen_amount": settings.camera_sharpen_amount,
+        "head_tight_probe": settings.yolo_head_tight_probe,
         "inference_process_isolated": _inference_executor is not None,
     }
 
@@ -520,8 +679,8 @@ def latest_raw_status(device_id: str):
 
 
 @router.get("/{device_id}/live/image")
-def latest_raw_image(device_id: str):
-    raw = latest_raw_frame(device_id)
+def latest_raw_image(device_id: str, corrected: bool = False):
+    raw = latest_preview_frame(device_id) if corrected else latest_raw_frame(device_id)
     if raw is None:
         raise HTTPException(404, "수신된 원본 카메라 프레임이 없습니다.")
     return Response(content=raw[0], media_type="image/jpeg",
@@ -540,7 +699,7 @@ async def raw_live_stream(device_id: str, request: Request, token: str = ""):
     async def frames():
         previous = None
         while not await request.is_disconnected():
-            raw = latest_raw_frame(device_id)
+            raw = latest_preview_frame(device_id)
             if raw is not None:
                 jpeg, metadata = raw
                 token = metadata["received_monotonic"]
@@ -555,12 +714,16 @@ async def raw_live_stream(device_id: str, request: Request, token: str = ""):
 
 
 @router.get("/{device_id}/latest")
-def latest_frame(device_id: str, db: Session = Depends(get_db)):
+def latest_frame(device_id: str, detailed: bool = False, metadata_only: bool = False, db: Session = Depends(get_db)):
     with _latest_analysis_lock:
-        cached = _latest_analysis_cache.get(device_id)
+        cached = (_detail_image_cache if detailed else _latest_analysis_cache).get(device_id)
         cached_details = dict(cached[1]) if cached else None
     if cached_details is not None:
+        if metadata_only:
+            cached_details = {k:cached_details[k] for k in ("frame_id", "analyzed_at", "filename") if k in cached_details}
         return {"device_id": device_id, "received": True, **cached_details}
+    if detailed:
+        return {"device_id": device_id, "received": False}
     event = (
         db.query(Event)
         .filter(Event.device_id == device_id, Event.event_type == "CAMERA_FRAME")
@@ -577,9 +740,9 @@ def latest_frame(device_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{device_id}/latest/image")
-def latest_frame_image(device_id: str, db: Session = Depends(get_db)):
+def latest_frame_image(device_id: str, detailed: bool = False, db: Session = Depends(get_db)):
     with _latest_analysis_lock:
-        cached = _latest_analysis_cache.get(device_id)
+        cached = (_detail_image_cache if detailed else _latest_analysis_cache).get(device_id)
         cached_image = cached[0] if cached else None
     if cached_image is not None:
         return Response(
@@ -587,6 +750,8 @@ def latest_frame_image(device_id: str, db: Session = Depends(get_db)):
             media_type="image/jpeg",
             headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"},
         )
+    if detailed:
+        raise HTTPException(404, "Detailed analysis pending")
     event = (
         db.query(Event)
         .filter(Event.device_id == device_id, Event.event_type == "CAMERA_FRAME")

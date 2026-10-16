@@ -4,7 +4,7 @@ import {loadCameraImage, releaseCameraImage} from "../services/cameraImage";
 
 // Metadata requests remain active while NO FRAME is displayed. Image requests
 // only happen for a new frame, so a stopped helmet cannot cause a 404 loop.
-export function CameraFrame({deviceId, alt}: {deviceId?: string; alt: string}) {
+export function CameraFrame({deviceId, alt, detailed = false}: {deviceId?: string; alt: string; detailed?: boolean}) {
   const [frame, setFrame] = useState<{deviceId: string; src: string} | null>(null);
   useEffect(() => {
     setFrame(null);
@@ -23,16 +23,20 @@ export function CameraFrame({deviceId, alt}: {deviceId?: string; alt: string}) {
     };
     const poll = async () => {
       try {
-        const data = await api.latestCamera(deviceId);
+        const data = await api.latestCamera(deviceId, detailed, true);
         if (!active) return;
         const next = data.received ? `${data.filename ?? ""}:${data.analyzed_at ?? ""}:${data.frame_id ?? ""}` : "";
-        if (!next || next === token) { miss(); return; }
+        if (!next) { miss(); return; }
+        if (next === token) {
+          if (!data.analyzed_at || Date.now()-Date.parse(data.analyzed_at)>3000) miss();
+          return;
+        }
         token = next;
         misses = 0;
         if (pending) { pending.onload = null; pending.onerror = null; }
         const image = new Image();
         pending = image;
-        const src = await loadCameraImage(api.cameraImageUrl(deviceId, next));
+        const src = await loadCameraImage(api.cameraImageUrl(deviceId, next, detailed));
         if (!active) { releaseCameraImage(src); return; }
         releaseCameraImage(pendingSrc);
         pendingSrc = src;
@@ -49,7 +53,7 @@ export function CameraFrame({deviceId, alt}: {deviceId?: string; alt: string}) {
     };
     // Schedule after completion to avoid overlapping requests on a slow server.
     let timer: ReturnType<typeof setTimeout>;
-    const tick = async () => { await poll(); if (active) timer = setTimeout(() => void tick(), 1000); };
+    const tick = async () => { await poll(); if (active) timer = setTimeout(() => void tick(), detailed ? 200 : 1000); };
     void tick();
     return () => {
       active = false;
@@ -58,7 +62,7 @@ export function CameraFrame({deviceId, alt}: {deviceId?: string; alt: string}) {
       releaseCameraImage(visibleSrc);
       releaseCameraImage(pendingSrc);
     };
-  }, [deviceId]);
+  }, [deviceId, detailed]);
   return frame && frame.deviceId === deviceId
     ? <img src={frame.src} alt={alt} />
     : <div className="camera-placeholder"><strong>No Frame</strong><span>수신된 카메라 화면이 없습니다. 새 프레임 수신 시 자동으로 표시됩니다.</span></div>;

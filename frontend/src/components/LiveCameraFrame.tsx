@@ -32,7 +32,7 @@ export function LiveCameraFrame({deviceId}: {deviceId: string}) {
     void poll();
     return () => { active = false; clearTimeout(timer); releaseCameraImage(visible); };
   }, [deviceId]);
-  if (!isCapacitorNative()) return <img src={api.liveCameraStreamUrl(deviceId)} alt="안전모 카메라 원본 영상" />;
-  return frame?.deviceId === deviceId ? <img src={frame.src} alt="안전모 카메라 원본 영상" />
+  if (!isCapacitorNative()) return <img src={api.liveCameraStreamUrl(deviceId)} alt="안전모 카메라 실시간 영상" />;
+  return frame?.deviceId === deviceId ? <img src={frame.src} alt="안전모 카메라 실시간 영상" />
     : <div className="camera-placeholder"><strong>영상 수신 대기</strong><span>안전모 카메라 이미지를 불러오는 중입니다.</span></div>;
 }

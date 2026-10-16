@@ -1,18 +1,21 @@
 import json
 import math
+import asyncio
+import time
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 
-from ..database import get_db, utcnow
+from ..database import get_db, utcnow, SessionLocal, engine
 from ..config import settings
 from ..models.entities import Anchor, Device, Location, SiteLayout, WorkerState, Zone
 from ..schemas.api import UwbDistancesIn
 from ..services.event_service import create_event, event_to_dict
 from ..services.evacuation_service import calculate_route, current_incident
-from ..services.location_filter_service import filter_location, reset_location_filter
+from ..services.location_filter_service import filter_location, reset_location_filter, location_motion_status
 from ..services.location_speed_service import speed_guard
+from ..services.anchor_transition_guard import anchor_transition_guard
 from ..services.device_service import mark_device_seen
 from ..services.presence_service import refresh_presence
 from ..services.location_service import solve_position
@@ -26,6 +29,8 @@ from ..websocket import manager
 from .auth import require_site
 
 router = APIRouter(prefix="/api", tags=["uwb"])
+_distance_processing_lock = asyncio.Lock()
+_failure_notices: dict[tuple[str, str, str], float] = {}
 
 
 def touch_uwb_device(db, payload):
@@ -46,7 +51,29 @@ def save_position_status(worker, check, received_at):
 
 
 @router.post("/uwb/distances")
-async def upload_distances(payload: UwbDistancesIn, db: Session = Depends(get_db)):
+async def upload_distances(payload: UwbDistancesIn, compact_ack: bool = False):
+    # Keep stateful range filtering ordered, but never block camera/audio's loop
+    # with synchronous SQL or position calculations. The session lives in one thread.
+    async with _distance_processing_lock:
+        result = await asyncio.to_thread(_distance_session, payload)
+        if not isinstance(result, dict):
+            return result
+        broadcast = result.pop('_broadcast_location', False)
+        if broadcast:
+            await manager.broadcast('location', result)
+        # Device telemetry needs acknowledgement only; retain full server logs.
+        return Response(status_code=204) if compact_ack else result
+
+
+def _distance_session(payload):
+    # Keep one connection through commit + response serialization, instead of
+    # reopening SQLite for the read following commit. It remains thread-local.
+    with engine.connect() as connection:
+        with SessionLocal(bind=connection) as db:
+            return _process_distances(payload, db)
+
+
+def _process_distances(payload: UwbDistancesIn, db: Session):
     received_at = utcnow().isoformat() + "Z"
     observation = {"event": "server_cycle", "server_received_at": received_at,
                    "input": payload.model_dump(mode="json"), "candidate_position": None,
@@ -109,7 +136,14 @@ async def upload_distances(payload: UwbDistancesIn, db: Session = Depends(get_db
                            position_check=check, position_status=worker_to_dict(worker)["position_status"],
                            final_position={"x": worker.x, "y": worker.y})
         saved = record_observation(observation)
-        create_event(db, "LOCATION_FAILED", str(exc), "warning", payload.worker_id, payload.device_id)
+        # Preserve each failed cycle in JSONL; bound identical UI events.
+        notice_key = (payload.site_id, payload.worker_id, str(exc))
+        notice_now = time.monotonic()
+        if notice_now - _failure_notices.get(notice_key, float('-inf')) >= 5:
+            create_event(db, "LOCATION_FAILED", str(exc), "warning", payload.worker_id, payload.device_id)
+            if len(_failure_notices) >= 1000:
+                _failure_notices.pop(min(_failure_notices, key=_failure_notices.get))
+            _failure_notices[notice_key] = notice_now
         db.commit()
         return JSONResponse(status_code=422, content={"detail": str(exc),
             "location": {"x": worker.x, "y": worker.y, "confidence": worker.confidence, "changed": False},
@@ -117,7 +151,16 @@ async def upload_distances(payload: UwbDistancesIn, db: Session = Depends(get_db
             "observation": {"measurement_id": payload.measurement_id, "accepted": True,
                             "server_received_at": received_at, "position_accepted": False, "log_saved": saved,
                             "position_check": check, "pipeline": pipeline, "distance_processing": processing}})
-    check = speed_guard.check(payload, raw_x, raw_y)
+    transition = anchor_transition_guard.check(
+        (payload.site_id, payload.worker_id, payload.device_id), payload.session_id,
+        usable_ids, raw_x, raw_y)
+    observation['anchor_transition'] = transition
+    if transition['accepted']:
+        check = speed_guard.check(payload, raw_x, raw_y)
+    else:
+        check = dict(mode='enforce', accepted=False, applied=False,
+                     reason='anchor_set_change_pending', reset_smoothing=False)
+    check['anchor_transition'] = transition
     check["quality_status"] = quality_status
     pipeline.update(position_solved=all(math.isfinite(v) for v in (raw_x, raw_y, confidence)),
                     position_accepted=check["accepted"], position_applied=check["applied"])
@@ -141,6 +184,7 @@ async def upload_distances(payload: UwbDistancesIn, db: Session = Depends(get_db
     if check["reset_smoothing"]:
         reset_location_filter(payload.worker_id)
     x, y = filter_location(payload.worker_id, raw_x, raw_y, None if check["reset_smoothing"] else previous_position)
+    observation["motion_filter"] = location_motion_status(payload.worker_id)
     position_changed = abs(x - previous_position[0]) > 0.001 or abs(y - previous_position[1]) > 0.001
     layout = db.get(SiteLayout, worker.site_id)
     worker.x, worker.y = clamp_position(x, y, layout.width if layout else None, layout.height if layout else None)
@@ -181,15 +225,14 @@ async def upload_distances(payload: UwbDistancesIn, db: Session = Depends(get_db
     recalculate_risk(db, worker)
     db.commit()
     log_saved = record_observation(observation)
-    incident = current_incident(db)
-    route = calculate_route(db, worker, incident) if incident else None
+    from ..services.evacuation_navigation import latest_route
+    route = latest_route(worker.worker_id)
     result = {"location": {"x": worker.x, "y": worker.y, "confidence": confidence, "raw_x": raw_x, "raw_y": raw_y, "changed": position_changed}, "worker": worker_to_dict(worker), "event": event_to_dict(zone_event) if zone_event else None, "evacuation_route": route}
     result["observation"] = {"measurement_id": payload.measurement_id,
                              "server_received_at": received_at, "log_saved": log_saved,
                              "accepted": True, "distance_processing": processing,
                              "position_check": check, "position_accepted": check["accepted"], "pipeline": pipeline}
-    if position_changed or zone_event:
-        await manager.broadcast("location", result)
+    result['_broadcast_location'] = bool(position_changed or zone_event)
     return result
 
 
@@ -212,3 +255,29 @@ def location_history(worker_id: str, limit: int = 100, site_id: str = Depends(re
 
 
 
+
+
+@router.websocket("/uwb/stream")
+async def uwb_stream(socket: WebSocket):
+    """Persistent telemetry; process in order with the same filters and logs."""
+    from pydantic import ValidationError
+    await socket.accept()
+    try:
+        while True:
+            raw = await socket.receive_text()
+            if len(raw) > 32768:
+                await socket.close(code=1009)
+                return
+            try:
+                payload = UwbDistancesIn.model_validate_json(raw)
+            except ValidationError:
+                await socket.close(code=1008)
+                return
+            try:
+                result = await upload_distances(payload)
+                status = result.status_code if isinstance(result, JSONResponse) else 200
+            except HTTPException as exc:
+                status = exc.status_code
+            await socket.send_text(f"ack:{payload.cycle_id}:{status}")
+    except WebSocketDisconnect:
+        pass

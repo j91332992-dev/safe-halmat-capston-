@@ -98,6 +98,11 @@ export interface EvacuationIncident {
 }
 
 export interface EvacuationRoute {
+  navigation_enabled?: boolean;
+  action?: string;
+  instruction_stable?: boolean;
+  location_age_ms?: number | null;
+  heading_age_ms?: number | null;
   worker_id: string;
   available: boolean;
   mode: "fire_unconfirmed" | "fire_confirmed";
@@ -208,10 +213,13 @@ export interface CameraLatest {
     model: string;
     ppe: Record<string, boolean | null>;
     hazards: Record<string, boolean | number>;
-    detections: unknown[];
+    person_seen?: boolean;
+    detections: {category?: string; positive?: boolean; confidence?: number; red_pixel_ratio?: number; class?: string}[];
+    detail_evidence?: {valid: boolean; age_ms?: number | null; frame_id?: number | null;
+      detections: {category?: string; positive?: boolean; confidence?: number; red_pixel_ratio?: number; class?: string}[]};
     ppe_judgement?: {
       active: boolean;
-      status: "active" | "pending_person";
+      status: "active" | "pending_person" | "fresh_detail" | "awaiting_detail";
       person_frames: number;
       person_frames_required: number;
       ppe_frames: Record<string, number>;

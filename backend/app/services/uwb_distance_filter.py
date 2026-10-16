@@ -27,6 +27,10 @@ class DistanceFilter:
         path.parent.mkdir(parents=True, exist_ok=True)
         key = json.dumps([payload.organization_id, payload.site_id, payload.uwb_tag_id])
         with closing(sqlite3.connect(path, timeout=10)) as db, db:
+            # This file contains recoverable filter history, not event records.
+            # WAL/NORMAL avoids full journal fsync for every 100 ms sample.
+            db.execute("PRAGMA journal_mode=WAL")
+            db.execute("PRAGMA synchronous=NORMAL")
             db.execute("CREATE TABLE IF NOT EXISTS distance_state (key TEXT PRIMARY KEY, touched REAL, data TEXT)")
             db.execute("BEGIN IMMEDIATE")
             db.execute("DELETE FROM distance_state WHERE touched < ?", (now-cfg.uwb_filter_state_ttl_seconds,))

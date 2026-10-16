@@ -1,6 +1,6 @@
 import asyncio
 import json
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from hmac import compare_digest
 from secrets import token_urlsafe
@@ -34,6 +34,9 @@ class CallConnectionManager:
         self.pending_requests: dict[str, PendingCallRequest] = {}
         self.active_request_events: dict[str, str] = {}
         self.traffic: dict[str, dict[str, int]] = {}
+        self.outputs = {}
+        self.relay_stats = defaultdict(lambda: {"sent": 0, "dropped": 0, "errors": 0,
+            "max_queue": 0, "max_send_ms": 0.0, "max_wait_ms": 0.0, "sent_frames": 0, "sent_bytes": 0, "dropped_bytes": 0, "capacity_drop_bytes": 0, "age_drop_bytes": 0, "control_drop_bytes": 0, "max_enqueue_gap_ms": 0.0})
 
     async def begin_call_request(self, device_id: str, worker_id: str, event_id: str) -> None:
         if device_id in self.pending_requests:
@@ -161,6 +164,7 @@ class CallConnectionManager:
             await websocket.send_json({"type": "call_status", "status": "unauthorized"})
             await websocket.close(code=4401)
             return False
+        self._start_writer(websocket, device_id, "to_helmet")
         self.devices[device_id].append(websocket)
         if self.operators.get(device_id):
             await self.cancel_call_request(device_id, reason="answered")
@@ -178,22 +182,25 @@ class CallConnectionManager:
             await websocket.send_json({"type": "call_status", "status": "busy"})
             await websocket.close(code=4409)
             return False
+        self._start_writer(websocket, device_id, "to_web")
         self.operators[device_id].append(websocket)
         self.traffic[device_id] = {"helmet_packets": 0, "helmet_bytes": 0, "operator_packets": 0, "operator_bytes": 0}
         if self.devices.get(device_id):
             await self.cancel_call_request(device_id, reason="answered")
             await self._send_text(self.devices[device_id], '{"type":"call_start"}')
-            await websocket.send_json({"type": "call_status", "status": "connected"})
+            await self._send_text([websocket], '{"type":"call_status","status":"connected"}')
         else:
-            await websocket.send_json({"type": "call_status", "status": "device_offline"})
+            await self._send_text([websocket], '{"type":"call_status","status":"device_offline"}')
         return True
 
     async def disconnect_device(self, device_id: str, websocket: WebSocket) -> None:
+        await self._stop_writer(websocket)
         self._remove(self.devices, device_id, websocket)
         if not self.devices.get(device_id):
             await self._send_text(self.operators.get(device_id, []), '{"type":"call_status","status":"device_offline"}')
 
     async def disconnect_operator(self, device_id: str, websocket: WebSocket) -> None:
+        await self._stop_writer(websocket)
         self._remove(self.operators, device_id, websocket)
         if not self.operators.get(device_id):
             await self._send_text(self.devices.get(device_id, []), '{"type":"call_stop"}')
@@ -231,23 +238,117 @@ class CallConnectionManager:
         if not sockets:
             store.pop(device_id, None)
 
-    @staticmethod
-    async def _send_bytes(sockets: list[WebSocket], payload: bytes) -> None:
-        for socket in list(sockets):
-            try:
-                await socket.send_bytes(payload)
-            except Exception:
-                if socket in sockets:
-                    sockets.remove(socket)
+    def _start_writer(self, socket, device_id, direction):
+        state = {"audio": deque(), "control": deque(), "wake": asyncio.Event(),
+                 "key": device_id + ":" + direction, "last_enqueue": None}
+        self.outputs[socket] = state
+        state["task"] = asyncio.create_task(self._writer(socket, state))
 
-    @staticmethod
-    async def _send_text(sockets: list[WebSocket], payload: str) -> None:
-        for socket in list(sockets):
+    async def _stop_writer(self, socket):
+        state = self.outputs.pop(socket, None)
+        if state and state["task"] is not asyncio.current_task():
+            state["task"].cancel()
             try:
-                await socket.send_text(payload)
+                await state["task"]
+            except asyncio.CancelledError:
+                pass
+
+    def diagnostics(self, device_id):
+        return {key: dict(value) for key, value in self.relay_stats.items()
+                if key.startswith(device_id + ":")}
+
+    async def _writer(self, socket, state):
+        stats = self.relay_stats[state["key"]]
+        try:
+            while True:
+                await state["wake"].wait()
+                while state["control"] or state["audio"]:
+                    control = bool(state["control"])
+                    payload, queued = (state["control"] if control else state["audio"]).popleft()
+                    now = monotonic()
+                    stats["max_wait_ms"] = max(stats["max_wait_ms"], (now - queued) * 1000)
+                    if not control and now - queued > 0.2:
+                        stats["dropped"] += 1
+                        stats["dropped_bytes"] += len(payload)
+                        stats["age_drop_bytes"] += len(payload)
+                        continue
+                    frames = 1
+                    if not control:
+                        # Coalesce only already queued PCM, with no batching delay.
+                        while state["audio"] and len(payload) + len(state["audio"][0][0]) <= 1920:
+                            more, queued_more = state["audio"].popleft()
+                            if now - queued_more > 0.2:
+                                stats["dropped"] += 1
+                                stats["dropped_bytes"] += len(more)
+                                stats["age_drop_bytes"] += len(more)
+                                continue
+                            payload += more
+                            frames += 1
+                    # A slow peer cannot block either input receive loop.
+                    async with asyncio.timeout(1.0):
+                        if control:
+                            await socket.send_text(payload)
+                        else:
+                            await socket.send_bytes(payload)
+                    stats["max_send_ms"] = max(stats["max_send_ms"], (monotonic() - now) * 1000)
+                    stats["sent"] += 1
+                    if not control:
+                        stats["sent_frames"] += frames
+                        stats["sent_bytes"] += len(payload)
+                state["wake"].clear()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            stats["errors"] += 1
+            try:
+                async with asyncio.timeout(1.0):
+                    await socket.close(code=1011)
             except Exception:
-                if socket in sockets:
-                    sockets.remove(socket)
+                pass
+
+    async def _send_bytes(self, sockets: list[WebSocket], payload: bytes) -> None:
+        for socket in list(sockets):
+            state = self.outputs.get(socket)
+            if not state or state["task"].done():
+                continue
+            queue = state["audio"]
+            stats = self.relay_stats[state["key"]]
+            # At most 200ms PCM16 at 16kHz, independent of variable frame size.
+            while queue and (sum(len(item[0]) for item in queue) + len(payload) > 6400 or len(queue) >= 32):
+                old, _ = queue.popleft()
+                stats["dropped"] += 1
+                stats["dropped_bytes"] += len(old)
+                stats["capacity_drop_bytes"] += len(old)
+            now = monotonic()
+            if state["last_enqueue"] is not None:
+                stats["max_enqueue_gap_ms"] = max(stats["max_enqueue_gap_ms"], (now - state["last_enqueue"]) * 1000)
+            state["last_enqueue"] = now
+            queue.append((payload, now))
+            stats["max_queue"] = max(stats["max_queue"], len(queue))
+            state["wake"].set()
+
+        # Receive() may return immediately for a TCP burst; give the writer a turn.
+        # This yields scheduling only and does not wait for network transmission.
+        await asyncio.sleep(0)
+
+    async def _send_text(self, sockets: list[WebSocket], payload: str) -> None:
+        for socket in list(sockets):
+            state = self.outputs.get(socket)
+            if not state or state["task"].done():
+                continue
+            stats = self.relay_stats[state["key"]]
+            stats["control_drop_bytes"] += sum(len(item[0]) for item in state["audio"])
+            state["audio"].clear()  # Explicitly account for call transition flushing.
+            if len(state["control"]) >= 8:
+                state["task"].cancel()
+                try:
+                    async with asyncio.timeout(1.0):
+                        await socket.close(code=1011)
+                except Exception:
+                    pass
+                continue
+            state["control"].append((payload, monotonic()))
+            state["wake"].set()
 
 
 call_manager = CallConnectionManager()

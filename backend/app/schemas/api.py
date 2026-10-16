@@ -118,7 +118,7 @@ class UwbDistancesIn(BaseModel):
     measured_at: datetime | None = None
     time_basis: str | None = Field(default=None, max_length=64)
     firmware_dropped_cycles: int = Field(default=0, ge=0)
-    transport: Literal["usb", "wifi", "legacy"] = "legacy"
+    transport: Literal["usb", "wifi", "wifi-ws", "legacy"] = "legacy"
     bridge_received_at: datetime | None = None
     bridge_capture_id: str | None = Field(default=None, max_length=64)
     observations: list[RangeObservation] = Field(default_factory=list, max_length=16)

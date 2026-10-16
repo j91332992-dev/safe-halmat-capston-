@@ -16,12 +16,14 @@ class BoundedJsonlLog:
     """
 
     def __init__(self, path: Path, max_bytes: int = 10 * 1024 * 1024,
-                 backups: int = 4, retention_days: float = 7):
+                 backups: int = 4, retention_days: float = 7, expiry_check_seconds: float = 0):
         if max_bytes < 1024 or not 0 <= backups <= 100 or retention_days <= 0:
             raise ValueError("Invalid UWB log limits")
         self.path = Path(path)
         self.max_bytes, self.backups = max_bytes, backups
         self.retention_seconds = retention_days * 86400
+        self.expiry_check_seconds = max(0, expiry_check_seconds)
+        self.last_expiry_check = time.monotonic()
         self.lock = Lock()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._expire()
@@ -50,7 +52,9 @@ class BoundedJsonlLog:
         if len(data) > self.max_bytes:
             raise ValueError("UWB observation exceeds log file limit")
         with self.lock:
-            self._expire()
+            if time.monotonic() - self.last_expiry_check >= self.expiry_check_seconds:
+                self._expire()
+                self.last_expiry_check = time.monotonic()
             if self.path.exists() and self.path.stat().st_size + len(data) > self.max_bytes:
                 self._file(self.backups).unlink(missing_ok=True)
                 for index in range(self.backups - 1, -1, -1):
@@ -72,7 +76,8 @@ def record_observation(record: dict) -> bool:
         with _init_lock:
             if _log is None:
                 _log = BoundedJsonlLog(Path(settings.uwb_log_path), settings.uwb_log_max_bytes,
-                                       settings.uwb_log_backups, settings.uwb_log_retention_days)
+                                       settings.uwb_log_backups, settings.uwb_log_retention_days,
+                                       expiry_check_seconds=60)
         _log.append(record)
         return True
     except (OSError, ValueError):

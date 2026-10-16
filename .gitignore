@@ -45,5 +45,12 @@ device_backups/
 outputs/
 backend/safety.db-*
 backend/test_result*.jpg
+backend/best.onnx
+backend/best_openvino_model/
 repomix-output.md
 * - 복사본.*
+
+# Private runtime data; handoff documentation is published separately.
+/safety.db
+/safety.db-*
+/docs/HANMIR_INTEGRATED_DIAGNOSTICS_2026-10-10_EVIDENCE.zip

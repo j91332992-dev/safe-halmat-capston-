@@ -62,16 +62,27 @@ class Settings(BaseSettings):
     uwb_solver_max_rmse_m: float = Field(default=1.0, gt=0, allow_inf_nan=False)
     location_stationary_radius_m: float = 0.15
     # Keep receiving positions continuously, but leave a stationary marker fixed
-    # until movement from the last accepted position reaches 30 cm twice.
+    # until movement from the last accepted position reaches 30 cm consistently three times.
     location_move_start_m: float = 0.30
-    location_move_confirm_samples: int = 2
+    location_move_confirm_samples: int = 3
+    location_stop_window_seconds: float = 0.8
+    location_stop_spread_m: float = 0.30
+    location_stop_net_m: float = 0.04
+    # Legacy settings retained for compatibility; timed window replaces them.
     location_stop_step_m: float = 0.08
-    location_stop_confirm_samples: int = 5
+    location_stop_confirm_samples: int = 3
     # Browser development plus native Capacitor Android/iOS WebViews.
     # Android uses https://localhost when androidScheme is set to https.
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost,https://localhost,capacitor://localhost,ionic://localhost"
     openai_api_key: str | None = None
     use_whisper_stt: bool = True
+    tts_timeout_seconds: float = Field(default=8.0, gt=0, le=60)
+    voice_trace_enabled: bool = True
+    voice_trace_retain_audio: bool = False
+    voice_trace_audio_files: int = Field(default=12, ge=1, le=100)
+    voice_trace_max_bytes: int = Field(default=5 * 1024 * 1024, ge=1024)
+    voice_trace_backups: int = Field(default=3, ge=0, le=100)
+    voice_trace_retention_days: float = Field(default=7, gt=0)
     stt_model: str = "gpt-4o-mini-transcribe"
     stt_language: str = "ko"
     stt_prompt: str = "한국어 산업 안전 현장 대화입니다. 호출어 투투스와 작업자의 짧은 명령을 정확히 받아쓰고, 들리지 않는 내용은 추측하지 마세요."
@@ -106,6 +117,26 @@ class Settings(BaseSettings):
     admin_password_salt: str = "hanmir-admin-v1"
     admin_session_hours: int = 8
     yolo_enabled: bool = True
+    yolo_target_fps: float = Field(default=10.0, gt=0, le=30)
+    yolo_trace_enabled: bool = True
+    yolo_async_detail: bool = True
+    yolo_head_detail_enabled: bool = True
+    yolo_head_tight_probe: bool = False
+    yolo_full_hand_evidence: bool = False
+    yolo_gpu_voice_fps: float = Field(default=10.0, gt=0, le=10)
+    camera_display_gamma: float = Field(default=1.0, ge=1.0, le=1.5)
+    camera_preview_gamma: float | None = Field(default=None, ge=1.0, le=1.8)
+    camera_preview_red_gain: float = Field(default=1.0, ge=0.8, le=1.2)
+    camera_preview_blue_gain: float = Field(default=1.0, ge=0.8, le=1.2)
+    camera_sharpen_amount: float = Field(default=0.0, ge=0.0, le=0.5)
+    yolo_fast_openvino_gpu: bool = False
+    yolo_detail_hybrid_gpu: bool = False
+    yolo_detail_gpu960_model_path: str = ""
+    yolo_vest_body_probe: bool = False
+    yolo_detail_early_exit: bool = False
+    yolo_detail_during_voice: bool = False
+    yolo_openvino_model_path: str = str(BASE_DIR / 'best_openvino_model')
+    yolo_detail_max_age_seconds: float = Field(default=1.5, gt=0, le=5)
     yolo_model_path: str = str(BASE_DIR / "best.pt")
     # Match backend/test_webcam.py: Ultralytics default confidence and 320px input.
     yolo_confidence: float = 0.25
@@ -113,6 +144,7 @@ class Settings(BaseSettings):
     # Keep full-frame detection at 320 (empirically best for this model), then
     # inspect the tracked person ROI at the model's native 640 training size.
     yolo_ppe_detail_image_size: int = 640
+    yolo_ppe_detail_960_enabled: bool = True
     yolo_ppe_detail_interval_seconds: float = 0.30
     yolo_person_track_seconds: float = 2.0
     yolo_person_confidence: float = 0.35
