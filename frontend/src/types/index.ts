@@ -10,6 +10,21 @@ export interface Worker {
   x: number;
   y: number;
   confidence: number;
+  position_status?: {
+    mode?: "observe" | "enforce";
+    accepted?: boolean | null;
+    applied?: boolean;
+    reason?: string;
+    last_valid_at?: string | null;
+    last_valid_position?: {x: number; y: number; confidence: number} | null;
+    last_valid_age_seconds?: number | null;
+    quality_status?: {
+      mode: "observe" | "enforce";
+      used_anchor_count: number;
+      excluded_anchor_ids: string[];
+      degraded_reasons: string[];
+    };
+  };
   current_zone: string | null;
   risk_score: number;
   risk_level: RiskLevel;

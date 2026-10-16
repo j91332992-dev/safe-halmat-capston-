@@ -4,7 +4,8 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from uwb_live_bridge import DistanceProcessor, parse_tag_line
+from scripts.legacy_uwb_processing import DistanceProcessor
+from uwb_live_bridge import parse_tag_line
 
 
 def test_parse_full_tag_frame():

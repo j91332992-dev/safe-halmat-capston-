@@ -22,6 +22,10 @@ from .websocket import call_manager, manager
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    from .services.location_speed_service import speed_guard
+    from .services.location_filter_service import reset_location_filter
+    speed_guard.reset()
+    reset_location_filter()
     init_database()
     await start_camera_processor()
     try:

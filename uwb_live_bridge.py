@@ -2,14 +2,18 @@
 from __future__ import annotations
 
 import argparse
-from collections import defaultdict, deque
 from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
-from statistics import median
 import sys
 import time
+from datetime import datetime, timezone
+from queue import Queue, Full, Empty
+from threading import Thread, Event
+from uuid import uuid4
+
+from backend.app.services.uwb_log_service import BoundedJsonlLog
 
 import requests
 import serial
@@ -17,7 +21,6 @@ from serial import SerialException
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-DEFAULT_CALIBRATION_FILE = PROJECT_ROOT / "uwb_calibration.json"
 ANCHOR_ID_MAP = {
     0: "anchor-001",
     1: "anchor-002",
@@ -40,6 +43,7 @@ class TagFrame:
     beacon: int
     ranges_cm: tuple[int, ...]
     anchor_numbers: tuple[int, ...]
+    payload: dict | None = None
 
 
 def _parse_csv_ints(value: str) -> tuple[int, ...]:
@@ -48,6 +52,29 @@ def _parse_csv_ints(value: str) -> tuple[int, ...]:
 
 def parse_tag_line(line: str) -> TagFrame | None:
     """펌웨어 한 줄을 파싱합니다. 부팅 로그 등 다른 줄은 None입니다."""
+    if line.strip().startswith("{"):
+        try:
+            data = json.loads(line)
+            if data.get("schema_version") != 2:
+                return None
+            # Use the same validation as the Wi-Fi endpoint. Preserve firmware
+            # JSON, including raw diagnostics, instead of re-deriving them here.
+            from backend.app.schemas.api import UwbDistancesIn
+            validated = UwbDistancesIn.model_validate(data)
+            if not validated.session_id or not validated.measurement_id or validated.sequence is None:
+                return None
+            observations = validated.observations
+            numbers = tuple(int(item.anchor_id[-3:]) - 1 for item in observations)
+            return TagFrame(
+                tag_id=validated.tag_hw_id or 0,
+                mask=sum(1 << number for number, item in zip(numbers, observations)
+                         if number in ANCHOR_ID_MAP and item.status != "missing"),
+                sequence=validated.sequence, beacon=-1,
+                ranges_cm=tuple(item.legacy_range_cm or 0 for item in observations),
+                anchor_numbers=numbers, payload=data,
+            )
+        except (ValueError, TypeError, KeyError):
+            return None
     match = TAG_LINE_RE.search(line.strip())
     if not match:
         return None
@@ -65,61 +92,13 @@ def parse_tag_line(line: str) -> TagFrame | None:
     )
 
 
-def load_calibration(path: Path, disabled: bool = False) -> dict[str, float]:
-    if disabled:
-        return {anchor_id: 0.0 for anchor_id in ANCHOR_ID_MAP.values()}
-    data = json.loads(path.read_text(encoding="utf-8"))
-    offsets = data.get("offset_m", data)
-    return {
-        anchor_id: float(offsets.get(anchor_id, 0.0))
-        for anchor_id in ANCHOR_ID_MAP.values()
-    }
-
-
-class DistanceProcessor:
-    """최근 거리 중앙값과 앵커별 보정을 적용합니다."""
-
-    def __init__(self, calibration: dict[str, float], history_size: int = 5, anchor_hold_seconds: float = 2.5):
-        self.calibration = calibration
-        self.history = defaultdict(lambda: deque(maxlen=history_size))
-        self.last_seen: dict[str, float] = {}
-        self.anchor_hold_seconds = anchor_hold_seconds
-
-    def process(self, frame: TagFrame) -> list[dict]:
-        now = time.monotonic()
-        current: dict[str, int] = {}
-        for raw_cm, anchor_number in zip(frame.ranges_cm, frame.anchor_numbers):
-            anchor_id = ANCHOR_ID_MAP.get(anchor_number)
-            if anchor_id is None or raw_cm <= 0:
-                continue
-            current[anchor_id] = raw_cm
-            self.history[anchor_id].append(raw_cm)
-            self.last_seen[anchor_id] = now
-
-        measurements = []
-        recent_anchor_ids = {
-            anchor_id for anchor_id, seen_at in self.last_seen.items()
-            if now - seen_at <= self.anchor_hold_seconds
-        }
-        for anchor_id in sorted(recent_anchor_ids):
-            samples = self.history[anchor_id]
-            smoothed_cm = float(median(samples))
-            distance_m = max(0.05, smoothed_cm / 100.0 + self.calibration.get(anchor_id, 0.0))
-            spread_cm = max(samples) - min(samples) if len(samples) > 1 else 0
-            age = now - self.last_seen[anchor_id]
-            held_penalty = 0.15 if anchor_id not in current else 0.0
-            age_penalty = held_penalty + min(
-                0.20, age / max(0.001, self.anchor_hold_seconds) * 0.20
-            )
-            quality = max(0.40, min(0.99, 0.98 - spread_cm / 250.0 - age_penalty))
-            measurements.append(
-                {
-                    "anchor_id": anchor_id,
-                    "distance_m": round(distance_m, 3),
-                    "quality": round(quality, 2),
-                }
-            )
-        return measurements
+def raw_measurements(frame: TagFrame) -> list[dict]:
+    """No calibration, filtering, hold, or quality inference in the bridge."""
+    if frame.payload is not None:
+        return frame.payload["measurements"]
+    return [{"anchor_id": ANCHOR_ID_MAP[number], "distance_m": cm / 100.0}
+            for cm, number in zip(frame.ranges_cm, frame.anchor_numbers)
+            if number in ANCHOR_ID_MAP and cm > 0]
 
 
 class BackendClient:
@@ -165,8 +144,15 @@ class BackendClient:
         ).raise_for_status()
         self.last_heartbeat = now
 
+    def send_payload(self, payload: dict) -> dict:
+        response = self.session.post(
+            f"{self.base_url}/api/uwb/distances", json=payload, timeout=3
+        )
+        response.raise_for_status()
+        return response.json()
+
     def send_distances(self, tag_id: int, measurements: list[dict]) -> dict:
-        payload = {
+        return self.send_payload({
             "organization_id": "org-001",
             "site_id": "site-001",
             "worker_id": "worker-001",
@@ -174,64 +160,116 @@ class BackendClient:
             "device_id": "helmet-001-uwb",
             "uwb_tag_id": f"tag-{tag_id + 1:03d}",
             "measurements": measurements,
-        }
-        response = self.session.post(
-            f"{self.base_url}/api/uwb/distances", json=payload, timeout=3
-        )
-        response.raise_for_status()
-        return response.json()
+        })
+
+
+def utc_timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def build_cycle_payload(frame: TagFrame, measurements: list[dict], received_at: str) -> dict:
+    payload = dict(frame.payload or {
+        "worker_id": "worker-001", "helmet_id": "helmet-001",
+        "device_id": "helmet-001-uwb", "uwb_tag_id": f"tag-{frame.tag_id + 1:03d}",
+        "sequence": frame.sequence % 256, "time_basis": "legacy_unknown",
+    })
+    payload.update(transport="usb", bridge_received_at=received_at,
+                   measurements=measurements)
+    if frame.payload is None:
+        payload["distances_calibrated"] = False
+    return payload
+
+
+def capture_frames(port, args, log, backend=None) -> None:
+    """Serial reading never waits for HTTP. Log every frame before throttling."""
+    queue = Queue(maxsize=32)
+    stopping = Event()
+
+    def sender():
+        while not stopping.is_set():
+            try:
+                capture_id, payload = queue.get(timeout=0.1)
+            except Empty:
+                continue
+            record = {"event": "usb_delivery", "capture_id": capture_id,
+                      "measurement_id": payload.get("measurement_id"), "sent_at": utc_timestamp()}
+            try:
+                backend.heartbeat_if_due()
+                result = backend.send_payload(payload)
+                record.update(status="sent", result=result)
+            except requests.RequestException as exc:
+                response = exc.response
+                record.update(status="failed", error=str(exc),
+                              http_status=response.status_code if response is not None else None,
+                              response=response.text[:2048] if response is not None else None)
+            log.append(record)
+            queue.task_done()
+
+    thread = Thread(target=sender, daemon=True) if backend is not None else None
+    if thread:
+        thread.start()
+    last_post = 0.0
+    try:
+        while True:
+            raw = port.readline()
+            if not raw:
+                continue
+            received_at = utc_timestamp()
+            line = raw.decode("utf-8", errors="replace").strip()
+            frame = parse_tag_line(line)
+            if frame is None:
+                if line.startswith("{"):
+                    log.append({"event": "usb_parse_failed", "received_at": received_at, "line": line[:16384]})
+                if args.show_raw and line:
+                    print(f"[TAG] {line}")
+                continue
+            measurements = raw_measurements(frame)
+            payload = build_cycle_payload(frame, measurements, received_at)
+            capture_id = uuid4().hex
+            payload["bridge_capture_id"] = capture_id
+            now = time.monotonic()
+            action = "log_only" if backend is None else "throttled" if now - last_post < args.post_interval else "queued"
+            # Preserve firmware values identically on USB and Wi-Fi.
+            log.append({"event": "usb_cycle", "capture_id": capture_id,
+                        "received_at": received_at, "firmware": frame.payload,
+                        "legacy_line": line if frame.payload is None else None,
+                        "payload": payload, "delivery": action,
+                        "condition": args.condition, "run_label": args.run_label})
+            if action == "queued":
+                try:
+                    queue.put_nowait((capture_id, payload))
+                    last_post = now
+                except Full:
+                    log.append({"event": "usb_delivery", "capture_id": capture_id,
+                                "measurement_id": payload.get("measurement_id"), "status": "queue_full"})
+    finally:
+        stopping.set()
+        if thread:
+            # At most one heartbeat + POST remains in flight (3 s each).
+            thread.join(timeout=7)
+            while not queue.empty():
+                capture_id, payload = queue.get_nowait()
+                log.append({"event": "usb_delivery", "capture_id": capture_id,
+                            "measurement_id": payload.get("measurement_id"), "status": "connection_closed"})
 
 
 def run_bridge(args: argparse.Namespace) -> None:
-    calibration = load_calibration(args.calibration, args.no_calibration)
-    processor = DistanceProcessor(calibration, args.history_size, args.anchor_hold_seconds)
-    backend = BackendClient(args.api_url)
-    backend.wait_until_ready()
-    print(f"[보정] {calibration}")
-    print(f"[시리얼] {args.port} @ {args.baud} 연결 중...")
-    print("[안내] 종료하려면 Ctrl+C를 누르세요.")
-
-    last_post = 0.0
+    if args.post_interval < 0:
+        raise ValueError("post-interval >= 0 required")
+    log = BoundedJsonlLog(args.log_path, args.log_max_bytes, args.log_backups, args.log_retention_days)
+    backend = None
+    if not args.log_only:
+        backend = BackendClient(args.api_url)
+        backend.wait_until_ready()
+    print("[거리 처리] 서버 공통 보정·중앙값 필터 사용")
+    print(f"[시리얼] {args.port} @ {args.baud}; 로그={args.log_path}; log_only={args.log_only}")
     while True:
         try:
             with serial.Serial(args.port, args.baud, timeout=1) as port:
-                port.reset_input_buffer()
-                print(f"[시리얼] {args.port} 연결 완료")
-                while True:
-                    raw = port.readline()
-                    if not raw:
-                        continue
-                    line = raw.decode("utf-8", errors="replace").strip()
-                    frame = parse_tag_line(line)
-                    if frame is None:
-                        if args.show_raw and line:
-                            print(f"[TAG] {line}")
-                        continue
-                    measurements = processor.process(frame)
-                    if len(measurements) < 3:
-                        print(f"[건너뜀] seq={frame.sequence}, 유효 앵커={len(measurements)}")
-                        continue
-                    now = time.monotonic()
-                    if now - last_post < args.post_interval:
-                        continue
-                    try:
-                        backend.heartbeat_if_due()
-                        result = backend.send_distances(frame.tag_id, measurements)
-                    except requests.RequestException as exc:
-                        print(f"[서버 오류] {exc}")
-                        time.sleep(1)
-                        continue
-                    last_post = now
-                    location = result["location"]
-                    distances = " ".join(
-                        f"{item['anchor_id'][-1]}={item['distance_m']:.2f}m"
-                        for item in measurements
-                    )
-                    print(
-                        f"[위치] x={location['x']:.2f}m y={location['y']:.2f}m "
-                        f"신뢰={location['confidence']:.2f} | {distances}"
-                    )
+                # Do not discard buffered first cycles/session information.
+                capture_frames(port, args, log, backend)
         except SerialException as exc:
+            log.append({"event": "usb_disconnect", "received_at": utc_timestamp(), "error": str(exc)})
             print(f"[시리얼 오류] {exc} — 2초 후 다시 연결합니다.")
             time.sleep(2)
 
@@ -239,14 +277,17 @@ def run_bridge(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="UWB TAG 시리얼 데이터를 실시간 웹 지도로 전송")
     parser.add_argument("--port", default="COM6", help="TAG COM 포트 (기본: COM6)")
-    parser.add_argument("--baud", type=int, default=115200)
+    parser.add_argument("--baud", type=int, default=460800, help="새 TAG: 460800; 기존 펌웨어/앵커: 115200")
     parser.add_argument("--api-url", default="http://127.0.0.1:8000")
-    parser.add_argument("--calibration", type=Path, default=DEFAULT_CALIBRATION_FILE)
-    parser.add_argument("--no-calibration", action="store_true")
-    parser.add_argument("--history-size", type=int, default=5)
-    parser.add_argument("--anchor-hold-seconds", type=float, default=2.5)
-    parser.add_argument("--post-interval", type=float, default=0.2)
+    parser.add_argument("--post-interval", type=float, default=0.0)
     parser.add_argument("--show-raw", action="store_true")
+    parser.add_argument("--log-only", action="store_true", help="서버 연결/heartbeat/전송 없이 수집")
+    parser.add_argument("--log-path", type=Path, default=PROJECT_ROOT / "logs" / "uwb-usb.jsonl")
+    parser.add_argument("--log-max-bytes", type=int, default=10 * 1024 * 1024)
+    parser.add_argument("--log-backups", type=int, default=4)
+    parser.add_argument("--log-retention-days", type=float, default=7)
+    parser.add_argument("--condition", choices=("los", "body", "obstacle", "unspecified"), default="unspecified")
+    parser.add_argument("--run-label", default="")
     return parser
 
 

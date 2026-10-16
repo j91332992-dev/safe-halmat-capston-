@@ -12,10 +12,19 @@ Board: esp32 2.0.16
 #include "dw3000.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
+#if __has_include("wifi_secrets.h")
 #include "wifi_secrets.h"
+#else
+#define HANMIR_WIFI_SSID ""
+#define HANMIR_WIFI_PASSWORD ""
+#define HANMIR_SERVER_URL ""
+#endif
 
 #ifndef TAG_ID
 #define TAG_ID              0
+#endif
+#ifndef UWB_WIFI_TELEMETRY
+#define UWB_WIFI_TELEMETRY   1
 #endif
 #define NET_PAN_ID          0xDECA
 #define MAX_ANCHORS         4
@@ -81,24 +90,20 @@ static uint32_t last_beacon_ms = 0;
 static uint8_t  last_beacon_sequence = 0;
 static bool     is_time_synced = false;
 static bool     is_slot_completed = false;
-static bool     wifi_report_pending = false;
 static uint32_t last_wifi_attempt_ms = 0;
-static uint32_t last_wifi_post_ms = 0;
 
 #define WIFI_RETRY_INTERVAL_MS 10000
-#define WIFI_POST_RETRY_MS     100
-#define WIFI_HTTP_TIMEOUT_MS   3000
 
 extern dwt_txconfig_t txconfig_options;
 
 static void listen_for_beacon(uint16_t timeout_ms);
 void perform_ranging(void);
 static void handle_response_frame(uint32_t poll_tx_ts_32);
-static void print_ranging_result(void);
 static void send_report(void);
 static bool wifi_is_configured(void);
 static void begin_wifi(void);
-static void service_wifi(void);
+
+#include "uwb_telemetry.h"
 
 static inline int get_anchor_index(uint16_t anchor_id)
 {
@@ -124,7 +129,7 @@ static inline void write_u16_le(uint8_t *data, uint16_t value)
 
 static bool wifi_is_configured()
 {
-    return HANMIR_WIFI_SSID[0] != '\0' && HANMIR_SERVER_URL[0] != '\0';
+    return UWB_WIFI_TELEMETRY && HANMIR_WIFI_SSID[0] != '\0' && HANMIR_SERVER_URL[0] != '\0';
 }
 
 static void begin_wifi()
@@ -143,88 +148,11 @@ static void begin_wifi()
     Serial.println(HANMIR_WIFI_SSID);
 }
 
-static void service_wifi()
-{
-    if (!wifi_is_configured())
-    {
-        return;
-    }
-
-    uint32_t now_ms = millis();
-    if (WiFi.status() != WL_CONNECTED)
-    {
-        if (now_ms - last_wifi_attempt_ms >= WIFI_RETRY_INTERVAL_MS)
-        {
-            WiFi.disconnect();
-            WiFi.begin(HANMIR_WIFI_SSID, HANMIR_WIFI_PASSWORD);
-            last_wifi_attempt_ms = now_ms;
-            Serial.println("[WIFI] reconnecting...");
-        }
-        return;
-    }
-
-    if (!wifi_report_pending || now_ms - last_wifi_post_ms < WIFI_POST_RETRY_MS)
-    {
-        return;
-    }
-
-    String payload;
-    payload.reserve(700);
-    payload = "{\"organization_id\":\"org-001\",\"site_id\":\"site-001\",";
-    payload += "\"worker_id\":\"worker-001\",\"helmet_id\":\"helmet-001\",";
-    payload += "\"device_id\":\"helmet-001-uwb\",\"uwb_tag_id\":\"tag-001\",";
-    payload += "\"distances_calibrated\":false,\"measurements\":[";
-
-    bool first = true;
-    for (int i = 0; i < MAX_ANCHORS; i++)
-    {
-        if (!(response_mask & (1 << i)) || ranges_cm[i] <= 0)
-        {
-            continue;
-        }
-        if (!first)
-        {
-            payload += ',';
-        }
-        first = false;
-        payload += "{\"anchor_id\":\"anchor-00";
-        payload += String(i + 1);
-        payload += "\",\"distance_m\":";
-        payload += String(ranges_cm[i] / 100.0f, 2);
-        payload += ",\"quality\":0.95}";
-    }
-    payload += "]}";
-
-    WiFiClient client;
-    HTTPClient http;
-    http.setTimeout(WIFI_HTTP_TIMEOUT_MS);
-    last_wifi_post_ms = now_ms;
-    if (!http.begin(client, HANMIR_SERVER_URL))
-    {
-        Serial.println("[WIFI] invalid server URL");
-        return;
-    }
-    http.addHeader("Content-Type", "application/json");
-    int status_code = http.POST(payload);
-    http.end();
-
-    if (status_code >= 200 && status_code < 300)
-    {
-        wifi_report_pending = false;
-        Serial.print("[WIFI] POST ");
-        Serial.print(status_code);
-        Serial.print(" IP=");
-        Serial.println(WiFi.localIP());
-    }
-    else
-    {
-        Serial.print("[WIFI] POST failed: ");
-        Serial.println(status_code);
-    }
-}
 void setup()
 {
     UART_init();
+    // Four raw diagnostic records exceed 115200 baud at the nominal cycle rate.
+    Serial.updateBaudRate(460800);
 
     tx_poll_msg[3] = (uint8_t)(NET_PAN_ID);
     tx_poll_msg[4] = (uint8_t)(NET_PAN_ID >> 8);
@@ -263,6 +191,7 @@ void setup()
         while (1);
     }
 
+    dwt_configciadiag(DW_CIA_DIAG_LOG_ALL); // Single RX buffer, full Ipatov diagnostics.
     dwt_configuretxrf(&txconfig_options);
     dwt_setrxantennadelay(RX_ANT_DLY);
     dwt_settxantennadelay(TX_ANT_DLY);
@@ -275,12 +204,14 @@ void setup()
     }
 
     begin_wifi();
+    start_telemetry();
 }
 
 // Receive A0 Beacon and synchronize the local TDMA epoch.
 static void listen_for_beacon(uint16_t timeout_ms)
 {
     dwt_setrxtimeout(timeout_ms * 1000UL);
+    dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_CIADONE_BIT_MASK);
     dwt_rxenable(DWT_START_RX_IMMEDIATE);
 
     while (!((status_reg = dwt_read32bitreg(SYS_STATUS_ID)) &
@@ -314,6 +245,7 @@ static void listen_for_beacon(uint16_t timeout_ms)
                     last_beacon_ms = synced_epoch_ms;
                     last_beacon_sequence = rx_buffer[BEACON_SEQ_IDX];
                     is_time_synced = true;
+                    record_beacon_state(true);
                     is_slot_completed = false;
                 }
             }
@@ -339,6 +271,7 @@ void loop()
     if (now_ms - last_beacon_ms > BEACON_TIMEOUT_MS )
     {
         is_time_synced = false;
+        record_beacon_state(false);
         is_slot_completed = false;
         return;
     }
@@ -357,7 +290,7 @@ void loop()
     if (frame_offset_ms < slot_start_ms || frame_offset_ms >= slot_end_ms)
     {
         is_slot_completed = false;
-        service_wifi();
+
     }
 
     delay(1);
@@ -366,6 +299,11 @@ void loop()
 // Run one ranging cycle: send Poll, receive Anchor Responses, then send Report.
 void perform_ranging()
 {
+    current_cycle = {};
+    current_cycle.cycle_id = next_cycle++;
+    current_cycle.sequence = sequence_number;
+    current_cycle.uptime_us = esp_timer_get_time();
+    current_cycle.beacon = last_beacon_sequence;
     for (int i = 0; i < MAX_ANCHORS; i++)
     {
         ranges_cm[i] = 0;
@@ -378,6 +316,7 @@ void perform_ranging()
     dwt_setrxtimeout(anchor_delays[0] + 2000);
     dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_ALL_RX_TO | SYS_STATUS_ALL_RX_ERR);
 
+    dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_CIADONE_BIT_MASK);
     tx_poll_msg[2] = sequence_number;
     dwt_writetxdata(sizeof(tx_poll_msg), tx_poll_msg, 0);
     dwt_writetxfctrl(sizeof(tx_poll_msg), 0, 0);
@@ -405,6 +344,7 @@ void perform_ranging()
         uint32_t timeout = (anchor_delays[i] - previous_delay) + 2000;
 
         dwt_setrxtimeout(timeout);
+        dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_CIADONE_BIT_MASK);
         dwt_rxenable(DWT_START_RX_IMMEDIATE);
 
         while (!((status_reg = dwt_read32bitreg(SYS_STATUS_ID)) &
@@ -424,46 +364,38 @@ void perform_ranging()
         previous_delay = anchor_delays[i];
     }
 
-    print_ranging_result();
     send_report();
+    current_cycle.mask = response_mask;
+    enqueue_cycle(current_cycle);
 
-    uint8_t valid_count = 0;
-    for (int i = 0; i < MAX_ANCHORS; i++)
-    {
-        if (response_mask & (1 << i))
-        {
-            valid_count++;
-        }
-    }
-    if (valid_count >= 3)
-    {
-        wifi_report_pending = true;
-    }
 }
 
 // Handle a received Anchor Response frame.
 static void handle_response_frame(uint32_t poll_tx_ts_32)
 {
-    uint32_t resp_rx_ts_32 = dwt_readrxtimestamplo32();
+    const uint64_t received_us = esp_timer_get_time();
+    const uint32_t capture_started_us = micros();
+    const uint64_t rx_dtu = get_rx_timestamp_u64();
+    uint32_t resp_rx_ts_32 = (uint32_t)rx_dtu;
     int32_t raw_clock_offset = dwt_readclockoffset();
 
-    // dwt_readclockoffset() already returns a signed int16_t from the driver.
-
+    // Match P4 integration baseline 722c9fd: driver already sign-extends 13 bits.
+    // Do not reintroduce the old main branch's incorrect bit-10 extension.
     float clock_offset = ((float)raw_clock_offset) / (uint32_t)(1 << 26);
 
-    dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_RXFCG_BIT_MASK);
+    dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_RXFCG_BIT_MASK | SYS_STATUS_CIADONE_BIT_MASK);
 
     uint32_t frame_len = dwt_read32bitreg(RX_FINFO_ID) & RXFLEN_MASK;
     uint16_t data_len = frame_len - FCS_LEN;
 
-    if (data_len > sizeof(rx_buffer) || data_len == 0)
+    if (data_len > sizeof(rx_buffer) || data_len < 18)
     {
         return;
     }
 
     dwt_readrxdata(rx_buffer, data_len, 0);
 
-    if (rx_buffer[9] != FUNC_RESPONSE)
+    if (rx_buffer[9] != FUNC_RESPONSE || rx_buffer[2] != current_cycle.sequence)
     {
         return;
     }
@@ -479,6 +411,24 @@ static void handle_response_frame(uint32_t poll_tx_ts_32)
     {
         return;
     }
+
+    // No output/allocation here. Snapshot before re-enabling RX for next anchor.
+    AnchorSnapshot &sample = current_cycle.anchors[anchor_idx];
+    if (sample.received) return;
+    sample.received = true;
+    sample.uptime_us = received_us;
+    sample.rx_dtu = rx_dtu;
+    sample.poll_tx_dtu = poll_tx_ts_32;
+    sample.ranging_clock_offset = raw_clock_offset;
+    dwt_rxdiag_t diagnostic = {};
+    dwt_readdiagnostics(&diagnostic);
+    sample.diagnostic = {diagnostic.ipatovPower, diagnostic.ipatovF1, diagnostic.ipatovF2,
+        diagnostic.ipatovF3, diagnostic.ipatovPeak, diagnostic.ipatovFpIndex,
+        diagnostic.ipatovAccumCount, dwt_read32bitreg(0x30060),
+        dwt_read32bitreg(DGC_CFG_ID), status_reg, (int16_t)raw_clock_offset,
+        (status_reg & SYS_STATUS_CIADONE_BIT_MASK) != 0};
+    sample.ipatov_rx_status = diagnostic.ipatovRxStatus;
+    sample.capture_us = micros() - capture_started_us;
 
     uint32_t anchor_rx_ts;
     uint32_t anchor_tx_ts;
@@ -497,6 +447,9 @@ static void handle_response_frame(uint32_t poll_tx_ts_32)
     }
 
     double time_of_flight = ((round_trip_time - reply_delay_time * (1.0 - clock_offset)) / 2.0) * DWT_TIME_UNITS;
+    sample.anchor_rx_dtu = anchor_rx_ts;
+    sample.anchor_tx_dtu = anchor_tx_ts;
+    sample.raw_distance_m = time_of_flight * SPEED_OF_LIGHT;
     int16_t distance_cm = (int16_t)(time_of_flight * SPEED_OF_LIGHT * 100 + 0.5);
 
     if (distance_cm < 0)
@@ -504,46 +457,10 @@ static void handle_response_frame(uint32_t poll_tx_ts_32)
         distance_cm = 0;
     }
 
+    sample.legacy_cm = distance_cm;
     ranges_cm[anchor_idx] = distance_cm;
     responded_anchor_ids[anchor_idx] = (uint8_t)anchor_idx;
     response_mask |= (1 << anchor_idx);
-}
-
-static void print_ranging_result()
-{
-    Serial.print("T");
-    Serial.print(TAG_ID);
-    Serial.print(",mask:");
-    Serial.print(response_mask, HEX);
-    Serial.print(",seq:");
-    Serial.print(sequence_number - 1);
-    Serial.print(",beacon:");
-    Serial.print(last_beacon_sequence);
-    Serial.print(",range:(");
-
-    for (int i = 0; i < MAX_ANCHORS; i++)
-    {
-        if (i > 0)
-        {
-            Serial.print(",");
-        }
-
-        Serial.print(ranges_cm[i]);
-    }
-
-    Serial.print("),ancid:(");
-
-    for (int i = 0; i < MAX_ANCHORS; i++)
-    {
-        if (i > 0)
-        {
-            Serial.print(",");
-        }
-
-        Serial.print(responded_anchor_ids[i] != 0xFF ? i : -1);
-    }
-
-    Serial.println(")");
 }
 
 // Broadcast 8 distance values.

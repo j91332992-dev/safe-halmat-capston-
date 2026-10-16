@@ -25,6 +25,8 @@ def measurements_to_dict(measurements, apply_calibration: bool = False) -> list[
             "anchor_id": item.anchor_id,
             "distance_m": round(max(0.05, item.distance_m + offsets.get(item.anchor_id, 0.0)), 3),
             "quality": item.quality,
+            "distance_before_calibration_m": item.distance_m,
+            "server_calibration_offset_m": offsets.get(item.anchor_id, 0.0),
         }
         for item in measurements
     ]

@@ -56,6 +56,12 @@ def worker_to_dict(worker) -> dict:
     from sqlalchemy.orm import object_session
     from .worker_operations import work_summary
     db = object_session(worker)
+    from ..database import utcnow
+    position_status = parse_json(worker.position_status_json, {})
+    position_status.update(age_basis="server_acceptance", last_valid_at=iso(worker.last_valid_location_at),
+                           last_valid_position=parse_json(worker.last_valid_location_json, None),
+                           last_valid_age_seconds=max(0.0, (utcnow()-worker.last_valid_location_at).total_seconds())
+                           if worker.last_valid_location_at else None)
     return {
         "work": work_summary(db, worker) if db else {"state": "off", "today_seconds": 0, "today_break_seconds": 0},
         "worker_id": worker.worker_id,
@@ -67,6 +73,7 @@ def worker_to_dict(worker) -> dict:
         "x": worker.x,
         "y": worker.y,
         "confidence": worker.confidence,
+        "position_status": position_status,
         "current_zone": worker.current_zone,
         "risk_score": worker.risk_score,
         "risk_level": worker.risk_level,

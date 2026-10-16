@@ -1,0 +1,32 @@
+{
+  "distance_2m_before": {
+    "samples": 386,
+    "mean_m": 1.9537580414507771,
+    "std_m": 0.05710495862123531,
+    "mae_m": 0.05841414507772021
+  },
+  "distance_2m_after_median5": {
+    "samples": 386,
+    "mean_m": 1.9514746554404145,
+    "std_m": 0.025932883652475543,
+    "mae_m": 0.049311691709844556
+  },
+  "position_p4": {
+    "frames": 382,
+    "solved": 382,
+    "accepted": 382,
+    "mean_x_m": 1.5556560157007127,
+    "mean_y_m": 0.9988269234070002,
+    "approximate_reference_mae_m": 0.7473201873893359,
+    "scatter_m": 0.05293694230202577
+  },
+  "position_modified": {
+    "frames": 382,
+    "solved": 381,
+    "accepted": 381,
+    "mean_x_m": 1.0361755372015586,
+    "mean_y_m": 0.8636219078526249,
+    "approximate_reference_mae_m": 0.36980986016206785,
+    "scatter_m": 0.1401537336176316
+  }
+}
