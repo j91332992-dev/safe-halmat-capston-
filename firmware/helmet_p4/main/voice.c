@@ -33,12 +33,13 @@
 #define END_SILENCE_MS 160 // Additional silence after AFE VAD; total target about 350 ms.
 #define PRE_ROLL_BYTES (SAMPLE_RATE * 2 * 300 / 1000)
 
-typedef struct { uint8_t *wav; size_t length; int64_t queued_us; } voice_clip_t;
+typedef struct { uint8_t *wav; size_t length; int64_t queued_us; char fall_incident[64]; } voice_clip_t;
 static const char *TAG = "hanmir_voice";
 static i2s_chan_handle_t mic;
 static const esp_afe_sr_iface_t *afe;
 static esp_afe_sr_data_t *afe_data;
 static QueueHandle_t upload_queue;
+static QueueHandle_t fall_upload_queue;
 static volatile bool playback_active;
 static volatile bool voice_ready, ns_ready;
 bool hanmir_voice_ready(void) { return voice_ready; }
@@ -133,6 +134,7 @@ static void fetch_task(void *arg)
     if (!pre_roll) { ESP_LOGE(TAG, "pre-roll allocation failed"); vTaskDelete(NULL); }
     unsigned silence_ms = 0;
     unsigned chunk_ms = (unsigned)(chunk_samples * 1000 / SAMPLE_RATE);
+    char clip_incident[64] = "";
     for (;;) {
         afe_fetch_result_t *result = afe->fetch(afe_data);
         if (!result || !result->data || result->ret_value == ESP_FAIL) {
@@ -142,13 +144,16 @@ static void fetch_task(void *arg)
         }
         if (hanmir_call_active()) hanmir_call_feed(result->data, chunk_samples);
         hanmir_local_wake_feed(result->data, chunk_samples, !playback_active && !hanmir_call_active());
-        if (playback_active || hanmir_call_active()) {
+        char fall_incident[64];
+        bool fall_listening = hanmir_fall_response_context(fall_incident, sizeof(fall_incident));
+        if (playback_active || hanmir_call_active() || (hanmir_fall_busy() && !fall_listening && !(current && clip_incident[0]))) {
             free(current);
             current = NULL;
             used = 0;
             silence_ms = 0;
             pre_count = 0;
             pre_next = 0;
+            clip_incident[0] = 0;
             continue;
         }
         if (result->wakeup_state == WAKENET_DETECTED) {
@@ -156,11 +161,13 @@ static void fetch_task(void *arg)
         }
         bool speech = result->vad_state == VAD_SPEECH;
         if (speech && !current) {
+            strlcpy(clip_incident, fall_incident, sizeof(clip_incident));
             ESP_LOGI(TAG, "VAD clip start; pre_roll_bytes=%u", (unsigned)pre_count);
             current = heap_caps_malloc(MAX_CLIP_BYTES + 44, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
             used = 0;
             silence_ms = 0;
             if (!current) ESP_LOGE(TAG, "voice clip allocation failed");
+            if (current && clip_incident[0]) hanmir_fall_voice_started(clip_incident);
             if (current && pre_count) {
                 size_t start = (pre_next + PRE_ROLL_BYTES - pre_count) % PRE_ROLL_BYTES;
                 for (size_t i = 0; i < pre_count; ++i) {
@@ -190,7 +197,9 @@ static void fetch_task(void *arg)
                      silence_ms >= END_SILENCE_MS ? "silence" : "max_length",
                      (unsigned)uxQueueMessagesWaiting(upload_queue));
             voice_clip_t clip = {.wav = current, .length = used + 44, .queued_us = esp_timer_get_time()};
-            if (xQueueSend(upload_queue, &clip, 0) != pdTRUE) {
+            strlcpy(clip.fall_incident, clip_incident, sizeof(clip.fall_incident));
+            QueueHandle_t destination = clip.fall_incident[0] ? fall_upload_queue : upload_queue;
+            if (xQueueSend(destination, &clip, 0) != pdTRUE) {
                 ESP_LOGE(TAG, "voice queue full; clip not delivered");
                 free(current);
             }
@@ -204,13 +213,17 @@ static void upload_task(void *arg)
 {
     voice_clip_t clip;
     for (;;) {
-        if (xQueueReceive(upload_queue, &clip, portMAX_DELAY) != pdTRUE) continue;
+        QueueHandle_t queue = arg ? fall_upload_queue : upload_queue;
+        if (xQueueReceive(queue, &clip, portMAX_DELAY) != pdTRUE) continue;
         if (hanmir_call_active()) { free(clip.wav); continue; }
+        if (!clip.fall_incident[0] && hanmir_fall_busy()) { free(clip.wav); continue; }
         int64_t upload_started = esp_timer_get_time();
         ESP_LOGI(TAG, "voice upload start queue_wait_ms=%ld bytes=%u",
                  (long)((upload_started - clip.queued_us) / 1000), (unsigned)clip.length);
         for (int attempt = 0; attempt < 3; ++attempt) {
-            if (hanmir_audio_upload_wav(clip.wav, clip.length)) break;
+            bool uploaded = clip.fall_incident[0] ? hanmir_fall_upload_wav(clip.wav, clip.length, clip.fall_incident) :
+                                                   hanmir_audio_upload_wav(clip.wav, clip.length);
+            if (uploaded) break;
             ESP_LOGW(TAG, "voice upload retry %d/3", attempt + 1);
             vTaskDelay(pdMS_TO_TICKS(1000 * (attempt + 1)));
         }
@@ -266,6 +279,9 @@ esp_err_t hanmir_voice_start(void)
     if (!afe_data) return ESP_FAIL;
     upload_queue = xQueueCreate(3, sizeof(voice_clip_t));
     if (!upload_queue) return ESP_ERR_NO_MEM;
+    fall_upload_queue = xQueueCreate(2, sizeof(voice_clip_t));
+    if (!fall_upload_queue) return ESP_ERR_NO_MEM;
+    if (xTaskCreate(upload_task, "fall_voice", 6144, (void *)1, 4, NULL) != pdPASS) return ESP_ERR_NO_MEM;
     if (hanmir_local_wake_start() != ESP_OK) ESP_LOGW(TAG, "Local wake shadow unavailable; existing voice path retained");
     if (xTaskCreatePinnedToCore(feed_task, "mic_feed", 6144, NULL, 5, NULL, 0) != pdPASS ||
         xTaskCreatePinnedToCore(fetch_task, "voice_vad", 8192, NULL, 5, NULL, 1) != pdPASS ||

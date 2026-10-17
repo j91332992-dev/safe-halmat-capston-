@@ -75,6 +75,8 @@ def evaluate_risk(db: Session, worker: WorkerState) -> dict:
         return _decision(1, "REPORTED_FIRE", "작업자 화재 발생 신고", 100, "화재 신고가 접수되었습니다. 기본 대피경로를 따라 즉시 대피하세요.", "SIREN_SOS_EVACUATE")
     if worker.emergency:
         return _decision(1, "LIFE_EMERGENCY", "긴급 구조 요청", 100, "긴급 구조 요청 접수 완료. 즉시 대피하십시오.", "SOS_AND_EVACUATE")
+    if hazards.get("fall_emergency"):
+        return _decision(1, "FALL_SUSPECTED", "낙상 의심 긴급 확인 필요", 100, "", "MANAGER_RESCUE_CHECK")
     if hazards.get("large_fire") or float(hazards.get("fire_area_ratio") or 0) >= 0.15 or float(hazards.get("fire_expansion_rate") or 0) >= 0.20:
         return _decision(1, "LARGE_FIRE", "대형 화재", 100, "대형 화재가 발생했습니다. 하던 일을 멈추고 즉시 대피하세요.", "SIREN_SOS_EVACUATE", fire_area_ratio=hazards.get("fire_area_ratio"))
     if hazards.get("fallen") or hazards.get("man_down"):

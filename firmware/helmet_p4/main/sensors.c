@@ -6,8 +6,11 @@
 #include "esp_rom_sys.h"
 #include <math.h>
 #include <inttypes.h>
+#include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
+#include "imu_alignment.h"
 #include "bno_sh2/sh2.h"
 #include "bno_sh2/sh2_err.h"
 #include "bno_sh2/sh2_SensorValue.h"
@@ -19,6 +22,107 @@ static portMUX_TYPE imu_mux = portMUX_INITIALIZER_UNLOCKED;
 static float imu_yaw, imu_pitch, imu_roll;
 static int64_t imu_report_us;
 static bool imu_reset_seen;
+static bool imu_reconfigure;
+static fall_event_t imu_last_fall;
+static uint32_t imu_fall_count;
+
+#ifdef CONFIG_HANMIR_IMU_CAPTURE
+typedef struct {
+    uint64_t sensor_us, received_us;
+    uint32_t raw_us;
+    uint8_t sensor_id, sequence, status;
+    float values[4];
+} imu_record_t;
+
+static QueueHandle_t imu_log_queue;
+static uint32_t imu_log_dropped;
+static fall_detector_t imu_detector;
+static imu_alignment_t imu_alignment;
+
+static void imu_log_task(void *arg)
+{
+    (void)arg;
+    imu_record_t record;
+    uint32_t previous_dropped = 0;
+    for (;;) {
+        if (xQueueReceive(imu_log_queue, &record, pdMS_TO_TICKS(100)) == pdTRUE) {
+            ESP_LOGI(TAG, "IMU1,%" PRIu64 ",%" PRIu64 ",%u,%u,%u,%.6g,%.6g,%.6g,%.6g,%" PRIu32,
+                     record.received_us, record.sensor_us, record.sensor_id, record.sequence,
+                     record.status, record.values[0], record.values[1], record.values[2],
+                     record.values[3], record.raw_us);
+        }
+        portENTER_CRITICAL(&imu_mux);
+        uint32_t dropped = imu_log_dropped;
+        portEXIT_CRITICAL(&imu_mux);
+        if (dropped != previous_dropped) {
+            previous_dropped = dropped;
+            ESP_LOGW(TAG, "IMU_LOG_DROPPED total=%" PRIu32, dropped);
+        }
+    }
+}
+
+static void imu_capture(const sh2_SensorValue_t *value)
+{
+    imu_record_t record = {
+        .sensor_us = value->timestamp, .received_us = esp_timer_get_time(),
+        .sensor_id = value->sensorId, .sequence = value->sequence, .status = value->status,
+    };
+    switch (value->sensorId) {
+    case SH2_ACCELEROMETER:
+        record.values[0] = value->un.accelerometer.x;
+        record.values[1] = value->un.accelerometer.y;
+        record.values[2] = value->un.accelerometer.z;
+        fall_sample_t sample = imu_alignment_sample(&imu_alignment, value->timestamp,
+                                                    record.values, value->status > 0);
+        fall_event_t fall;
+        if (fall_detector_update(&imu_detector, &sample, &fall)) {
+            portENTER_CRITICAL(&imu_mux);
+            imu_last_fall = fall;
+            uint32_t count = ++imu_fall_count;
+            portEXIT_CRITICAL(&imu_mux);
+            hanmir_fall_detected(&fall);
+            ESP_LOGW(TAG, "FALL_SUSPECTED id=%" PRIu32 " sensor_us=%" PRIu64
+                     " impact_us=%" PRIu64 " peak_g=%.3f peak_rad_s=%.3f tilt_deg=%.1f low_g=%d",
+                     count, fall.detected_us, fall.impact_us, fall.peak_g,
+                     fall.peak_rad_s, fall.tilt_deg, fall.low_g_seen);
+        }
+        break;
+    case SH2_GYROSCOPE_CALIBRATED:
+        record.values[0] = value->un.gyroscope.x;
+        record.values[1] = value->un.gyroscope.y;
+        record.values[2] = value->un.gyroscope.z;
+        imu_alignment_push(&imu_alignment, false, value->timestamp, record.values, value->status > 0);
+        break;
+    case SH2_ROTATION_VECTOR:
+        record.values[0] = value->un.rotationVector.i;
+        record.values[1] = value->un.rotationVector.j;
+        record.values[2] = value->un.rotationVector.k;
+        record.values[3] = value->un.rotationVector.real;
+        imu_alignment_push(&imu_alignment, true, value->timestamp, record.values, value->status > 0);
+        break;
+    case SH2_RAW_ACCELEROMETER:
+        record.values[0] = value->un.rawAccelerometer.x;
+        record.values[1] = value->un.rawAccelerometer.y;
+        record.values[2] = value->un.rawAccelerometer.z;
+        record.raw_us = value->un.rawAccelerometer.timestamp;
+        break;
+    case SH2_RAW_GYROSCOPE:
+        record.values[0] = value->un.rawGyroscope.x;
+        record.values[1] = value->un.rawGyroscope.y;
+        record.values[2] = value->un.rawGyroscope.z;
+        record.values[3] = value->un.rawGyroscope.temperature;
+        record.raw_us = value->un.rawGyroscope.timestamp;
+        break;
+    default:
+        return;
+    }
+    if (imu_log_queue && xQueueSend(imu_log_queue, &record, 0) != pdTRUE) {
+        portENTER_CRITICAL(&imu_mux);
+        imu_log_dropped++;
+        portEXIT_CRITICAL(&imu_mux);
+    }
+}
+#endif
 
 #define IMU_UART UART_NUM_1
 #define IMU_UART_BAUD 3000000
@@ -222,8 +326,13 @@ static void imu_event(void *cookie, sh2_AsyncEvent_t *event)
     if (event->eventId == SH2_RESET) {
         portENTER_CRITICAL(&imu_mux);
         imu_reset_seen = true;
+        imu_reconfigure = true;
         imu_report_us = 0;
         portEXIT_CRITICAL(&imu_mux);
+#ifdef CONFIG_HANMIR_IMU_CAPTURE
+        fall_detector_init(&imu_detector, NULL);
+        memset(&imu_alignment, 0, sizeof(imu_alignment));
+#endif
         ESP_LOGI(TAG, "BNO085 SH-2 reset complete");
     }
 }
@@ -232,7 +341,11 @@ static void imu_sensor_event(void *cookie, sh2_SensorEvent_t *event)
 {
     (void)cookie;
     sh2_SensorValue_t value;
-    if (sh2_decodeSensorEvent(&value, event) != SH2_OK || value.sensorId != SH2_ROTATION_VECTOR) return;
+    if (sh2_decodeSensorEvent(&value, event) != SH2_OK) return;
+#ifdef CONFIG_HANMIR_IMU_CAPTURE
+    imu_capture(&value);
+#endif
+    if (value.sensorId != SH2_ROTATION_VECTOR) return;
     const float x = value.un.rotationVector.i;
     const float y = value.un.rotationVector.j;
     const float z = value.un.rotationVector.k;
@@ -258,13 +371,28 @@ static void imu_task(void *arg)
     (void)arg;
     sh2_setSensorCallback(imu_sensor_event, NULL);
     ESP_LOGI(TAG, "BNO085 SH-2 service task started");
-    bool report_enabled = false;
+    const uint8_t reports[] = {SH2_ROTATION_VECTOR,
+#ifdef CONFIG_HANMIR_IMU_CAPTURE
+        SH2_ACCELEROMETER, SH2_GYROSCOPE_CALIBRATED,
+#ifdef CONFIG_HANMIR_IMU_RAW_ADC
+        SH2_RAW_ACCELEROMETER, SH2_RAW_GYROSCOPE,
+#endif
+#endif
+    };
+    bool enabled[sizeof(reports)] = {0};
+    unsigned next_report = 0;
     int64_t last_config_attempt_us = 0;
     int64_t last_state_log_us = 0;
     int64_t last_reset_retry_us = esp_timer_get_time();
     unsigned reset_retries = 0;
     for (;;) {
         sh2_service();
+        if (imu_reconfigure) {
+            memset(enabled, 0, sizeof(enabled));
+            imu_reconfigure = false;
+        }
+        bool report_enabled = true;
+        for (unsigned index = 0; index < sizeof(reports); ++index) report_enabled &= enabled[index];
         int64_t now_us = esp_timer_get_time();
         if (now_us - last_state_log_us >= 2000000) {
             last_state_log_us = now_us;
@@ -284,14 +412,17 @@ static void imu_task(void *arg)
         }
         if (imu_reset_seen && !report_enabled && now_us - last_config_attempt_us >= 1000000) {
             last_config_attempt_us = now_us;
-            sh2_SensorConfig_t config = {0};
-            config.reportInterval_us = IMU_REPORT_INTERVAL_US;
-            int result = sh2_setSensorConfig(SH2_ROTATION_VECTOR, &config);
-            if (result == SH2_OK) {
-                report_enabled = true;
-                ESP_LOGI(TAG, "BNO085 rotation-vector report enabled at 10 Hz");
-            } else {
-                ESP_LOGW(TAG, "BNO085 rotation-vector setup pending rc=%d", result);
+            for (unsigned offset = 0; offset < sizeof(reports); ++offset) {
+                unsigned index = (next_report + offset) % sizeof(reports);
+                if (enabled[index]) continue;
+                sh2_SensorConfig_t config = {0};
+                config.reportInterval_us = reports[index] == SH2_ROTATION_VECTOR ? IMU_REPORT_INTERVAL_US : 20000;
+                int result = sh2_setSensorConfig(reports[index], &config);
+                enabled[index] = result == SH2_OK;
+                next_report = (index + 1) % sizeof(reports);
+                ESP_LOGI(TAG, "BNO085 report=%u interval_us=%" PRIu32 " setup rc=%d",
+                         reports[index], config.reportInterval_us, result);
+                break;
             }
         }
         vTaskDelay(pdMS_TO_TICKS(2));
@@ -300,6 +431,16 @@ static void imu_task(void *arg)
 
 void hanmir_sensors_init(void)
 {
+#ifdef CONFIG_HANMIR_IMU_CAPTURE
+    fall_detector_init(&imu_detector, NULL);
+    imu_log_queue = xQueueCreate(128, sizeof(imu_record_t));
+    if (!imu_log_queue || xTaskCreate(imu_log_task, "imu_log", 4096, NULL, 1, NULL) != pdPASS) {
+        if (imu_log_queue) vQueueDelete(imu_log_queue);
+        imu_log_queue = NULL;
+        ESP_LOGE(TAG, "IMU recording unavailable; detector remains enabled");
+    }
+    ESP_LOGI(TAG, "IMU_SCHEMA=1 accel=m/s2 gyro=rad/s quaternion=xyzw raw=ADC time=us detector=experimental-v1");
+#endif
     if (CONFIG_HANMIR_BAT_SDA_GPIO >= 0 && CONFIG_HANMIR_BAT_SCL_GPIO >= 0) {
         i2c_master_bus_config_t bus_config = {
             .i2c_port = I2C_NUM_1,
@@ -416,4 +557,14 @@ bool hanmir_imu_orientation(float *yaw, float *pitch, float *roll)
     }
     portEXIT_CRITICAL(&imu_mux);
     return ready;
+}
+
+bool hanmir_imu_last_fall(fall_event_t *event, uint32_t *count)
+{
+    portENTER_CRITICAL(&imu_mux);
+    if (event) *event = imu_last_fall;
+    if (count) *count = imu_fall_count;
+    bool found = imu_fall_count > 0;
+    portEXIT_CRITICAL(&imu_mux);
+    return found;
 }

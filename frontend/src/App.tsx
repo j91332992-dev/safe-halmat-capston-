@@ -86,6 +86,7 @@ function App() {
   const worker = useMemo(() => data?.workers.find(item => item.worker_id === selectedId) ?? data?.workers[0], [data, selectedId]);
   const evacuationIncident = data?.evacuation?.incident ?? null;
   const emergencyWorker = data?.workers.find(item => item.emergency) ?? null;
+  const fallEvent = data?.events.find(item => item.event_type === "FALL_SUSPECTED" && item.status !== "resolved") ?? null;
   const emergencyEvent = data?.events.find(item =>
     item.worker_id === emergencyWorker?.worker_id &&
     (item.event_type === "WORKER_SOS" || (item.event_type === "VOICE_COMMAND" &&
@@ -331,6 +332,12 @@ function App() {
           <div className="active-fire-banner" role="alert">
             <div><b>화재 경보 활성</b><span>확인된 화재 위치와 가장 가까운 비상구 거리를 작업자 안전모로 안내 중입니다.</span></div>
             <button disabled={busy} onClick={() => void action(() => api.cancelFire(evacuationIncident.incident_id, "resolved"))}>화재 종료</button>
+          </div>
+        )}
+        {fallEvent && (
+          <div className="active-sos-banner" role="alert" key={`${fallEvent.event_id}-${String(fallEvent.details?.fall_state)}`}>
+            <div><b>{fallEvent.message}</b><span>{fallEvent.worker_id} · {String(fallEvent.details?.state_label ?? "응답 대기")}</span></div>
+            <button onClick={() => navigate("/event")}>사건 확인</button>
           </div>
         )}
         {emergencyWorker && (

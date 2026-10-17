@@ -113,4 +113,16 @@ menu "HANMIR P4 integration"
     config HANMIR_ENABLE_BNO_SH2
         bool "Enable BNO085 UART-SHTP orientation driver"
         default n
+    config HANMIR_IMU_CAPTURE
+        bool "Capture IMU reports and run experimental fall suspicion detector"
+        depends on HANMIR_ENABLE_BNO_SH2
+        default y
+    config HANMIR_IMU_RAW_ADC
+        bool "Also capture raw accelerometer/gyroscope ADC reports"
+        depends on HANMIR_IMU_CAPTURE
+        default y
+    config HANMIR_IMU_STANDALONE
+        bool "IMU-only acquisition without network/camera/voice startup"
+        depends on HANMIR_IMU_CAPTURE
+        default n
 endmenu
