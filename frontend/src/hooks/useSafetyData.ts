@@ -3,7 +3,7 @@ import {App} from "@capacitor/app";
 import {Network} from "@capacitor/network";
 import {api, auth} from "../services/api";
 import {getWsBaseUrl} from "../services/config";
-import type {LocationPoint, Snapshot, Worker, EvacuationSnapshot} from "../types";
+import type {LocationPoint, Snapshot, Worker, EvacuationSnapshot, SafetyEvent} from "../types";
 
 export type ConnectionState = "connected" | "connecting" | "reconnecting" | "offline" | "error";
 
@@ -131,6 +131,15 @@ export function useSafetyData(enabled = true) {
             data?: Partial<EvacuationSnapshot> & {worker?: Worker; location?: {x: number; y: number; confidence: number};
               device_id?: string; imu_yaw_deg?: number; imu_pitch_deg?: number; imu_roll_deg?: number; heading_at?: string};
           };
+          if (message.type === "fall_incident") {
+            const fall = JSON.parse(event.data).data as {event: SafetyEvent; notify: boolean};
+            if (fall.event?.event_id) {
+              setData(current => current ? {...current, events: [fall.event,
+                ...current.events.filter(item => item.event_id !== fall.event.event_id)]} : current);
+            }
+            void refreshRef.current();
+            return;
+          }
           if (message.type === "evacuation_navigation" && message.data?.routes) {
             const navigation = message.data as EvacuationSnapshot;
             setData(current => current ? {...current, evacuation: navigation} : current);

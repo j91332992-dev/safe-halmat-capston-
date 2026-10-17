@@ -142,6 +142,29 @@ class Event(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
 
+class FallIncident(Base):
+    __tablename__ = "fall_incidents"
+    incident_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    device_id: Mapped[str] = mapped_column(String(80), index=True)
+    worker_id: Mapped[str] = mapped_column(String(40))
+    site_id: Mapped[str] = mapped_column(String(40), index=True)
+    detection_id: Mapped[str] = mapped_column(String(96), unique=True)
+    state: Mapped[str] = mapped_column(String(30), default="waiting_prompt", index=True)
+    prompt_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result_ready: Mapped[bool] = mapped_column(Boolean, default=False)
+    deadline: Mapped[datetime] = mapped_column(DateTime)
+    stt_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    speech_started: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class FallDetection(Base):
+    __tablename__ = "fall_detections"
+    detection_id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    incident_id: Mapped[str] = mapped_column(String(64), index=True)
+
+
 class VoiceCommand(Base):
     __tablename__ = "voice_commands"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

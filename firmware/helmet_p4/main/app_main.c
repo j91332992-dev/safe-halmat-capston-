@@ -15,7 +15,15 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(err);
     ESP_ERROR_CHECK(hanmir_pin_guard_validate());
+#if defined(CONFIG_HANMIR_IMU_CAPTURE) && !defined(CONFIG_HANMIR_IMU_STANDALONE)
+    err = hanmir_fall_start();
+    if (err != ESP_OK) ESP_LOGE(TAG, "fall reporting unavailable: %s", esp_err_to_name(err));
+#endif
     hanmir_sensors_init();
+#ifdef CONFIG_HANMIR_IMU_STANDALONE
+    ESP_LOGW(TAG, "IMU-only acquisition mode; no network credentials required");
+    return;
+#endif
     ESP_ERROR_CHECK(hanmir_network_start());
     ESP_ERROR_CHECK(hanmir_camera_transport_start());
     err = hanmir_camera_source_start();

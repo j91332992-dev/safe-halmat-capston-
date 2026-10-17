@@ -16,10 +16,10 @@ export function EventLog({events, onRefresh, expanded = false}: Props) {
         return <div className="event-row" key={event.event_id}>
           <span className="event-time">{new Date(event.created_at).toLocaleTimeString("ko-KR")}</span>
           <span className={`event-severity-label level-${event.severity}`}><i className={`severity severity-${event.severity}`} />{({emergency:"비상",danger:"위험",warning:"주의",info:"안내"} as Record<string,string>)[event.severity] ?? event.severity}</span>
-          <span><b>{event.event_type}</b><small>{event.message}</small>{image && <button className="event-photo-link" onClick={() => setPhoto(image)}>사진 보기</button>}</span>
+          <span><b>{event.event_type === "FALL_SUSPECTED" ? "낙상 의심" : event.event_type}</b><small>{event.message}</small>{image && <button className="event-photo-link" onClick={() => setPhoto(image)}>사진 보기</button>}</span>
           <span>{event.worker_id ?? "-"}<small>{event.device_id ?? ""}</small></span>
-          <span className={`event-status status-${event.status}`}>{({open:"미확인",acknowledged:"확인 완료",resolved:"처리 완료"} as Record<string,string>)[event.status] ?? event.status}</span>
-          <span className="event-actions">{event.status === "open" && <button onClick={() => void change(event.event_id, "ack")}>확인</button>}{event.status !== "resolved" && <button onClick={() => void change(event.event_id, "resolve")}>종료</button>}</span>
+          <span className={`event-status status-${event.status}`}>{event.event_type === "FALL_SUSPECTED" ? String(event.details?.state_label ?? "응답 대기") : ({open:"미확인",acknowledged:"확인 완료",resolved:"처리 완료"} as Record<string,string>)[event.status] ?? event.status}</span>
+          <span className="event-actions">{event.status === "open" && <button onClick={() => void change(event.event_id, "ack")}>확인</button>}{event.status !== "resolved" && !(event.event_type === "FALL_SUSPECTED" && ["waiting_prompt", "waiting_response"].includes(String(event.details?.fall_state))) && <button onClick={() => void change(event.event_id, "resolve")}>종료</button>}</span>
         </div>;
       })}
       {!events.length && <div className="event-empty-state"><span aria-hidden="true">✓</span><b>현재 확인할 이벤트가 없습니다</b><p>새로운 안전 알림이 수신되면 시간과 처리 상태가 이곳에 표시됩니다.</p></div>}

@@ -31,11 +31,17 @@ async def lifespan(_: FastAPI):
     await start_camera_processor()
     from .services.evacuation_navigation import run_navigation
     navigation_task = asyncio.create_task(run_navigation())
+    from .services import fall_service
+    fall_timeout_task = asyncio.create_task(fall_service.run_timeouts())
     try:
         yield
     finally:
         navigation_task.cancel()
         await asyncio.gather(navigation_task, return_exceptions=True)
+        fall_timeout_task.cancel()
+        for task in list(fall_service.tasks):
+            task.cancel()
+        await asyncio.gather(fall_timeout_task, *list(fall_service.tasks), return_exceptions=True)
         await stop_camera_processor()
 
 

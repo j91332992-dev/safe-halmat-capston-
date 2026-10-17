@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models.entities import Event, WorkerState
+from ..models.entities import Event, FallIncident, WorkerState
 from .auth import require_site
 from ..services.event_service import event_to_dict
 from ..services.risk_service import recalculate_risk
@@ -41,7 +41,21 @@ async def change_status(event_id: str, status: str, site_id: str, db: Session) -
         intent = json.loads(row.details_json or "{}").get("intent")
     except (json.JSONDecodeError, TypeError):
         pass
+    if row.event_type == "FALL_SUSPECTED" and status == "resolved":
+        incident = db.get(FallIncident, row.event_id)
+        if incident and incident.state in {"waiting_prompt", "waiting_response"}:
+            raise HTTPException(409, "착용자 응답 확인 중에는 사건을 종료할 수 없습니다.")
     row.status = status
+    if row.event_type == "FALL_SUSPECTED" and status == "resolved":
+        db.flush()
+        worker = db.get(WorkerState, row.worker_id)
+        other_emergencies = db.query(Event).filter(Event.worker_id == row.worker_id,
+            Event.event_type == "FALL_SUSPECTED", Event.severity == "emergency", Event.status != "resolved").count()
+        if worker and not other_emergencies:
+            hazards = json.loads(worker.hazard_json or "{}")
+            hazards.pop("fall_emergency", None)
+            worker.hazard_json = json.dumps(hazards, ensure_ascii=False)
+            recalculate_risk(db, worker)
     if status == "resolved" and row.worker_id and _life_safety_intent(row):
         related = db.query(Event).filter(Event.worker_id == row.worker_id, Event.status != "resolved").all()
         for item in related:
@@ -63,7 +77,9 @@ async def change_status(event_id: str, status: str, site_id: str, db: Session) -
 @router.post("/resolve-all")
 async def resolve_all(site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     """Mark every unresolved event for the signed-in site as resolved."""
-    event_ids = [row.event_id for row in db.query(Event).filter(Event.site_id == site_id, Event.status != "resolved").all()]
+    event_ids = [row.event_id for row in db.query(Event).filter(Event.site_id == site_id, Event.status != "resolved").all()
+                 if not (row.event_type == "FALL_SUSPECTED" and
+                         json.loads(row.details_json or "{}").get("fall_state") in {"waiting_prompt", "waiting_response"})]
     for event_id in event_ids:
         await change_status(event_id, "resolved", site_id, db)
     return {"resolved_count": len(event_ids)}

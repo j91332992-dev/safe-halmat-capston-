@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "esp_err.h"
+#include "fall_detector.h"
 
 esp_err_t hanmir_network_start(void);
 esp_err_t hanmir_pin_guard_validate(void);
@@ -39,5 +40,13 @@ void hanmir_sensors_init(void);
 bool hanmir_battery_percent(float *percent);
 bool hanmir_imu_ready(void);
 bool hanmir_imu_orientation(float *yaw, float *pitch, float *roll);
+bool hanmir_imu_last_fall(fall_event_t *event, uint32_t *count);
+esp_err_t hanmir_fall_start(void);
+void hanmir_fall_detected(const fall_event_t *event);
+bool hanmir_fall_response_context(char *incident, size_t capacity);
+bool hanmir_fall_busy(void);
+int hanmir_fall_remaining_ms(void);
+void hanmir_fall_voice_started(const char *incident_id);
+bool hanmir_fall_upload_wav(const uint8_t *wav, size_t length, const char *incident_id);
 
 bool hanmir_speaker_ack(void);

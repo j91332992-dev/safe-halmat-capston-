@@ -113,23 +113,37 @@ void hanmir_api_task(void *arg)
     }
 }
 
-bool hanmir_audio_upload_wav(const uint8_t *wav, size_t length)
+static bool upload_wav(const uint8_t *wav, size_t length, const char *incident_id)
 {
     if (!hanmir_network_online() || !wav || length < 44) return false;
-    char url[256], head[512];
-    make_url(url, sizeof(url), "/api/audio/upload");
+    char url[256], head[768], extra[224] = "";
+    char path[192];
+    if (incident_id && incident_id[0]) snprintf(path, sizeof(path), "/api/falls/%s/audio", incident_id);
+    else strlcpy(path, "/api/audio/upload", sizeof(path));
+    make_url(url, sizeof(url), path);
     const char *boundary = "hanmirp4voice";
+    if (incident_id && incident_id[0]) {
+        snprintf(extra, sizeof(extra),
+            "--%s\r\nContent-Disposition: form-data; name=\"playback_finished\"\r\n\r\ntrue\r\n"
+            "--%s\r\nContent-Disposition: form-data; name=\"remaining_ms\"\r\n\r\n%d\r\n",
+            boundary, boundary, hanmir_fall_remaining_ms());
+    }
     int head_len = snprintf(head, sizeof(head),
         "--%s\r\nContent-Disposition: form-data; name=\"device_id\"\r\n\r\n%s\r\n"
         "--%s\r\nContent-Disposition: form-data; name=\"worker_id\"\r\n\r\n%s\r\n"
-        "--%s\r\nContent-Disposition: form-data; name=\"file\"; filename=\"speech.wav\"\r\n"
+        "%s--%s\r\nContent-Disposition: form-data; name=\"file\"; filename=\"speech.wav\"\r\n"
         "Content-Type: audio/wav\r\n\r\n",
-        boundary, CONFIG_HANMIR_DEVICE_ID, boundary, CONFIG_HANMIR_WORKER_ID, boundary);
+        boundary, CONFIG_HANMIR_DEVICE_ID, boundary, CONFIG_HANMIR_WORKER_ID, extra, boundary);
     const char *tail = "\r\n--hanmirp4voice--\r\n";
     if (head_len <= 0 || head_len >= sizeof(head)) return false;
     esp_http_client_config_t config = {.url = url, .timeout_ms = 12000};
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) return false;
+    if (incident_id && incident_id[0]) {
+        char authorization[256];
+        snprintf(authorization, sizeof(authorization), "Bearer %s", CONFIG_HANMIR_CALL_DEVICE_TOKEN);
+        esp_http_client_set_header(client, "Authorization", authorization);
+    }
     esp_http_client_set_method(client, HTTP_METHOD_POST);
     char content_type[96];
     snprintf(content_type, sizeof(content_type), "multipart/form-data; boundary=%s", boundary);
@@ -147,6 +161,16 @@ bool hanmir_audio_upload_wav(const uint8_t *wav, size_t length)
     }
     esp_http_client_cleanup(client);
     return ok;
+}
+
+bool hanmir_audio_upload_wav(const uint8_t *wav, size_t length)
+{
+    return upload_wav(wav, length, NULL);
+}
+
+bool hanmir_fall_upload_wav(const uint8_t *wav, size_t length, const char *incident_id)
+{
+    return upload_wav(wav, length, incident_id);
 }
 
 bool hanmir_report_speaker(const char *command_id, bool ok)
