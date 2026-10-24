@@ -9,6 +9,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 
 
 class Settings(BaseSettings):
+    audio_lossless_transport_enabled: bool = False
     app_name: str = "ESP32 스마트 안전관제 서버"
     api_prefix: str = "/api"
     database_url: str = f"sqlite:///{(BASE_DIR / 'safety.db').as_posix()}"
@@ -45,7 +46,18 @@ class Settings(BaseSettings):
     uwb_speed_reacquire_span_seconds: float = Field(default=2.0, gt=0)
     uwb_speed_state_ttl_seconds: float = Field(default=3600, ge=60)
     # Provisional Ipatov rules; no labelled LOS/NLOS calibration dataset yet.
-    uwb_quality_mode: Literal["observe", "enforce"] = "observe"
+    uwb_quality_mode: Literal["observe", "weighted", "enforce"] = "observe"
+    uwb_quality_nlos_weight: float = Field(default=0.15, ge=0.05, le=1)
+    uwb_quality_weight_recovery_step: float = Field(default=0.10, gt=0, le=1)
+    uwb_jump_mode: Literal["observe", "enforce"] = "enforce"
+    uwb_jump_speed_mps: float = Field(default=3.0, gt=0, le=20)
+    uwb_jump_margin_m: float = Field(default=0.20, ge=0, le=2)
+    uwb_jump_max_step_m: float = Field(default=0.60, gt=0, le=5)
+    uwb_jump_confirm_samples: int = Field(default=3, ge=2, le=20)
+    uwb_jump_confirm_seconds: float = Field(default=0.30, gt=0, le=5)
+    uwb_jump_reset_gap_seconds: float = Field(default=1.0, gt=0, le=30)
+    uwb_survey_device_token: str | None = None
+    uwb_survey_site_id: str = "site-001"
     uwb_quality_gap_warn_db: float = Field(default=6, ge=0, allow_inf_nan=False)
     uwb_quality_gap_bad_db: float = Field(default=12, ge=0, allow_inf_nan=False)
     uwb_quality_path_warn_samples: float = Field(default=4, ge=0, allow_inf_nan=False)
@@ -76,6 +88,8 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost,https://localhost,capacitor://localhost,ionic://localhost"
     openai_api_key: str | None = None
     use_whisper_stt: bool = True
+    call_voice_end_enabled: bool = True
+    call_voice_end_rms: float = Field(default=120.0, ge=1, le=32767)
     tts_timeout_seconds: float = Field(default=8.0, gt=0, le=60)
     voice_trace_enabled: bool = True
     voice_trace_retain_audio: bool = False

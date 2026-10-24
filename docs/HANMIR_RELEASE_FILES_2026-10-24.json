@@ -1,0 +1,794 @@
+{
+  "date_kst": "2026-10-24",
+  "branch": "integration/hanmir-final-prd-20261016",
+  "base_commit": "9519ce6",
+  "hash_basis": "SHA256 of canonical Git blob content; checkout CRLF conversion can change disk bytes.",
+  "scope": "Changed and added publishable files; excludes this manifest itself. Credentials, operational DB, recordings and configured firmware binaries are not published.",
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 1311,
+      "sha256": "4261620e5b3ea6078bc2c3d6f77ce55f5b494b5980af192a3131311ccc5d161d"
+    },
+    {
+      "path": "README.md",
+      "bytes": 11341,
+      "sha256": "7a41ecf303135a12bb532d7c1ac827701315659a86eee1c3dddf2b4087dddf67"
+    },
+    {
+      "path": "backend/.env.demo.example",
+      "bytes": 3876,
+      "sha256": "1f4e2ed96843ac6b4519cf55d3ec1b3c5c625d5617bda081bca842904ffa26a4"
+    },
+    {
+      "path": "backend/.env.example",
+      "bytes": 4126,
+      "sha256": "1f7be2c7b344648f21a2588aa30ab128a67f0545e0859ad3a6420bdc0372dd3d"
+    },
+    {
+      "path": "backend/app/config.py",
+      "bytes": 11156,
+      "sha256": "21766d6d8e4d029cdb19716bdd10d671031ca771aee10898338df57be0c593fe"
+    },
+    {
+      "path": "backend/app/main.py",
+      "bytes": 9349,
+      "sha256": "fdbb1c011b37368f4c4640822997e3000d707523ef565d61f15ee0336fc2bb7b"
+    },
+    {
+      "path": "backend/app/models/entities.py",
+      "bytes": 14765,
+      "sha256": "002c38e2cbc05033c9b143b08325b9c0db8cad19a45b8dcbb392a02cc102c9e9"
+    },
+    {
+      "path": "backend/app/routers/__init__.py",
+      "bytes": 661,
+      "sha256": "46e622b0267500023487f7014e2d2ae5338391af2f379d5676508019b32879a2"
+    },
+    {
+      "path": "backend/app/routers/anchor_survey.py",
+      "bytes": 12162,
+      "sha256": "d237c99006895d3f90684d627ee59f4d50f6e9cb2edc65879d4114f24365851b"
+    },
+    {
+      "path": "backend/app/routers/audio.py",
+      "bytes": 16369,
+      "sha256": "8ed0540f3601fd3c8012188d9831a73c489fcef97cd6153108fdb78292460763"
+    },
+    {
+      "path": "backend/app/routers/camera.py",
+      "bytes": 40555,
+      "sha256": "55093f6bf6d19d5582f4d7592a4d76ced28b6fa833f46e6c19b31162a6c6f9ed"
+    },
+    {
+      "path": "backend/app/routers/devices.py",
+      "bytes": 5886,
+      "sha256": "9818d1803a08d13692450fdc0dc508c130fd8a757534ef3d89e97f4aeb620c73"
+    },
+    {
+      "path": "backend/app/routers/evacuation.py",
+      "bytes": 8830,
+      "sha256": "0589315f0fcd08649bb499d25a709aee4fa72376bd6a981b24438f7dee04e8b0"
+    },
+    {
+      "path": "backend/app/routers/events.py",
+      "bytes": 3390,
+      "sha256": "c5b8dd1137c9f4957253e4e8cf8b79001ddc44660d6d752dbf28c80a0f8ac1ea"
+    },
+    {
+      "path": "backend/app/routers/imu.py",
+      "bytes": 6024,
+      "sha256": "a6f88b570cacd09cc7f3ace4215ba11169a001fe74156ceeab0eb7d7da53eb7f"
+    },
+    {
+      "path": "backend/app/routers/layout.py",
+      "bytes": 11582,
+      "sha256": "3be16c6e89e94bed92b147687d29656903f266df2542d42669491dae92443ce2"
+    },
+    {
+      "path": "backend/app/routers/uwb.py",
+      "bytes": 16317,
+      "sha256": "4d7620115b2889bfff1eb31e26cd2980c3ebf3ed07e5e81106bc43a19d33cf41"
+    },
+    {
+      "path": "backend/app/routers/zones.py",
+      "bytes": 2943,
+      "sha256": "44435a7db97a0d40951820d18ccd899237886ee102986d161f88c102ccdba601"
+    },
+    {
+      "path": "backend/app/schemas/api.py",
+      "bytes": 8226,
+      "sha256": "fefad8c814fb5f22db6b48d9c22f67b700dcddf34363d91a2e9259e703a8051c"
+    },
+    {
+      "path": "backend/app/services/anchor_survey_service.py",
+      "bytes": 8749,
+      "sha256": "148f2dd169c497e4ad4bdcc09edfd04ba06a662465500f44255f42a6038bcc38"
+    },
+    {
+      "path": "backend/app/services/anchor_survey_trace.py",
+      "bytes": 2667,
+      "sha256": "8ff8c9057d14978720b28619cfe1c3a5fce2be07b4669164a76c04fd72a9eb58"
+    },
+    {
+      "path": "backend/app/services/anchor_transition_guard.py",
+      "bytes": 2136,
+      "sha256": "c5d817e7ee4a4ecf5833a1c0376d5215a28608c70ac8a8e1f65145f463e9a2c1"
+    },
+    {
+      "path": "backend/app/services/audio_service.py",
+      "bytes": 2237,
+      "sha256": "0b12c314abe475972ec60e9e3d4db15483ee0f17aa31940aea22a61e8e20b3a7"
+    },
+    {
+      "path": "backend/app/services/call_voice_control.py",
+      "bytes": 6973,
+      "sha256": "c25709309f64cce84669445f654c6a47bff31f56f2461d537a5a135e35472505"
+    },
+    {
+      "path": "backend/app/services/camera_service.py",
+      "bytes": 2264,
+      "sha256": "24fc5df104395ba4bac4f0abb9f5c9655ae491be1945ed3a458a960b7a796cb8"
+    },
+    {
+      "path": "backend/app/services/camera_trace.py",
+      "bytes": 2355,
+      "sha256": "7547b74a8fae0f92a17052e98a975b3da692e41c92298b53bf1d043776dfb6fc"
+    },
+    {
+      "path": "backend/app/services/detail_merge.py",
+      "bytes": 3523,
+      "sha256": "432e1bbccab8ccc988bf126de1852e36a191d0f9c46912de8d01c4d691c8af65"
+    },
+    {
+      "path": "backend/app/services/evacuation_corridor.py",
+      "bytes": 2506,
+      "sha256": "9e9889417673c1fdaf3142380fcf6e7bb12c84f8438743fcb90b52bed27c7245"
+    },
+    {
+      "path": "backend/app/services/evacuation_guidance_service.py",
+      "bytes": 6970,
+      "sha256": "ee74aa3e223e6974237c8eb0441225a61ae2d1bdb70028c888d8adfee08409e8"
+    },
+    {
+      "path": "backend/app/services/evacuation_navigation.py",
+      "bytes": 11757,
+      "sha256": "014c4124f548bf1f6573fa2328c176226a6e0f89ce757cbe4b410f50b00c5d9b"
+    },
+    {
+      "path": "backend/app/services/evacuation_service.py",
+      "bytes": 14378,
+      "sha256": "020b0523470082d439b095d57dd10acf0a6e165d35471d56f60e9bdbdf8b71c9"
+    },
+    {
+      "path": "backend/app/services/fall_confirmation.py",
+      "bytes": 10879,
+      "sha256": "d49b3b164585eaaccc2940e492a7ea5b6bf7cb7b9b2aa80a04615fd4b94637ea"
+    },
+    {
+      "path": "backend/app/services/imu_capture_service.py",
+      "bytes": 5509,
+      "sha256": "2053a26ca4a9f82ace10a5ceb1f3e3f95cddf3eb29b1a2fd1da002cb723b798a"
+    },
+    {
+      "path": "backend/app/services/location_service.py",
+      "bytes": 4576,
+      "sha256": "2ef956a3f45a78247eaf34485d299ce9294ec820ceb2956837bf545641dac89c"
+    },
+    {
+      "path": "backend/app/services/loop_watchdog.py",
+      "bytes": 1549,
+      "sha256": "e195b81b6789e03fd505b9fd5f15d4e7e962938195e5cf1bff4a5459e6ba45c9"
+    },
+    {
+      "path": "backend/app/services/position_jump_guard.py",
+      "bytes": 4515,
+      "sha256": "fe9536149fb6fc02b603fd28881c786ff3e0c84c3be91a37ade193501b6d248d"
+    },
+    {
+      "path": "backend/app/services/ppe_events.py",
+      "bytes": 3503,
+      "sha256": "07599190d22b3cc7e5b24f4659d5428f85394590bd741a047ba504c50394e3a9"
+    },
+    {
+      "path": "backend/app/services/ppe_observation.py",
+      "bytes": 9948,
+      "sha256": "31cdd8f4e7838ad9cb64ef0f6a238657fa79022699e4ed6167e76d1357f42051"
+    },
+    {
+      "path": "backend/app/services/uwb_distance_filter.py",
+      "bytes": 15878,
+      "sha256": "4a95302c24f5e7a846350996ae29df71e52371bf081fb7a35d9e7a6374cbe3b5"
+    },
+    {
+      "path": "backend/app/services/uwb_log_service.py",
+      "bytes": 4578,
+      "sha256": "9b741f5f3bf44239a18c0dadf8a2833d54c3e966877e7a42be7301ede7a5a8f6"
+    },
+    {
+      "path": "backend/app/services/uwb_quality_service.py",
+      "bytes": 5965,
+      "sha256": "bb01278ac58e6041d1bcb78a2e2faceee071e8993de6da9ad4922a545cc38541"
+    },
+    {
+      "path": "backend/app/services/uwb_timestamp_audit.py",
+      "bytes": 2152,
+      "sha256": "1598b86b79beb9b5da461bbaeacdeefb6e32f2ea38c0b9fdebe2c668e53e0c97"
+    },
+    {
+      "path": "backend/app/services/voice_trace.py",
+      "bytes": 2028,
+      "sha256": "baf889e4b77181aa6a9ec08a2caa0bc992c51c4d93922e082e0cbc1648e78dd7"
+    },
+    {
+      "path": "backend/app/services/whisper_service.py",
+      "bytes": 3688,
+      "sha256": "57841cc9aa001ad88248ca904fac5d058eabb8a949e855fa03c49db70c2c0c81"
+    },
+    {
+      "path": "backend/app/services/yolo_service.py",
+      "bytes": 37094,
+      "sha256": "f24cecab8c5e164bc84f03e8a6226d9c0abe939c539e8a2c28325e4755fa4c5d"
+    },
+    {
+      "path": "backend/app/services/zone_service.py",
+      "bytes": 1451,
+      "sha256": "95bc8f717550424e2a1a2d0fb75d742cf83525441b1ede78c1d4b3620c42f3af"
+    },
+    {
+      "path": "backend/app/services/zone_warning_service.py",
+      "bytes": 10191,
+      "sha256": "6ad9d84a3ad02f1041f8726ac5645a3aee9550020ab37a1202d0326a979fc8ca"
+    },
+    {
+      "path": "backend/app/websocket/call_manager.py",
+      "bytes": 18074,
+      "sha256": "5e473b8a646ec958e7b1e16c67323fbaa7188a39c388cec77564ef9df54ae2b5"
+    },
+    {
+      "path": "backend/app/websocket/manager.py",
+      "bytes": 5381,
+      "sha256": "82f6705ce0d85470d3aa7453a691b3e0f9fd7cb713837b71ad297545435040f5"
+    },
+    {
+      "path": "backend/tests/conftest.py",
+      "bytes": 1306,
+      "sha256": "548a68e88610933884e445e3b846b22ce1e6025886f16231d8c285e6387b293a"
+    },
+    {
+      "path": "backend/tests/test_anchor_survey.py",
+      "bytes": 8801,
+      "sha256": "fb893dc2e2c0fc1dfdd4e9eb01e08ae868f75bad6d0ba22dc707ff54ff1d2086"
+    },
+    {
+      "path": "backend/tests/test_anchor_survey_trace.py",
+      "bytes": 2280,
+      "sha256": "bd525a8414e536b0180c94c48b976cb1d679c7820ce514fcfc57f3d8687cd65b"
+    },
+    {
+      "path": "backend/tests/test_uwb_timestamp_audit.py",
+      "bytes": 2965,
+      "sha256": "4231c2eca67dbabd17ad0436fbebd7f4b43fa006293e53a4ca35f96295f45846"
+    },
+    {
+      "path": "backend/tests/test_uwb_weighted_jump.py",
+      "bytes": 5261,
+      "sha256": "e3691f33127357f5087dc6cf34650e8a2b35025d10b8609929ba66f173fac74b"
+    },
+    {
+      "path": "docs/HANMIR_2.0_ALL_EVIDENCE_ARCHIVE_2026-10-24.md",
+      "bytes": 808018,
+      "sha256": "bb37caddb25128f3722d9fa59423f518cf5ea7439b7a14b6a79874c0b7a065b7"
+    },
+    {
+      "path": "docs/HANMIR_2.0_FINAL_TECHNICAL_REPORT_2026-10-24.md",
+      "bytes": 46865,
+      "sha256": "559d798a698b0b027ec7eee23784f499f160477ca52cda38a533722b289b9b75"
+    },
+    {
+      "path": "docs/HANMIR_BATTERY_30MIN_LOAD_REPORT_2026-10-24.md",
+      "bytes": 10633,
+      "sha256": "3fee3816c97b057032a3cb3210526b8b0edbb4fd85e21edeaaa34ad21a71d84c"
+    },
+    {
+      "path": "docs/HANMIR_BNO_FALL_BUILD_2026-10-24.json",
+      "bytes": 3937,
+      "sha256": "f4f8c4b418c32d41ca6dbeea3f5b727284cd4e67a314771eb87976ae0d8a43ad"
+    },
+    {
+      "path": "docs/HANMIR_BNO_FALL_PREFLASH_2026-10-24.md",
+      "bytes": 13564,
+      "sha256": "a0d1ce5047ace966b3e6c6220f3268d6cd2d4abfc2d5b454668c92b265071a92"
+    },
+    {
+      "path": "docs/HANMIR_BNO_ORIENTATION_20_TRIALS_2026-10-24.md",
+      "bytes": 12546,
+      "sha256": "5b992e14a57e2ebfcc5a0d31039a789b3c43189f72e6478ad35d61648d33894c"
+    },
+    {
+      "path": "docs/HANMIR_BNO_POSTFLASH_RUNTIME_2026-10-24.md",
+      "bytes": 5129,
+      "sha256": "73bcb55c40297201ff337a8ecbd46319c88a53f1ab3aefefbc9c5e6c922624fc"
+    },
+    {
+      "path": "docs/HANMIR_CALL_AUDIO_QUALITY_2026-10-24.md",
+      "bytes": 9186,
+      "sha256": "ea64247570148b43f6420768dcd3a4ed8361a399d795f8dca217051138b4fda9"
+    },
+    {
+      "path": "docs/HANMIR_CALL_RX_QUEUE_INVESTIGATION_2026-10-24.md",
+      "bytes": 14834,
+      "sha256": "42354e376acb1838ee75a22017a57a1fd4f9f6388bbcd6f8541cc43cf4610653"
+    },
+    {
+      "path": "docs/HANMIR_CALL_VOICE_END_2026-10-24.md",
+      "bytes": 3325,
+      "sha256": "f80e120dc91ce3e4c15774b8d9187101ff3829959827fc109afaf694f71aaeb0"
+    },
+    {
+      "path": "docs/HANMIR_DEMO_CONFIGURATION_2026-10-24.json",
+      "bytes": 4985,
+      "sha256": "fc62179d6239f79fdb29aa93e8ecdc07cee3031a8232892bc18b6891e2629e91"
+    },
+    {
+      "path": "docs/HANMIR_DUAL_WIFI_2026-10-24.md",
+      "bytes": 17001,
+      "sha256": "42d0840e9bc583748a8fc765f56ed683d870e4286c031fe1ad02f1067a0d3675"
+    },
+    {
+      "path": "docs/HANMIR_EVACUATION_CORRIDOR_2026-10-24.md",
+      "bytes": 2963,
+      "sha256": "f365507814ed38e0ca505015592165259d3ec1edb5359fb45713ad3a9e98cc9b"
+    },
+    {
+      "path": "docs/HANMIR_EVIDENCE_INDEX_2026-10-24.json",
+      "bytes": 7255,
+      "sha256": "1562c9354e56a0c2f6cd6bda95797fe146aa68395d199ba8050b25a91a014d4f"
+    },
+    {
+      "path": "docs/HANMIR_FALL_BATTERY_RETEST_2026-10-24.md",
+      "bytes": 5430,
+      "sha256": "20589f5a8c227aa846924a44d7fda5726b4e280f445d4ae6bc5402f155f6fcab"
+    },
+    {
+      "path": "docs/HANMIR_FALL_CONFIRMATION_2026-10-24.md",
+      "bytes": 10230,
+      "sha256": "70c5839ab8c9fe41b44f3b79c738caafbff5608bd3430c1ce89db3ed57278aeb"
+    },
+    {
+      "path": "docs/HANMIR_FALL_INCIDENT_2026-10-24_211232.md",
+      "bytes": 5570,
+      "sha256": "2605e52ac4204c7fe6606c5eb3f7d5aab547f2f7ae630d820e5bbf3566c12036"
+    },
+    {
+      "path": "docs/HANMIR_FIRE_GUIDANCE_STOP_2026-10-24.md",
+      "bytes": 1938,
+      "sha256": "3fc841bb6eb5ba25cbba9fba937d741546e48f9667ee98ff69c0770456284b56"
+    },
+    {
+      "path": "docs/HANMIR_FIRMWARE_UPLOAD_2026-10-24.md",
+      "bytes": 7079,
+      "sha256": "db84d3e8ae144636dee89d2c1ecbb16b3a2e472298e9d1c8afcecf910660d5e8"
+    },
+    {
+      "path": "docs/HANMIR_LAYOUT_APPLY_FIX_2026-10-24.md",
+      "bytes": 1883,
+      "sha256": "7f30127b78adc67a01aa440801bedeb4407ed47a22c8c26de06269917e6c8e4d"
+    },
+    {
+      "path": "docs/HANMIR_P4_WIRING_REFERENCE_2026-10-23.png",
+      "bytes": 1788090,
+      "sha256": "e03024358057849fabd99f9b8e3358db834b0a244454bfe18109c07c69e0ce91"
+    },
+    {
+      "path": "docs/HANMIR_PPE_ADMIN_POLICY_2026-10-24.md",
+      "bytes": 5630,
+      "sha256": "545b1bc4e578d8575f4695cc70cd6307b57c29d5cbaea1ba55b4cf9caca906da"
+    },
+    {
+      "path": "docs/HANMIR_TRANSPORT_OPTIMIZATION_2026-10-24.md",
+      "bytes": 10869,
+      "sha256": "e2800d1f38c5122cc31e923d77bfb9fcf8bffbf51908818b8979103a9839a829"
+    },
+    {
+      "path": "docs/HANMIR_UWB_DISTANCE_BIAS_2026-10-24.md",
+      "bytes": 18606,
+      "sha256": "28d852ca69dcd52c0ee682947574c436ac038a4e8c02b53fdcabeeb793736b6c"
+    },
+    {
+      "path": "docs/HANMIR_UWB_REVIEWED_SURVEY_IMPLEMENTATION_2026-10-24.md",
+      "bytes": 13833,
+      "sha256": "055a2111458dc3f3e17b1c8fcace3009a7e933d76919cd3b1553502a0b3abe22"
+    },
+    {
+      "path": "docs/HANMIR_UWB_REVIEWED_SURVEY_PLAN_2026-10-24.md",
+      "bytes": 11758,
+      "sha256": "447b95e40c0c91e79c84b39567304536200ab70a3e6bca157227c8f3a2a5316b"
+    },
+    {
+      "path": "docs/HANMIR_UWB_STATIONARY_5.2x3.6_2026-10-24.md",
+      "bytes": 3517,
+      "sha256": "52a203e88596f57506fa5319f5634addc7eaadc20a6c41cd859eed8f501c155d"
+    },
+    {
+      "path": "docs/HANMIR_UWB_STATIONARY_AND_SURVEY_UI_2026-10-24.md",
+      "bytes": 10506,
+      "sha256": "9d324a0dc7a952f0f875dab2a776934ab56e1b0dafc4406f6bc786f63ebc6c84"
+    },
+    {
+      "path": "docs/HANMIR_UWB_WALK_TEST_2026-10-24.md",
+      "bytes": 4206,
+      "sha256": "b30b3d5d7bf69257104b300fc9c6264410646bbfd56b46cc45e8a7d7828dfe6f"
+    },
+    {
+      "path": "docs/HANMIR_UWB_WEIGHTED_JUMP_2026-10-24.md",
+      "bytes": 5887,
+      "sha256": "cf4ebd920b897f7c8a108c50c9116a37ef652ba83abf11921d310548c6fbc322"
+    },
+    {
+      "path": "docs/HANMIR_ZONE_WARNINGS_2026-10-24.md",
+      "bytes": 12054,
+      "sha256": "668918d338273f366d4ffa8daa08e16485428abdd61c617c5f72361af2cbf7e6"
+    },
+    {
+      "path": "docs/assets/bno_orientation_20261024_20trials.png",
+      "bytes": 76855,
+      "sha256": "d08cec3fe7055ed8e55b1a5c3212abea05cb9082a9451427ace778560e58c055"
+    },
+    {
+      "path": "docs/assets/bno_orientation_20261024_traces.png",
+      "bytes": 353364,
+      "sha256": "e6eefe10f2bc2f402d936ca7f90a8c33fabcdef80becda058f1387bdbc7ce938"
+    },
+    {
+      "path": "docs/evidence/2026-10-24/call-quality-comparison.json",
+      "bytes": 10301,
+      "sha256": "3520166753224d51903fce7b55f1225e329f98f9f02c9be2e081dae5ec468387"
+    },
+    {
+      "path": "docs/evidence/2026-10-24/publication-checks.json",
+      "bytes": 478,
+      "sha256": "d5037ab40e7f246634d4bf23d799b607d2f1bd250cc5bae2e6de6b76df9556ee"
+    },
+    {
+      "path": "docs/evidence/2026-10-24/site-001-layout.json",
+      "bytes": 1271,
+      "sha256": "4a6a3e224338b6dcc5b177ae5547b8c686d7d58c8b5ed608c9d429e8260fd25c"
+    },
+    {
+      "path": "docs/evidence/2026-10-24/zone-warning-call-check.json",
+      "bytes": 349,
+      "sha256": "e6ff53742e058bf5096124288e5cbcc2fee0dfea9aeada6f7cb9b304afb4ec15"
+    },
+    {
+      "path": "docs/evidence/2026-10-24/zone-warning-results.json",
+      "bytes": 1904,
+      "sha256": "bce043706d094808bfb485f4e36295f3f1241006492103db81bd9355b73c1453"
+    },
+    {
+      "path": "docs/evidence/2026-10-24/zone-warning-telemetry-details.json",
+      "bytes": 3544,
+      "sha256": "e0f091b1049fa531bfa74da3f659cd4badd85b76b25d641ea5d642c60a8b84c0"
+    },
+    {
+      "path": "docs/zone-warning-results-20261024.json",
+      "bytes": 1904,
+      "sha256": "bce043706d094808bfb485f4e36295f3f1241006492103db81bd9355b73c1453"
+    },
+    {
+      "path": "docs/zone-warning-telemetry-details-20261024.json",
+      "bytes": 3544,
+      "sha256": "e0f091b1049fa531bfa74da3f659cd4badd85b76b25d641ea5d642c60a8b84c0"
+    },
+    {
+      "path": "firmware/helmet_p4/README.md",
+      "bytes": 7542,
+      "sha256": "b15d465b8038eb68b772466ff28ce2f2850fb56549aabc43d9d1a4ec74c0ab27"
+    },
+    {
+      "path": "firmware/helmet_p4/main/CMakeLists.txt",
+      "bytes": 849,
+      "sha256": "ff8d53084da9fd587b3f5d975340735225eb54cdafa55bdf58370ee2094ac37e"
+    },
+    {
+      "path": "firmware/helmet_p4/main/Kconfig.projbuild",
+      "bytes": 4589,
+      "sha256": "56d6d166a5d661d4c75318ab8651bdfad6ec14efa5a66b4cefa599f48c54d081"
+    },
+    {
+      "path": "firmware/helmet_p4/main/api_client.c",
+      "bytes": 10523,
+      "sha256": "e0cfd7c217027bac81251990e05c7f27f2f4c7021a58703de16d3247ac7f35f3"
+    },
+    {
+      "path": "firmware/helmet_p4/main/app_main.c",
+      "bytes": 1469,
+      "sha256": "c0012ec5dc351a693bd0e3bfaa5afac6b42c6cb08dcf8cd92bde5ca8e34a6dcb"
+    },
+    {
+      "path": "firmware/helmet_p4/main/call_client.c",
+      "bytes": 13089,
+      "sha256": "30f93715634463ac651b234168c2ed8f568e79f7c6788185e2ebed2b86f56711"
+    },
+    {
+      "path": "firmware/helmet_p4/main/camera_source.c",
+      "bytes": 8402,
+      "sha256": "d287957de84cdbf550a8d56d5665273130ff1e33b8237d33c0ba3af1b4828690"
+    },
+    {
+      "path": "firmware/helmet_p4/main/camera_transport.c",
+      "bytes": 10087,
+      "sha256": "268a5607e6cdabe04111f299c8654762901f37d426ad934013e22521f1c2c1a6"
+    },
+    {
+      "path": "firmware/helmet_p4/main/command_client.c",
+      "bytes": 9598,
+      "sha256": "b2f3ef178df1559e85c3412ed31137ca974b1494e61202affd5b56eb8686e3c2"
+    },
+    {
+      "path": "firmware/helmet_p4/main/fall_detector.c",
+      "bytes": 5867,
+      "sha256": "eaeaecea2e1e6187d493b35b2b94df162fb2a0733b79648efa2b08125c59f2cd"
+    },
+    {
+      "path": "firmware/helmet_p4/main/fall_detector.h",
+      "bytes": 1089,
+      "sha256": "01051bdc58a39883d145d149e5bd1aadae51c52088a3ea41a6f4cd3590822c85"
+    },
+    {
+      "path": "firmware/helmet_p4/main/hanmir.h",
+      "bytes": 2014,
+      "sha256": "e65f0432060f78d9126f5e88340a42120fc6b13686d8e28548ce4353f73a5307"
+    },
+    {
+      "path": "firmware/helmet_p4/main/imu_alignment.h",
+      "bytes": 2184,
+      "sha256": "a0be18874f78090d42e3294abe6272def34c0eeabf6035d09719f674bbb27a64"
+    },
+    {
+      "path": "firmware/helmet_p4/main/imu_monitor.c",
+      "bytes": 13465,
+      "sha256": "c6f68c363f3418c512c0ee96693840c8ae33691656be3e052521d31735184627"
+    },
+    {
+      "path": "firmware/helmet_p4/main/imu_monitor.h",
+      "bytes": 940,
+      "sha256": "f08898d2a6913791e1129c6d9ee636b76095908bca801281dac216c36cc4daee"
+    },
+    {
+      "path": "firmware/helmet_p4/main/imu_transport.c",
+      "bytes": 8310,
+      "sha256": "e1a2345f791c6df0333f34636d61492544615b3fea2c604dc41c5f7738281713"
+    },
+    {
+      "path": "firmware/helmet_p4/main/network.c",
+      "bytes": 4566,
+      "sha256": "662d02fa7e2f92ea1fbb7c050730539e29b1c8883ff549d816dccceda3a91155"
+    },
+    {
+      "path": "firmware/helmet_p4/main/sensors.c",
+      "bytes": 19999,
+      "sha256": "7590605944adbf8639b71a73dd4fa7879345f67af9f1f8118151db5ac22ad80d"
+    },
+    {
+      "path": "firmware/helmet_p4/main/speaker.c",
+      "bytes": 10205,
+      "sha256": "4434f5df09cad3b1d25a1cf6e6c2d5ed2beff31ac657130b4d091a38b479d418"
+    },
+    {
+      "path": "firmware/helmet_p4/main/voice.c",
+      "bytes": 12202,
+      "sha256": "29cb262c3b4eb9e9c77bb3f4aadb82fed5d858177b2151407a6f92abee43b5fa"
+    },
+    {
+      "path": "firmware/helmet_p4/main/wifi_profiles.example.h",
+      "bytes": 299,
+      "sha256": "5b90ede5f7bf3c5353cc945470863e496a9bf96237c600b53e932bf1b835bc96"
+    },
+    {
+      "path": "firmware/helmet_p4/sdkconfig.defaults",
+      "bytes": 990,
+      "sha256": "290b1c5f0323859c9a261e30dcf3f515649138e029b5d87091a00e68f8e2b881"
+    },
+    {
+      "path": "firmware/helmet_p4/sdkconfig.demo-20261024.example",
+      "bytes": 2190,
+      "sha256": "5eaf00ad7aa4e2c42112463b438f4f0801af38e516771185e8d670fb91cd1b40"
+    },
+    {
+      "path": "firmware/uwb_multi_test/include/anchor_survey.h",
+      "bytes": 34007,
+      "sha256": "2ba115880ef9e4d476f9081cb09d8d6d7bb65835cd7cfa10cc87cfa4944c4b4f"
+    },
+    {
+      "path": "firmware/uwb_multi_test/include/survey_trace.h",
+      "bytes": 1313,
+      "sha256": "2a850c046284a51082745e3470b80300f601db3b70eab20bea63a54ac842bcee"
+    },
+    {
+      "path": "firmware/uwb_multi_test/include/uwb_telemetry.h",
+      "bytes": 15295,
+      "sha256": "e1371edfd3a76e85215bd62474fd9520015303f31e24e339b4386eac28af9f65"
+    },
+    {
+      "path": "firmware/uwb_multi_test/include/uwb_ws_transport.h",
+      "bytes": 3751,
+      "sha256": "3fdd1b7095a36d268fe5fb7880424d53d1a4cb0e403ee653357b407e32bedfa6"
+    },
+    {
+      "path": "firmware/uwb_multi_test/include/wifi_profiles.h",
+      "bytes": 1352,
+      "sha256": "62ece0f5857c3afbf8a8f13382a95848bc299c1a0060aa74684d86fab7ddcb48"
+    },
+    {
+      "path": "firmware/uwb_multi_test/include/wifi_secrets.example.h",
+      "bytes": 519,
+      "sha256": "5240ad275e19e19bf8229c5a272f3db1307b733622713d1237a42530dbef2c93"
+    },
+    {
+      "path": "firmware/uwb_multi_test/platformio.ini",
+      "bytes": 1895,
+      "sha256": "648185555fc3605c0b7c5f5eab9b420d4d2ca506f92c45254f19fe476a5c9a1f"
+    },
+    {
+      "path": "firmware/uwb_multi_test/src/anchor.cpp",
+      "bytes": 8745,
+      "sha256": "7c8a028597bf706446ed7d9da0e25e3249919903ac8d5e51d4ad201f7ea0fdfe"
+    },
+    {
+      "path": "firmware/uwb_multi_test/src/tag.cpp",
+      "bytes": 14606,
+      "sha256": "37857450ec54fc2d9cb54e8f9567f14f039fe7f564b45a035f4cc928600671b4"
+    },
+    {
+      "path": "frontend/public/hanmir-call-network.js",
+      "bytes": 1522,
+      "sha256": "a499c3750fc3690cbc2245e16a83d21b3b1c0c9e29335a8db1e48628cab077ee"
+    },
+    {
+      "path": "frontend/public/hanmir-call-worklet.js",
+      "bytes": 4045,
+      "sha256": "a3c0dbe6e0679e49b1145ae7c02196ccd902cc8d9ed211a90f6d226023d2e30b"
+    },
+    {
+      "path": "frontend/src/App.tsx",
+      "bytes": 34802,
+      "sha256": "dc2173e839579112b1aa2347f8d8b6ec39ae5be9f0af4282d6ae8f7e77dd370b"
+    },
+    {
+      "path": "frontend/src/admin-green-theme.css",
+      "bytes": 9027,
+      "sha256": "8f8e2d7ec1ffd2cc07d940901e5ab24c058169b94dffd263ca53bacf8c10edc2"
+    },
+    {
+      "path": "frontend/src/components/AnchorSurveyPanel.tsx",
+      "bytes": 4273,
+      "sha256": "d6e4994c0e1beecf9d4adb604e74201f0cea26bc51cc4341f9ae1707087a6e13"
+    },
+    {
+      "path": "frontend/src/components/CameraMonitor.tsx",
+      "bytes": 10762,
+      "sha256": "ef2f21cb3684dbfd0d695e19f7f689179bc98db51deb627573cd585f9b6a2cae"
+    },
+    {
+      "path": "frontend/src/components/HelmetCall.tsx",
+      "bytes": 18204,
+      "sha256": "f12c1e4b656c6f29f98f7a995a8eb3b9b6c15f3184867faf38909dbb7764454b"
+    },
+    {
+      "path": "frontend/src/components/LayoutEditor.tsx",
+      "bytes": 32964,
+      "sha256": "3f2af03f05f8223126e0cab5f78c6e2ac2e10a5bc83e823503a45c1bc2ccab58"
+    },
+    {
+      "path": "frontend/src/components/SiteMap.tsx",
+      "bytes": 15797,
+      "sha256": "fe91a210e88b05f386e29b8f279e3b7ede741bc7926adb132df3fbf662cc1b3d"
+    },
+    {
+      "path": "frontend/src/hooks/useSafetyData.ts",
+      "bytes": 13989,
+      "sha256": "8ef4d76cd27783ad91976f912ce81e48755927014041a7dca727cc8970333297"
+    },
+    {
+      "path": "frontend/src/services/api.ts",
+      "bytes": 13922,
+      "sha256": "46849a2be60fde4bace2700219d7e6fd000942fd8aa13b55043572b0e969c86f"
+    },
+    {
+      "path": "frontend/src/services/callWorker.ts",
+      "bytes": 1445,
+      "sha256": "d368b3e5f4a628a799f82c81d81430cdf6daaeb7699f468cdd672878f0c4c604"
+    },
+    {
+      "path": "frontend/src/services/layoutIssues.ts",
+      "bytes": 1823,
+      "sha256": "cd1a1f1ad9b6545de2efa4970a6e472a4c98f92a1eb2a64f1073ea8920bbc43e"
+    },
+    {
+      "path": "frontend/src/services/positionUpdates.ts",
+      "bytes": 972,
+      "sha256": "4a34ea8ed6445364dff893965a0d4e9db30208a115e1c2e5ff0c83ff19a62da7"
+    },
+    {
+      "path": "frontend/src/services/surveyEstimate.ts",
+      "bytes": 2059,
+      "sha256": "eb90cb4e7f31568f7a9f73226d255607c806c5ebbb9437decd7d9c1d44090585"
+    },
+    {
+      "path": "frontend/src/styles.css",
+      "bytes": 110488,
+      "sha256": "3a5c03a963461761411674f20b4c8b599a5e74ff8c7ae0d6224e8613830dd6be"
+    },
+    {
+      "path": "frontend/src/types/index.ts",
+      "bytes": 7284,
+      "sha256": "71062f46db460076c1aae4b9aa717560fc3aaf13a63c4924d1063de263080c3e"
+    },
+    {
+      "path": "frontend/tests/positionUpdates.test.mjs",
+      "bytes": 2051,
+      "sha256": "d61793710c2be906b73a50cd32904bb6c4e422ebece4349109d5c059ee9b2dd5"
+    },
+    {
+      "path": "frontend/tests/surveyEstimate.test.mjs",
+      "bytes": 1994,
+      "sha256": "57c6dc5d2d3e1762465d711e42b1bb81fa0cb69875ad18183cd0803d9cf58426"
+    },
+    {
+      "path": "scripts/shared_log_reader.py",
+      "bytes": 1170,
+      "sha256": "c335f5435a68ea5d818150789ce39e51f4b9fc603ea84932d3f097ffb011dbbb"
+    },
+    {
+      "path": "tools/analyze_anchor_survey_bias.py",
+      "bytes": 3888,
+      "sha256": "9031afc481a67cf2d1af910379fad4ab049b1288615e07648273f31f150a5fd0"
+    },
+    {
+      "path": "tools/analyze_bno_orientation.py",
+      "bytes": 10007,
+      "sha256": "376ae08604ff8c3b40d0d1605281d0ec186cbcbd2096cbcfdcf6ccbaed0fb6ff"
+    },
+    {
+      "path": "tools/analyze_uwb_stationary.py",
+      "bytes": 1903,
+      "sha256": "c8c2885f08b84ba366a2a9bad1be17cb49cb418ef2bbd28f95cce8fd08bb6ff3"
+    },
+    {
+      "path": "tools/bno_orientation_monitor.html",
+      "bytes": 6402,
+      "sha256": "7c8ccb3cecd77c37e757146221d7c3361df626d1478c02d3d42f4abc69268360"
+    },
+    {
+      "path": "tools/bno_orientation_monitor.py",
+      "bytes": 14971,
+      "sha256": "55fea81f9696d02b502f6f5c7939851eefac0ede7d6ea922c0229d9a914bc4ef"
+    },
+    {
+      "path": "tools/call_quality_capture.py",
+      "bytes": 2286,
+      "sha256": "f3a1a22ed171df6b71bb9b16f120fbba15eb90462440287055e43b8b9eca56ba"
+    },
+    {
+      "path": "tools/imu_capture_session.py",
+      "bytes": 7306,
+      "sha256": "bde6d978ab59710c4bc826eb289701c1d9e8d6fae42c4b7dabd2038434070e4e"
+    },
+    {
+      "path": "tools/provision_anchor_survey.py",
+      "bytes": 2212,
+      "sha256": "f7e0ee4163817afe35e93b72ddcccf84d1f385de6e4fd14d51db89b32596ba0c"
+    },
+    {
+      "path": "tools/zone_warning_call_check.py",
+      "bytes": 2024,
+      "sha256": "255596dd29b5bca10cbb1da660bd0edc4eabe64ac2ed8cc12beccd70b4cc0474"
+    },
+    {
+      "path": "tools/zone_warning_capture.py",
+      "bytes": 2037,
+      "sha256": "9be1d15867e2f9a535f7889c87b2eec1452ccc149efc2a99d1398e16af3c7dba"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import {useEffect, useRef, useState} from "react";
 import {api} from "../services/api";
 import {getWsBaseUrl} from "../services/config";
+import {CallWorkerSocket} from '../services/callWorker';
 
 type CallStatus = "idle" | "requesting" | "connecting" | "connected" | "offline" | "busy" | "error";
 
@@ -45,18 +46,21 @@ function playCallTone(context: AudioContext, tone: CallTone) {
   }
 }
 
-function resample(input: Float32Array, inputRate: number, outputRate = 16000): Int16Array {
-  const outputLength = Math.max(1, Math.round(input.length * outputRate / inputRate));
-  const output = new Int16Array(outputLength);
-  for (let index = 0; index < outputLength; index += 1) {
-    const position = index * inputRate / outputRate;
-    const left = Math.floor(position);
-    const right = Math.min(input.length - 1, left + 1);
-    const mix = position - left;
-    const value = Math.max(-1, Math.min(1, input[left] * (1 - mix) + input[right] * mix));
-    output[index] = value < 0 ? value * 32768 : value * 32767;
-  }
-  return output;
+function makeResampler(inputRate: number) {
+  let position=0,next=0,previous=0;
+  return (input: Float32Array): Int16Array => {
+    const output:number[]=[];
+    for(let i=0;i<input.length;i++,position++) {
+      while(next<=position) {
+        const fraction=next-(position-1);
+        const value=Math.max(-1,Math.min(1,previous+(input[i]-previous)*fraction));
+        output.push(value<0?value*32768:value*32767);
+        next+=inputRate/16000;
+      }
+      previous=input[i];
+    }
+    return Int16Array.from(output);
+  };
 }
 
 export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
@@ -64,10 +68,14 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
   const [listenOnly, setListenOnly] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
-  const socketRef = useRef<WebSocket | null>(null);
+  const socketRef = useRef<WebSocket | CallWorkerSocket | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const contextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const workletRef = useRef<AudioWorkletNode | null>(null);
+  const filtersRef = useRef<BiquadFilterNode[]>([]);
+  const [audioQuality, setAudioQuality] = useState("");
+  const webDroppedSamples = useRef(0);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const muteRef = useRef<GainNode | null>(null);
   const pendingRef = useRef<Int16Array>(new Int16Array(0));
@@ -98,6 +106,12 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
     socket?.close();
     socketRef.current = null;
     processorRef.current?.disconnect();
+    workletRef.current?.port.postMessage({type: 'enabled', value: false});
+    if (workletRef.current) workletRef.current.port.onmessage = null;
+    workletRef.current?.disconnect();
+    workletRef.current = null;
+    filtersRef.current.forEach(filter => filter.disconnect());
+    filtersRef.current = [];
     sourceRef.current?.disconnect();
     muteRef.current?.disconnect();
     streamRef.current?.getTracks().forEach(track => track.stop());
@@ -119,6 +133,7 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
     pendingRef.current = new Int16Array(0);
     nextPlaybackRef.current = 0;
     setSeconds(0);
+    setAudioQuality("");
     setStatus("idle");
   };
 
@@ -133,6 +148,10 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
   const playHelmetAudio = (payload: ArrayBuffer) => {
     const context = contextRef.current;
     if (!context || payload.byteLength < 2) return;
+    if (workletRef.current) {
+      workletRef.current.port.postMessage({type: 'audio', pcm: payload}, [payload]);
+      return;
+    }
     const pcm = new Int16Array(payload);
     const audioBuffer = context.createBuffer(1, pcm.length, 16000);
     const channel = audioBuffer.getChannelData(0);
@@ -140,8 +159,17 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
     const source = context.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(context.destination);
-    if (nextPlaybackRef.current > context.currentTime + 0.25) nextPlaybackRef.current = context.currentTime + 0.04;
-    const startAt = Math.max(context.currentTime + 0.04, nextPlaybackRef.current);
+    // Never schedule a new buffer over speech already scheduled in the future.
+    if (nextPlaybackRef.current > context.currentTime + 0.25) {
+      webDroppedSamples.current += pcm.length;
+      return;
+    }
+    const startAt = Math.max(context.currentTime + 0.06, nextPlaybackRef.current);
+    const ramp=context.createGain();
+    const gap=nextPlaybackRef.current<context.currentTime+.01;
+    ramp.gain.setValueAtTime(gap?0:1,startAt);
+    if(gap) ramp.gain.linearRampToValueAtTime(1,startAt+.002);
+    source.disconnect();source.connect(ramp);ramp.connect(context.destination);
     source.start(startAt);
     nextPlaybackRef.current = startAt + audioBuffer.duration;
   };
@@ -168,32 +196,70 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
       const context = new AudioContext();
       contextRef.current = context;
       await context.resume();
-      const processor = stream ? context.createScriptProcessor(2048, 1, 1) : null;
-      if (stream && processor) {
+      let worklet: AudioWorkletNode | null = null;
+      webDroppedSamples.current = 0;
+      if (context.audioWorklet && typeof AudioWorkletNode !== 'undefined') {
+        try {
+          await context.audioWorklet.addModule(`${import.meta.env.BASE_URL}hanmir-call-worklet.js`);
+          worklet = new AudioWorkletNode(context,'hanmir-call',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
+          const rxHigh=context.createBiquadFilter(),rxLow=context.createBiquadFilter();
+          rxHigh.type='highpass';rxHigh.frequency.value=80;rxHigh.Q.value=.707;
+          rxLow.type='lowpass';rxLow.frequency.value=6000;rxLow.Q.value=.707;
+          worklet.connect(rxHigh);rxHigh.connect(rxLow);rxLow.connect(context.destination);
+          filtersRef.current.push(rxHigh,rxLow);
+          workletRef.current = worklet;
+        } catch (error) {console.warn('Call AudioWorklet unavailable; using short-block fallback',error);}
+      }
+      const processor = !worklet && stream ? context.createScriptProcessor(512, 1, 1) : null;
+      if (stream && (processor || worklet)) {
         const source = context.createMediaStreamSource(stream);
-        const mute = context.createGain();
-        mute.gain.value = 0;
-        source.connect(processor);
-        processor.connect(mute);
-        mute.connect(context.destination);
+        const highpass=context.createBiquadFilter(),lowpass=context.createBiquadFilter();
+        highpass.type='highpass';highpass.frequency.value=80;highpass.Q.value=.707;
+        lowpass.type='lowpass';lowpass.frequency.value=6500;lowpass.Q.value=.707;
+        source.connect(highpass);highpass.connect(lowpass);
+        filtersRef.current.push(highpass,lowpass);
+        if(worklet) lowpass.connect(worklet);
+        else if(processor) {
+          const mute=context.createGain();mute.gain.value=0;
+          lowpass.connect(processor);processor.connect(mute);mute.connect(context.destination);
+          muteRef.current=mute;
+        }
         sourceRef.current = source;
         processorRef.current = processor;
-        muteRef.current = mute;
       }
 
       const wsBase = getWsBaseUrl();
-      const socket = new WebSocket(`${wsBase}/ws/call/operator/${encodeURIComponent(deviceId)}?ticket=${encodeURIComponent(ticket.ticket)}`);
+      const url=`${wsBase}/ws/call/operator/${encodeURIComponent(deviceId)}?ticket=${encodeURIComponent(ticket.ticket)}`;
+      const socket=worklet && typeof Worker!=='undefined' ? new CallWorkerSocket(url,worklet,n=>{webDroppedSamples.current=n;}) : new WebSocket(url);
       socket.binaryType = "arraybuffer";
       socketRef.current = socket;
       setStatus("connecting");
+      const resampleMic=makeResampler(context.sampleRate);
+
+      if(worklet) worklet.port.onmessage=event=>{
+        if (closingRef.current || socketRef.current!==socket) return;
+        if(event.data.type==='mic') {
+          const pcm=event.data.pcm as ArrayBuffer;
+          if(socket.readyState===WebSocket.OPEN && callConnectedRef.current) {
+            if(socket.bufferedAmount<=640*4) socket.send(pcm);
+            else webDroppedSamples.current+=pcm.byteLength/2;
+          }
+        } else if(event.data.type==='stats') {
+          const stats={...event.data,webDroppedSamples:webDroppedSamples.current};
+          setAudioQuality(`재생 버퍼 ${Math.round(stats.queueMs)}ms · 재생 큐 폐기 ${Math.round(stats.overflowSamples/16)}ms`);
+          console.info('Hanmir call quality',stats);
+          if(socket.readyState===WebSocket.OPEN) socket.send(JSON.stringify({type:'call_audio_metrics',metrics:stats}));
+        }
+      };
 
       if (processor) processor.onaudioprocess = event => {
         if (socket.readyState !== WebSocket.OPEN || closingRef.current || !callConnectedRef.current) return;
         if (socket.bufferedAmount > 640 * 4) {
+          webDroppedSamples.current += pendingRef.current.length + Math.round(event.inputBuffer.length*16000/context.sampleRate);
           pendingRef.current = new Int16Array(0);
           return;
         }
-        const current = resample(event.inputBuffer.getChannelData(0), context.sampleRate);
+        const current = resampleMic(event.inputBuffer.getChannelData(0));
         const combined = new Int16Array(pendingRef.current.length + current.length);
         combined.set(pendingRef.current);
         combined.set(current, pendingRef.current.length);
@@ -242,6 +308,11 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
           return;
         }
         const message = JSON.parse(event.data) as {type?: string; status?: string};
+        if(message.type==='call_audio_tick'){
+          lastAudioRef.current=performance.now();
+          if(audioStalledRef.current){audioStalledRef.current=false;callConnectedRef.current=true;setStatus('connected');setErrorMessage('');}
+          return;
+        }
         if (message.type !== "call_status") return;
         if (message.status === "connected") {
           if (reconnectDeadlineRef.current !== null) window.clearTimeout(reconnectDeadlineRef.current);
@@ -251,10 +322,12 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
           if (!audioStalledRef.current) setErrorMessage("");
           if (!callConnectedRef.current && contextRef.current) playCallTone(contextRef.current, "connected");
           callConnectedRef.current = true;
+          if(!(socket instanceof CallWorkerSocket))workletRef.current?.port.postMessage({type:'enabled',value:true});
           if (!audioStalledRef.current) setStatus("connected");
         }
         else if (message.status === "ended") stop();
         else if (message.status === "device_offline") {
+          workletRef.current?.port.postMessage({type:'enabled',value:false});
           callConnectedRef.current = false;
           pendingRef.current = new Int16Array(0);
           setStatus("connecting");
@@ -295,6 +368,7 @@ export function HelmetCall({deviceId, workerName, disabled = false}: Props) {
         {statusText[status]}
       </button>
       {status === "connected" && <small>{workerName} · {elapsed} · {listenOnly ? "듣기 전용 · 내 목소리는 전송되지 않음" : "양방향"}</small>}
+      {status === 'connected' && audioQuality && <small>{audioQuality}</small>}
       {status === "error" && errorMessage.includes("마이크") && <button type="button" disabled={disabled} onClick={() => void start(true)}>안전모 소리만 듣기</button>}
       {status === "connecting" && errorMessage && <small>{errorMessage}</small>}
       {status === "offline" && <small>안전모 통화 채널이 끊겼습니다. 전원·Wi-Fi를 확인한 뒤 다시 연결하세요.</small>}

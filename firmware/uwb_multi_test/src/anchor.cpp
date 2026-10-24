@@ -77,7 +77,7 @@ static uint8_t tx_beacon_msg[] = {
 #define BEACON_SLOT_IDX     13
 #define REPORT_MASK_IDX     10
 #define REPORT_RANGE_IDX    11
-#define RX_BUF_LEN          32
+#define RX_BUF_LEN          64
 
 static uint8_t rx_buffer[RX_BUF_LEN];
 static uint32_t status_reg = 0;
@@ -105,6 +105,10 @@ static inline void write_u16_le(uint8_t *data, uint16_t value)
     data[0] = (uint8_t)value;
     data[1] = (uint8_t)(value >> 8);
 }
+
+#ifdef HANMIR_ENABLE_SURVEY
+#include "anchor_survey.h"
+#endif
 
 void setup()
 {
@@ -151,11 +155,20 @@ void setup()
     dwt_setrxantennadelay(RX_ANT_DLY);
     dwt_settxantennadelay(TX_ANT_DLY);
     dwt_setlnapamode(DWT_LNA_ENABLE | DWT_PA_ENABLE);
+#ifdef HANMIR_ENABLE_SURVEY
+    survey_setup();
+#endif
 }
 
 void loop()
 {
-    if (BEACON_ENABLE && ANCHOR_ID == MASTER_ANCHOR_ID && millis() > BEACON_START_DELAY_MS && millis() - last_beacon_tx_ms >= TDMA_FRAME_MS)
+#ifdef HANMIR_ENABLE_SURVEY
+    survey_tick();
+    bool normal_mode=!survey_active();
+#else
+    bool normal_mode=true;
+#endif
+    if (normal_mode && BEACON_ENABLE && ANCHOR_ID == MASTER_ANCHOR_ID && millis() > BEACON_START_DELAY_MS && millis() - last_beacon_tx_ms >= TDMA_FRAME_MS)
     {
         send_beacon();
     }
@@ -176,7 +189,7 @@ void loop()
         uint32_t frame_len = dwt_read32bitreg(RX_FINFO_ID) & RXFLEN_MASK;
         uint16_t data_len = frame_len - FCS_LEN;
 
-        if (data_len <= sizeof(rx_buffer) && data_len > 0)
+        if (data_len <= sizeof(rx_buffer) && data_len >= 10)
         {
             dwt_readrxdata(rx_buffer, data_len, 0);
             uint16_t rx_pan_id = read_u16_le(&rx_buffer[3]);
@@ -187,6 +200,10 @@ void loop()
             }
 
             uint8_t function_code = rx_buffer[9];
+#ifdef HANMIR_ENABLE_SURVEY
+            if(survey_handle(data_len))return;
+            if(survey_active())return;
+#endif
 
             if (function_code == FUNC_POLL)
             {

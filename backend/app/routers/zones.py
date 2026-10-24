@@ -45,6 +45,12 @@ def list_zones(site_id: str = Depends(require_site), db: Session = Depends(get_d
     return [serialize(row) for row in db.query(Zone).filter(Zone.site_id == site_id).all()]
 
 
+@router.get("/warnings/status")
+def warning_status(site_id: str = Depends(require_site)):
+    from ..services import zone_warning_service
+    return zone_warning_service.status(site_id)
+
+
 @router.post("")
 def create_zone(payload: ZoneIn, site_id: str = Depends(require_site), db: Session = Depends(get_db)):
     if db.get(Zone, payload.zone_id):

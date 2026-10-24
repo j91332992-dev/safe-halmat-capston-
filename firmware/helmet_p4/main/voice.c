@@ -269,7 +269,7 @@ esp_err_t hanmir_voice_start(void)
     if (hanmir_local_wake_start() != ESP_OK) ESP_LOGW(TAG, "Local wake shadow unavailable; existing voice path retained");
     if (xTaskCreatePinnedToCore(feed_task, "mic_feed", 6144, NULL, 5, NULL, 0) != pdPASS ||
         xTaskCreatePinnedToCore(fetch_task, "voice_vad", 8192, NULL, 5, NULL, 1) != pdPASS ||
-        xTaskCreate(upload_task, "voice_upload", 6144, NULL, 4, NULL) != pdPASS) return ESP_ERR_NO_MEM;
+        xTaskCreate(upload_task, "voice_upload", 16384, NULL, 4, NULL) != pdPASS) return ESP_ERR_NO_MEM;
     ESP_LOGI(TAG, "INMP441 + AFE VAD ready; external NS readiness is logged by mic_feed");
     voice_ready = true;
     return ESP_OK;

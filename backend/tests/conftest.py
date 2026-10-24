@@ -26,8 +26,13 @@ def isolated_uwb_filter_state(tmp_path, monkeypatch):
     from app.config import settings
     from app.services.location_speed_service import speed_guard
     from app.services.location_filter_service import reset_location_filter
+    from app.services.position_jump_guard import jump_guard
     speed_guard.reset()
+    jump_guard.reset()
     reset_location_filter()
     monkeypatch.setattr(settings, "uwb_speed_mode", "observe")
     monkeypatch.setattr(settings, "uwb_quality_mode", "observe")
+    # Legacy suites isolate their original speed/quality policies. New jump
+    # integration cases explicitly enable the independent guard.
+    monkeypatch.setattr(settings, "uwb_jump_mode", "observe")
     monkeypatch.setattr(settings, "uwb_filter_state_path", str(tmp_path / "distance-state.sqlite3"))

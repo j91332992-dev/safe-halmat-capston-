@@ -1,7 +1,11 @@
 from . import anchors, audio, auth, button, camera, dashboard, devices, diagnostics, evacuation, events, layout, risk, system, uwb, workers, zones, worker_app
 from . import operating_policy
+from . import anchor_survey
+from . import imu
 
 ALL_ROUTERS = [
+    imu.router,
+    anchor_survey.router,
     operating_policy.router,
     auth.router,
     worker_app.router,

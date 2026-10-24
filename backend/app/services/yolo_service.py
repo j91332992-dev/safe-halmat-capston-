@@ -165,11 +165,11 @@ def _update_observed_person_ppe(
     return result, counts
 
 
-def analyze_frame(filename: str, detail_enabled: bool = True) -> dict:
+def analyze_frame(filename: str, detail_enabled: bool = True, jpeg: bytes | None = None) -> dict:
     worker_started=time.perf_counter()
     global _model, _model_attempted, _fast_gpu_failed
     filepath = CAPTURE_DIR / filename
-    if not filepath.exists():
+    if jpeg is None and not filepath.exists():
         return analyze_frame_dummy(filename)
     model = get_yolo_model()
     if model is None:
@@ -181,7 +181,11 @@ def analyze_frame(filename: str, detail_enabled: bool = True) -> dict:
         # Keep the inference parameters identical to test_webcam.py. Rendering
         # remains filtered to the safety categories used by the ESP dashboard.
         decode_started=time.perf_counter()
-        source_image=cv2.imread(str(filepath))
+        if jpeg is None:
+            source_image=cv2.imread(str(filepath))
+        else:
+            import numpy as np
+            source_image=cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR)
         if source_image is None:
             return analyze_frame_dummy(filename)
         corrected_image=brighten(source_image) if detail_enabled else None
@@ -620,8 +624,18 @@ def analyze_frame(filename: str, detail_enabled: bool = True) -> dict:
             encoded, jpeg = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 88])
             if encoded:
                 annotated_jpeg = jpeg.tobytes()
+        observations = []
+        observation_ms = 0.0
+        if detail_enabled:
+            from .ppe_observation import build_observations
+            observation_started = time.perf_counter()
+            observations = build_observations(detections, model_candidates, source_image,
+                                               float(settings.yolo_person_confidence))
+            observation_ms = (time.perf_counter()-observation_started)*1000
         return {
             "mode": "real",
+            "ppe_observations": observations,
+            "ppe_observation_ms": round(observation_ms, 3),
             "model": Path(settings.yolo_model_path).name,
             "engine": getattr(model,'_hanmir_engine','pytorch_cpu'),
             "detections": detections,
@@ -664,6 +678,6 @@ def analyze_frame(filename: str, detail_enabled: bool = True) -> dict:
         if getattr(model,'_hanmir_engine','')=='openvino_gpu_fp32' and not _fast_gpu_failed:
             logger.exception('GPU inference failed; retrying this frame with original model')
             _fast_gpu_failed=True; _model=None; _model_attempted=False
-            return analyze_frame(filename,detail_enabled)
+            return analyze_frame(filename,detail_enabled,jpeg)
         logger.exception("YOLO 프레임 분석 실패: %s", exc)
         return analyze_frame_dummy(filename)

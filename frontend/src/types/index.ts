@@ -16,6 +16,7 @@ export interface Worker {
     applied?: boolean;
     reason?: string;
     last_valid_at?: string | null;
+    server_received_at?: string | null;
     last_valid_position?: {x: number; y: number; confidence: number} | null;
     last_valid_age_seconds?: number | null;
     quality_status?: {
@@ -98,6 +99,9 @@ export interface EvacuationIncident {
 }
 
 export interface EvacuationRoute {
+  corridor_half_width_m?: number;
+  corridor_status?: "following" | "replanned" | "planned";
+  cross_track_error_m?: number | null;
   navigation_enabled?: boolean;
   action?: string;
   instruction_stable?: boolean;
@@ -212,6 +216,9 @@ export interface CameraLatest {
     mode: string;
     model: string;
     ppe: Record<string, boolean | null>;
+    ppe_people?: {track_id: string; box: {x1: number; y1: number; x2: number; y2: number};
+      items: Record<string, {status: string; visible: boolean; reason: string; confidence: number | null;
+        valid_samples: number; missing_samples: number; missing_ratio: number | null; span_seconds: number}>}[];
     hazards: Record<string, boolean | number>;
     person_seen?: boolean;
     detections: {category?: string; positive?: boolean; confidence?: number; red_pixel_ratio?: number; class?: string}[];
@@ -219,7 +226,7 @@ export interface CameraLatest {
       detections: {category?: string; positive?: boolean; confidence?: number; red_pixel_ratio?: number; class?: string}[]};
     ppe_judgement?: {
       active: boolean;
-      status: "active" | "pending_person" | "fresh_detail" | "awaiting_detail";
+      status: "active" | "pending_person" | "fresh_detail" | "awaiting_detail" | "per_person";
       person_frames: number;
       person_frames_required: number;
       ppe_frames: Record<string, number>;

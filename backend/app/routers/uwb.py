@@ -12,19 +12,20 @@ from ..config import settings
 from ..models.entities import Anchor, Device, Location, SiteLayout, WorkerState, Zone
 from ..schemas.api import UwbDistancesIn
 from ..services.event_service import create_event, event_to_dict
+from ..services import zone_warning_service
 from ..services.evacuation_service import calculate_route, current_incident
 from ..services.location_filter_service import filter_location, reset_location_filter, location_motion_status
 from ..services.location_speed_service import speed_guard
+from ..services.position_jump_guard import jump_guard
 from ..services.anchor_transition_guard import anchor_transition_guard
 from ..services.device_service import mark_device_seen
 from ..services.presence_service import refresh_presence
-from ..services.location_service import solve_position
+from ..services.location_service import solve_position, solution_diagnostics
 from ..services.risk_service import recalculate_risk
 from ..services.serializers import worker_to_dict
 from ..site_profile import clamp_position
 from ..services.uwb_distance_filter import DistanceFilter
 from ..services.uwb_log_service import record_observation
-from ..services.zone_service import confirm_zone, point_in_zone
 from ..websocket import manager
 from .auth import require_site
 
@@ -58,6 +59,10 @@ async def upload_distances(payload: UwbDistancesIn, compact_ack: bool = False):
         result = await asyncio.to_thread(_distance_session, payload)
         if not isinstance(result, dict):
             return result
+        zone_events = result.pop('_zone_events', [])
+        zone_warning_service.submit(zone_events)
+        for event in zone_events:
+            await manager.broadcast('event', event, site_id=event['site_id'])
         broadcast = result.pop('_broadcast_location', False)
         if broadcast:
             await manager.broadcast('location', result)
@@ -126,7 +131,11 @@ def _process_distances(payload: UwbDistancesIn, db: Session):
     observation.update(processed_measurements=measurements, anchors=anchors,
                        previous_position={"x": worker.x, "y": worker.y})
     try:
+        solve_started = time.perf_counter()
         raw_x, raw_y, confidence = solve_position(anchors, measurements)
+        observation['solver'] = (solution_diagnostics(anchors, measurements, raw_x, raw_y)
+                                 if all(math.isfinite(v) for v in (raw_x, raw_y)) else {'status':'nonfinite_candidate'})
+        observation['solver']['processing_ms'] = round((time.perf_counter()-solve_started)*1000, 3)
     except ValueError as exc:
         check = {"mode": settings.uwb_speed_mode, "accepted": False, "applied": False,
                  "reason": getattr(exc, "reason", "solve_failed"), "quality_status": quality_status,
@@ -157,9 +166,20 @@ def _process_distances(payload: UwbDistancesIn, db: Session):
     observation['anchor_transition'] = transition
     if transition['accepted']:
         check = speed_guard.check(payload, raw_x, raw_y)
+        jump_started = time.perf_counter()
+        jump = jump_guard.check(payload, raw_x, raw_y)
+        jump['processing_ms'] = round((time.perf_counter()-jump_started)*1000, 3)
+        observation['position_jump'] = jump
+        check['position_jump'] = jump
+        if not jump['applied']:
+            check.update(upstream_reason=check['reason'], reason=jump['reason'],
+                         accepted=False, applied=False, reset_smoothing=False)
+        elif not jump['accepted']:
+            check['accepted'] = False
     else:
         check = dict(mode='enforce', accepted=False, applied=False,
-                     reason='anchor_set_change_pending', reset_smoothing=False)
+                     reason=transition['reason'] if transition['reason']=='nonfinite_candidate' else 'anchor_set_change_pending',
+                     reset_smoothing=False)
     check['anchor_transition'] = transition
     check["quality_status"] = quality_status
     pipeline.update(position_solved=all(math.isfinite(v) for v in (raw_x, raw_y, confidence)),
@@ -206,32 +226,21 @@ def _process_distances(payload: UwbDistancesIn, db: Session):
             distances_json=json.dumps(measurements),
         )
         db.add(location)
-    zone_event = None
-    for zone in db.query(Zone).filter(Zone.site_id == worker.site_id, Zone.active.is_(True)).all():
-        allowed_worker_ids = json.loads(zone.allowed_worker_ids_json)
-        if payload.worker_id in allowed_worker_ids:
-            if worker.current_zone == zone.zone_id:
-                worker.current_zone = None
-            continue
-        is_current = worker.current_zone == zone.zone_id
-        confirmed, transition = confirm_zone(payload.worker_id, zone, point_in_zone(worker.x, worker.y, zone), is_current)
-        if transition == "ZONE_ENTERED":
-            worker.current_zone = zone.zone_id
-            zone_event = create_event(db, "DANGER_ZONE_ENTERED", zone.warning_message, "danger", payload.worker_id, payload.device_id, {"zone_id": zone.zone_id})
-            break
-        if transition == "ZONE_EXITED":
-            worker.current_zone = None
-            zone_event = create_event(db, "ZONE_EXITED", f"{zone.zone_name}에서 이탈했습니다.", "info", payload.worker_id, payload.device_id, {"zone_id": zone.zone_id})
+    zone_started = time.perf_counter()
+    zone_events = zone_warning_service.evaluate(db, worker) if check["accepted"] else []
+    observation["zone_processing_ms"] = round((time.perf_counter()-zone_started)*1000, 3)
+    zone_event = zone_events[-1] if zone_events else None
     recalculate_risk(db, worker)
     db.commit()
     log_saved = record_observation(observation)
     from ..services.evacuation_navigation import latest_route
     route = latest_route(worker.worker_id)
-    result = {"location": {"x": worker.x, "y": worker.y, "confidence": confidence, "raw_x": raw_x, "raw_y": raw_y, "changed": position_changed}, "worker": worker_to_dict(worker), "event": event_to_dict(zone_event) if zone_event else None, "evacuation_route": route}
+    result = {"location": {"x": worker.x, "y": worker.y, "confidence": confidence, "raw_x": raw_x, "raw_y": raw_y, "changed": position_changed}, "worker": worker_to_dict(worker), "event": zone_event, "evacuation_route": route}
     result["observation"] = {"measurement_id": payload.measurement_id,
                              "server_received_at": received_at, "log_saved": log_saved,
                              "accepted": True, "distance_processing": processing,
                              "position_check": check, "position_accepted": check["accepted"], "pipeline": pipeline}
+    result['_zone_events'] = zone_events
     result['_broadcast_location'] = bool(position_changed or zone_event)
     return result
 

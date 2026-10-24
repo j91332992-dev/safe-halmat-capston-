@@ -178,17 +178,13 @@ static void http_telemetry_task(void *) {
     String endpoint = HANMIR_SERVER_URL;
     endpoint += endpoint.indexOf('?') >= 0 ? "&compact_ack=true" : "?compact_ack=true";
     CycleSnapshot snapshot;
-    uint32_t last_wifi_attempt = millis();
     for (;;) {
+        hanmir_wifi_maintain();
         portENTER_CRITICAL(&telemetry_mux);
         bool available = http_queue.pop_latest(snapshot, delivery_stats.superseded);
         portEXIT_CRITICAL(&telemetry_mux);
         if (!available) { vTaskDelay(pdMS_TO_TICKS(2)); continue; }
         if (WiFi.status() != WL_CONNECTED) {
-            if (millis() - last_wifi_attempt >= WIFI_RETRY_INTERVAL_MS) {
-                WiFi.disconnect(); WiFi.begin(HANMIR_WIFI_SSID, HANMIR_WIFI_PASSWORD);
-                last_wifi_attempt = millis();
-            }
             portENTER_CRITICAL(&telemetry_mux);
             ++delivery_stats.offline;
             portEXIT_CRITICAL(&telemetry_mux);

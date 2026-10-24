@@ -1,6 +1,7 @@
 import asyncio
 from collections import deque
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from contextlib import suppress
 from dataclasses import dataclass, field
 import ctypes
@@ -14,6 +15,7 @@ import struct
 from pathlib import Path
 from threading import Lock
 import time
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
@@ -32,7 +34,10 @@ from ..services.risk_service import recalculate_risk
 from ..services.serializers import worker_to_dict
 from ..services.yolo_service import analyze_frame
 from ..services.camera_trace import record_analysis
+from ..services.loop_watchdog import loop_watchdog
 from ..services.detail_merge import merge_detail
+from ..services.ppe_observation import ppe_tracker
+from ..services.ppe_events import persist_ppe_notifications, close_previous_ppe_observations
 from ..services.frame_pacing import next_deadline, inference_interval
 from ..services.inference_priority import voice_requests_active
 from ..websocket import manager
@@ -40,6 +45,9 @@ from .auth import session_identity
 
 router = APIRouter(prefix="/api/camera", tags=["camera"])
 logger = logging.getLogger(__name__)
+_ppe_expiry_task = None
+_ppe_publish_lock = asyncio.Lock()
+_ppe_decision_ms = 0.0
 
 
 @dataclass(frozen=True)
@@ -50,6 +58,7 @@ class CameraJob:
     helmet_id: str
     frame_id: int | None = None
     queued_at: float = field(default_factory=time.monotonic)
+    jpeg: bytes | None = None
 
 
 class MockDetectionIn(BaseModel):
@@ -67,6 +76,7 @@ _camera_queue: asyncio.Queue[CameraJob] | None = None
 _camera_worker_task: asyncio.Task | None = None
 _loop_probe_task: asyncio.Task | None = None
 _loop_lag_ms = deque(maxlen=200)
+_event_loop_kind = "not_started"
 _inference_executor: ProcessPoolExecutor | None = None
 _detail_executor: ProcessPoolExecutor | None = None
 _detail_task: asyncio.Task | None = None
@@ -75,6 +85,10 @@ _detail_image_cache: dict[str, tuple[bytes, dict]] = {}
 _detail_last_submitted: dict[str, float] = {}
 _detail_completed = 0
 _detail_last_ms = 0.0
+_detail_pool_restarts = 0
+_detail_pool_errors = 0
+_detail_retry_after = 0.0
+_detail_last_error: str | None = None
 _dropped_stale_frames = 0
 _latest_analysis_cache: dict[str, tuple[bytes, dict]] = {}
 _latest_analysis_lock = Lock()
@@ -82,6 +96,8 @@ _last_checkpoint_at: dict[str, float] = {}
 _last_alert_at: dict[str, float] = {}
 _last_alert_signature: dict[str, tuple] = {}
 _last_device_seen_commit: dict[str, float] = {}
+_device_touch_tasks: dict[str, asyncio.Task] = {}
+_device_touch_errors = 0
 _checkpoint_interval_seconds = 1.0
 _alert_refresh_seconds = 5.0
 _last_inference_ms = 0.0
@@ -134,16 +150,19 @@ def enqueue_camera_job(job: CameraJob) -> bool:
             _dropped_stale_frames += 1
             dropped = True
             with suppress(OSError):
-                (CAPTURE_DIR / stale.filename).unlink(missing_ok=True)
+                if stale.jpeg is None:
+                    (CAPTURE_DIR / stale.filename).unlink(missing_ok=True)
     _camera_queue.put_nowait(job)
     return dropped
 
 
 async def start_camera_processor() -> None:
+    global _ppe_expiry_task
     global _camera_queue, _camera_worker_task, _inference_executor, _detail_executor, _loop_probe_task
     import cv2
     cv2.setNumThreads(1)
     if _camera_worker_task is None or _camera_worker_task.done():
+        await asyncio.to_thread(close_previous_ppe_observations)
         _camera_queue = asyncio.Queue(maxsize=1)
         _inference_executor = ProcessPoolExecutor(
             max_workers=1,
@@ -152,6 +171,7 @@ async def start_camera_processor() -> None:
         )
         _camera_worker_task = asyncio.create_task(_camera_worker(), name="camera-yolo-worker")
         _loop_probe_task = asyncio.create_task(_probe_loop_lag(), name="camera-loop-probe")
+        _ppe_expiry_task = asyncio.create_task(_expire_ppe_tracks(), name="ppe-track-expiry")
         if settings.yolo_async_detail:
             _detail_executor = ProcessPoolExecutor(max_workers=1,
                 mp_context=multiprocessing.get_context("spawn"),
@@ -159,13 +179,27 @@ async def start_camera_processor() -> None:
 
 
 async def _probe_loop_lag():
-    while True:
-        started=time.monotonic()
-        await asyncio.sleep(.05)
-        _loop_lag_ms.append(max(0.,(time.monotonic()-started-.05)*1000))
+    global _event_loop_kind
+    _event_loop_kind = type(asyncio.get_running_loop()).__name__
+    if settings.yolo_trace_enabled:
+        loop_watchdog.start()
+    try:
+        while True:
+            started=time.monotonic()
+            loop_watchdog.pulse()
+            await asyncio.sleep(.05)
+            _loop_lag_ms.append(max(0.,(time.monotonic()-started-.05)*1000))
+    finally:
+        loop_watchdog.stop()
 
 
 async def stop_camera_processor() -> None:
+    global _ppe_expiry_task
+    if _ppe_expiry_task:
+        _ppe_expiry_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await _ppe_expiry_task
+        _ppe_expiry_task = None
     global _camera_queue, _camera_worker_task, _inference_executor, _detail_executor, _detail_task, _loop_probe_task
     if _camera_worker_task is None:
         return
@@ -245,29 +279,83 @@ def _merge_detection(worker: WorkerState, analysis: dict) -> None:
 
 
 async def _run_detail(job: CameraJob, filename: str, submitted_at: float) -> None:
-    global _detail_completed, _detail_last_ms
+    global _detail_completed, _detail_last_ms, _ppe_decision_ms
+    global _detail_executor, _detail_pool_restarts, _detail_pool_errors, _detail_retry_after, _detail_last_error
     try:
         started=time.perf_counter()
-        analysis=await asyncio.get_running_loop().run_in_executor(_detail_executor, analyze_frame, filename, True)
+        analysis=await asyncio.get_running_loop().run_in_executor(_detail_executor, analyze_frame, filename, True, job.jpeg)
         _detail_last_ms=(time.perf_counter()-started)*1000
+        notes = []
+        decision_started = time.perf_counter()
+        if analysis.get('mode') == 'real' and time.monotonic()-submitted_at <= settings.yolo_detail_max_age_seconds:
+            people, notes = ppe_tracker.update(job.device_id, analysis.get('ppe_observations', []), submitted_at)
+            analysis['ppe_people'] = people
+        else:
+            analysis['ppe_people'] = []
+        _ppe_decision_ms = (time.perf_counter()-decision_started)*1000
+        analysis['ppe_decision_ms'] = round(_ppe_decision_ms, 3)
+        analysis['ppe'] = {item: None for item in ('helmet', 'vest', 'glove')}
+        analysis['ppe_judgement'] = dict(active=bool(analysis['ppe_people']), status='per_person',
+            subject_scope='observed_person', window_seconds=2, valid_samples_required=6,
+            min_span_seconds=1.5, missing_ratio_required=.8)
         detail_jpeg = analysis.pop('_annotated_jpeg',None)
         if detail_jpeg:
             with _latest_analysis_lock:
                 _detail_image_cache[job.device_id] = (detail_jpeg, dict(frame_id=job.frame_id,
                     analyzed_at=utcnow().isoformat()+'Z', analysis=analysis))
         _detail_completed+=1
+        _detail_last_error = None
         if analysis.get('mode')=='real':
             _detail_cache[job.device_id]=dict(analysis=analysis,frame_id=job.frame_id,submitted_at=submitted_at)
         if settings.yolo_trace_enabled:
             record_analysis(lane='detail',device_id=job.device_id,frame_id=job.frame_id,
                             inference_ms=round(_detail_last_ms,2),analysis=analysis)
+        await _publish_ppe(notes, detail_jpeg)
     except asyncio.CancelledError:
         raise
+    except BrokenProcessPool:
+        _detail_pool_errors += 1
+        _detail_last_error = 'BrokenProcessPool'
+        # Do not keep submitting to a permanently broken pool or present stale PPE.
+        # Delay the next attempt to bound repeated failures and log volume.
+        _detail_retry_after = time.monotonic() + 5.0
+        _detail_cache.pop(job.device_id, None)
+        with _latest_analysis_lock:
+            _detail_image_cache.pop(job.device_id, None)
+        if _detail_executor is not None:
+            _detail_executor.shutdown(wait=False, cancel_futures=True)
+        _detail_executor = ProcessPoolExecutor(max_workers=1,
+            mp_context=multiprocessing.get_context('spawn'),
+            initializer=_initialize_inference_worker, initargs=(2, 'detail'))
+        _detail_pool_restarts += 1
+        logger.exception('PPE process exited; pool recreated, retry in 5 seconds')
+        record_analysis(lane='detail_pool_recovery', device_id=job.device_id,
+                        errors=_detail_pool_errors, restarts=_detail_pool_restarts)
     except Exception:
         logger.exception('Separate PPE analysis failed')
     finally:
-        with suppress(OSError):
-            (CAPTURE_DIR/filename).unlink(missing_ok=True)
+        if job.jpeg is None:
+            with suppress(OSError):
+                (CAPTURE_DIR/filename).unlink(missing_ok=True)
+
+
+async def _publish_ppe(notes, jpeg=None):
+    if not notes:
+        return
+    async with _ppe_publish_lock:
+        events = await asyncio.to_thread(persist_ppe_notifications, notes, jpeg)
+        for event in events:
+            record_analysis(lane='ppe_admin_event', event=event)
+            await manager.broadcast('ppe_observation', event, site_id=event['site_id'])
+
+
+async def _expire_ppe_tracks():
+    while True:
+        await asyncio.sleep(1)
+        try:
+            await _publish_ppe(ppe_tracker.expire(time.monotonic()))
+        except Exception:
+            logger.exception('PPE observation expiry failed')
 
 
 async def _process_camera_job(job: CameraJob) -> None:
@@ -280,17 +368,18 @@ async def _process_camera_job(job: CameraJob) -> None:
     # opt-in voice policy and keeps at most one job in flight.
     detail_enabled = voice_requests_active() == 0 and not settings.yolo_async_detail
     if (settings.yolo_async_detail and _detail_executor is not None and (voice_requests_active()==0 or settings.yolo_detail_during_voice)
+            and time.monotonic() >= _detail_retry_after
             and (_detail_task is None or _detail_task.done())
             and time.monotonic()-_detail_last_submitted.get(job.device_id,0)>=settings.yolo_ppe_detail_interval_seconds):
         # One in-flight detail frame globally; never accumulate old detail jobs.
         detail_name=f'_detail/{Path(job.filename).name}'
-        (CAPTURE_DIR/'_detail').mkdir(exist_ok=True)
-        shutil.copyfile(CAPTURE_DIR/job.filename,CAPTURE_DIR/detail_name)
+        if job.jpeg is None:
+            await asyncio.to_thread(_copy_detail_frame, job.filename, detail_name)
         submitted=time.monotonic()
         _detail_last_submitted[job.device_id]=submitted
         _detail_task=asyncio.create_task(_run_detail(job,detail_name,submitted))
     analysis = await asyncio.get_running_loop().run_in_executor(
-        _inference_executor, analyze_frame, job.filename, detail_enabled
+        _inference_executor, analyze_frame, job.filename, detail_enabled, job.jpeg
     )
     _last_inference_ms = (time.perf_counter() - inference_started) * 1000.0
     _analysis_completed += 1
@@ -305,6 +394,8 @@ async def _process_camera_job(job: CameraJob) -> None:
                         received_frames=_received_frames, analysis_completed=_analysis_completed,
                         analysis=analysis)
     raw_path = CAPTURE_DIR / job.filename
+    if not annotated_jpeg and job.jpeg is not None:
+        annotated_jpeg = job.jpeg
     if not annotated_jpeg:
         with suppress(OSError):
             annotated_jpeg = raw_path.read_bytes()
@@ -324,7 +415,9 @@ async def _process_camera_job(job: CameraJob) -> None:
 
     hazards = analysis.get("hazards") or {}
     ppe = analysis.get("ppe") or {}
-    missing = tuple(sorted(name for name, worn in ppe.items() if worn is False))
+    # PPE has separate per-person administrator events; camera hazard events
+    # and helmet evacuation guidance must never be triggered by missing PPE.
+    missing = ()
     hazard_signature = tuple(
         bool(hazards.get(name)) for name in ("fire", "large_fire", "smoke", "fallen")
     )
@@ -341,8 +434,9 @@ async def _process_camera_job(job: CameraJob) -> None:
     # frames only checkpoint worker state once per second; this removes the
     # per-frame event/image/commit work from the YOLO critical path.
     if not checkpoint_due and not alert_due:
-        with suppress(OSError):
-            raw_path.unlink(missing_ok=True)
+        if job.jpeg is None:
+            with suppress(OSError):
+                raw_path.unlink(missing_ok=True)
         return
 
     result, guidance = await asyncio.to_thread(_persist_camera_analysis, job, analysis, raw_path, annotated_jpeg, cache_details, hazards, missing, hazard_signature, alert_signature, now, alert_due)
@@ -360,8 +454,9 @@ def _persist_camera_analysis(job, analysis, raw_path, annotated_jpeg, cache_deta
     with SessionLocal() as db:
         worker = db.get(WorkerState, job.worker_id)
         if worker is None:
-            with suppress(OSError):
-                raw_path.unlink(missing_ok=True)
+            if job.jpeg is None:
+                with suppress(OSError):
+                    raw_path.unlink(missing_ok=True)
             return None, None
         _merge_detection(worker, analysis)
         recalculate_risk(db, worker)
@@ -381,7 +476,9 @@ def _persist_camera_analysis(job, analysis, raw_path, annotated_jpeg, cache_deta
                 (CAPTURE_DIR / evidence_name).write_bytes(annotated_jpeg)
             else:
                 evidence_name = job.filename
-            if raw_path.exists():
+            if job.jpeg is not None:
+                (CAPTURE_DIR / raw_evidence_name).write_bytes(job.jpeg)
+            elif raw_path.exists():
                 raw_path.replace(CAPTURE_DIR / raw_evidence_name)
             else:
                 raw_evidence_name = job.filename
@@ -431,7 +528,7 @@ def _persist_camera_analysis(job, analysis, raw_path, annotated_jpeg, cache_deta
                             result["evacuation"]["incident"]["incident_id"], route)
 
     # Keep raw evidence only when an alert was actually persisted.
-    if not event:
+    if not event and job.jpeg is None:
         with suppress(OSError):
             raw_path.unlink(missing_ok=True)
     return result, guidance
@@ -462,8 +559,9 @@ async def _camera_worker() -> None:
                     newer = await asyncio.wait_for(queue.get(), timeout=remaining)
                 except asyncio.TimeoutError:
                     break
-                with suppress(OSError):
-                    (CAPTURE_DIR / job.filename).unlink(missing_ok=True)
+                if job.jpeg is None:
+                    with suppress(OSError):
+                        (CAPTURE_DIR / job.filename).unlink(missing_ok=True)
                 queue.task_done()
                 _paced_skipped_frames += 1
                 job = newer
@@ -554,9 +652,16 @@ async def upload_frame(
 
 
 def _store_received_frame(jpeg, device_id, frame_id):
-    path=save_frame_bytes(jpeg,device_id)
+    # Both inference lanes receive the original JPEG bytes. Only persist raw
+    # evidence when an alert needs it; ordinary frames never hit the disk.
+    path=CAPTURE_DIR / '_live' / f'{device_id}_{uuid4().hex}.jpg'
     remember_raw_frame(device_id,jpeg,frame_id)
     return path
+
+
+def _copy_detail_frame(filename, detail_name):
+    (CAPTURE_DIR/'_detail').mkdir(exist_ok=True)
+    shutil.copyfile(CAPTURE_DIR/filename,CAPTURE_DIR/detail_name)
 
 
 def _touch_camera_device(device_id):
@@ -565,6 +670,15 @@ def _touch_camera_device(device_id):
         if current is not None:
             mark_device_seen(current,'camera')
             db.commit()
+
+
+async def _touch_camera_background(device_id):
+    global _device_touch_errors
+    try:
+        await asyncio.to_thread(_touch_camera_device, device_id)
+    except Exception:
+        _device_touch_errors += 1
+        logger.exception('Camera presence checkpoint failed')
 
 
 @router.websocket("/stream/{device_id}")
@@ -611,14 +725,19 @@ async def stream_frames(websocket: WebSocket, device_id: str, worker_id: str, he
             _last_jpeg_bytes=len(jpeg)
             _received_jpeg_bytes+=len(jpeg)
             _received_payload_bytes+=len(packet)
-            path = await asyncio.to_thread(_store_received_frame, jpeg, device_id, frame_id)
+            path = _store_received_frame(jpeg, device_id, frame_id)
             relative_name = path.relative_to(CAPTURE_DIR).as_posix()
-            dropped = enqueue_camera_job(CameraJob(relative_name, device_id, worker_id, helmet_id, frame_id))
+            dropped = enqueue_camera_job(CameraJob(relative_name, device_id, worker_id, helmet_id, frame_id, jpeg=jpeg))
             global _received_frames
             _received_frames += 1
             accepted += 1
             if accepted == 1 or accepted % 8 == 0:
-                await asyncio.to_thread(_touch_camera_device, device_id)
+                touch = _device_touch_tasks.get(device_id)
+                now = time.monotonic()
+                if ((touch is None or touch.done())
+                        and now - _last_device_seen_commit.get(device_id, 0) >= 1):
+                    _last_device_seen_commit[device_id] = now
+                    _device_touch_tasks[device_id] = asyncio.create_task(_touch_camera_background(device_id))
                 await websocket.send_json({"type": "frame_ack", "frame_id": frame_id,
                                            "queue_depth": _camera_queue.qsize() if _camera_queue else 0,
                                            "dropped_stale": dropped})
@@ -629,13 +748,24 @@ async def stream_frames(websocket: WebSocket, device_id: str, worker_id: str, he
 @router.get("/processor/status")
 def processor_status():
     from ..services.audio_service import upload_stats
+    from ..services.camera_trace import trace_stats
+    from ..services.voice_trace import voice_trace_stats
+    from ..services.uwb_log_service import observation_log_stats
     lag=sorted(list(_loop_lag_ms))
     return {
+        "event_loop_kind": _event_loop_kind,
         "event_loop_lag_ms": {"samples":len(lag), "p50":round(lag[len(lag)//2],2) if lag else None,
             "p95":round(lag[min(len(lag)-1,int(len(lag)*.95))],2) if lag else None,
             "max":round(max(lag),2) if lag else None},
         "sampled_at_seconds": time.monotonic(),
         "audio_upload": upload_stats(),
+        "camera_trace": trace_stats(),
+        "voice_trace": voice_trace_stats(),
+        "uwb_log": observation_log_stats(),
+        "dashboard_delivery": dict(manager.stats),
+        "transient_frame_storage": "jpeg_memory_for_websocket",
+        "camera_presence_pending": sum(not task.done() for task in _device_touch_tasks.values()),
+        "camera_presence_errors": _device_touch_errors,
         "running": _camera_worker_task is not None and not _camera_worker_task.done(),
         "queue_depth": _camera_queue.qsize() if _camera_queue is not None else 0,
         "queue_capacity": _camera_queue.maxsize if _camera_queue is not None else 1,
@@ -654,8 +784,16 @@ def processor_status():
         "last_postprocess_ms": round(_last_postprocess_ms,1),
         "last_queue_age_ms": round(_last_queue_age_ms,1),
         "detail_completed": _detail_completed,
+        "ppe_decision_ms": round(_ppe_decision_ms, 3),
+        "ppe_active_tracks": len(ppe_tracker.tracks),
+        "ppe_policy": {"window_seconds": 2, "min_samples": 6, "min_span_seconds": 1.5,
+                       "missing_ratio": .8, "remind_once_after_seconds": 15,
+                       "audience": "administrator", "helmet_audio": False},
         "detail_last_ms": round(_detail_last_ms,1),
         "detail_busy": _detail_task is not None and not _detail_task.done(),
+        "detail_pool_restarts": _detail_pool_restarts,
+        "detail_pool_errors": _detail_pool_errors,
+        "detail_last_error": _detail_last_error,
         "detail_separated": settings.yolo_async_detail,
         "brightness_gamma": settings.camera_display_gamma,
         "preview_gamma": settings.camera_preview_gamma or settings.camera_display_gamma,
@@ -699,7 +837,7 @@ async def raw_live_stream(device_id: str, request: Request, token: str = ""):
     async def frames():
         previous = None
         while not await request.is_disconnected():
-            raw = latest_preview_frame(device_id)
+            raw = await asyncio.to_thread(latest_preview_frame, device_id)
             if raw is not None:
                 jpeg, metadata = raw
                 token = metadata["received_monotonic"]

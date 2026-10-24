@@ -19,6 +19,7 @@ Board: esp32 2.0.16
 #define HANMIR_WIFI_PASSWORD ""
 #define HANMIR_SERVER_URL ""
 #endif
+#include "wifi_profiles.h"
 
 #ifndef TAG_ID
 #define TAG_ID              0
@@ -145,9 +146,7 @@ static void begin_wifi()
         return;
     }
 
-    WiFi.mode(WIFI_STA);
-    WiFi.setSleep(false);
-    WiFi.begin(HANMIR_WIFI_SSID, HANMIR_WIFI_PASSWORD);
+    hanmir_wifi_begin();
     last_wifi_attempt_ms = millis();
     Serial.print("[WIFI] connecting to ");
     Serial.println(HANMIR_WIFI_SSID);

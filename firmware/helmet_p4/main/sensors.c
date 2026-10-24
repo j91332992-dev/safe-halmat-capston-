@@ -11,6 +11,7 @@
 #include "bno_sh2/sh2.h"
 #include "bno_sh2/sh2_err.h"
 #include "bno_sh2/sh2_SensorValue.h"
+#include "imu_monitor.h"
 
 static const char *TAG = "hanmir_sensors";
 static i2c_master_dev_handle_t fuel_gauge;
@@ -18,7 +19,26 @@ static sh2_Hal_t imu_hal;
 static portMUX_TYPE imu_mux = portMUX_INITIALIZER_UNLOCKED;
 static float imu_yaw, imu_pitch, imu_roll;
 static int64_t imu_report_us;
+static int cal_before=-1, cal_after=-1, cal_get_rc=-999, cal_set_rc=-999;
+static unsigned cal_attempts;
+static float rotation_accuracy_rad;
+
+void hanmir_imu_calibration_status(cJSON *object)
+{
+    portENTER_CRITICAL(&imu_mux);
+    int before=cal_before,after=cal_after,get_rc=cal_get_rc,set_rc=cal_set_rc;
+    unsigned attempts=cal_attempts; float accuracy=rotation_accuracy_rad;
+    portEXIT_CRITICAL(&imu_mux);
+    cJSON *cal=cJSON_AddObjectToObject(object,"sensor_calibration");
+    cJSON_AddNumberToObject(cal,"before_mask",before);
+    cJSON_AddNumberToObject(cal,"after_mask",after);
+    cJSON_AddNumberToObject(cal,"get_rc",get_rc);
+    cJSON_AddNumberToObject(cal,"set_rc",set_rc);
+    cJSON_AddNumberToObject(cal,"attempts",attempts);
+    cJSON_AddNumberToObject(cal,"rotation_accuracy_rad",accuracy);
+}
 static bool imu_reset_seen;
+static unsigned imu_enabled_reports;
 
 #define IMU_UART UART_NUM_1
 #define IMU_UART_BAUD 3000000
@@ -223,7 +243,12 @@ static void imu_event(void *cookie, sh2_AsyncEvent_t *event)
         portENTER_CRITICAL(&imu_mux);
         imu_reset_seen = true;
         imu_report_us = 0;
+        imu_enabled_reports = 0;
+        cal_before=cal_after=-1; cal_attempts=0;
         portEXIT_CRITICAL(&imu_mux);
+#ifdef CONFIG_HANMIR_IMU_FALL_SHADOW
+        hanmir_imu_monitor_reset();
+#endif
         ESP_LOGI(TAG, "BNO085 SH-2 reset complete");
     }
 }
@@ -232,7 +257,11 @@ static void imu_sensor_event(void *cookie, sh2_SensorEvent_t *event)
 {
     (void)cookie;
     sh2_SensorValue_t value;
-    if (sh2_decodeSensorEvent(&value, event) != SH2_OK || value.sensorId != SH2_ROTATION_VECTOR) return;
+    if (sh2_decodeSensorEvent(&value, event) != SH2_OK) return;
+#ifdef CONFIG_HANMIR_IMU_FALL_SHADOW
+    hanmir_imu_monitor_feed(&value);
+#endif
+    if (value.sensorId != SH2_ROTATION_VECTOR) return;
     const float x = value.un.rotationVector.i;
     const float y = value.un.rotationVector.j;
     const float z = value.un.rotationVector.k;
@@ -243,6 +272,7 @@ static void imu_sensor_event(void *cookie, sh2_SensorEvent_t *event)
     const float roll = atan2f(2.0f * (w * x + y * z), 1.0f - 2.0f * (x * x + y * y)) * 57.2957795f;
     portENTER_CRITICAL(&imu_mux);
     imu_yaw = yaw; imu_pitch = pitch; imu_roll = roll;
+    rotation_accuracy_rad=value.un.rotationVector.accuracy;
     imu_report_us = esp_timer_get_time();
     portEXIT_CRITICAL(&imu_mux);
     static int64_t last_log_us;
@@ -258,18 +288,50 @@ static void imu_task(void *arg)
     (void)arg;
     sh2_setSensorCallback(imu_sensor_event, NULL);
     ESP_LOGI(TAG, "BNO085 SH-2 service task started");
-    bool report_enabled = false;
+    unsigned next_report = 0;
+    static const uint8_t report_ids[] = {SH2_ROTATION_VECTOR,
+#ifdef CONFIG_HANMIR_IMU_FALL_SHADOW
+        SH2_ACCELEROMETER, SH2_GYROSCOPE_CALIBRATED, SH2_GAME_ROTATION_VECTOR,
+#endif
+    };
+    const unsigned report_count = sizeof(report_ids)/sizeof(report_ids[0]);
     int64_t last_config_attempt_us = 0;
     int64_t last_state_log_us = 0;
+    int64_t last_cal_attempt_us = 0;
     int64_t last_reset_retry_us = esp_timer_get_time();
     unsigned reset_retries = 0;
     for (;;) {
         sh2_service();
         int64_t now_us = esp_timer_get_time();
+#ifdef CONFIG_HANMIR_IMU_FALL_SHADOW
+        // SH-2 operations are serialized in this sensor task, never a network callback.
+        // Preserve existing calibration flags; enable only the missing gyro bit.
+        if (imu_enabled_reports==((1U<<report_count)-1) && cal_attempts<3 &&
+            cal_after<0 && now_us-last_cal_attempt_us>2000000) {
+            last_cal_attempt_us=now_us;
+            uint8_t before=0, after=0;
+            int get_rc=sh2_getCalConfig(&before),set_rc=-999;
+            if (get_rc==SH2_OK) {
+                if (!(before & SH2_CAL_GYRO)) set_rc=sh2_setCalConfig(before|SH2_CAL_GYRO);
+                else set_rc=SH2_OK;
+                get_rc=sh2_getCalConfig(&after);
+            }
+            portENTER_CRITICAL(&imu_mux);
+            cal_attempts++; cal_get_rc=get_rc; cal_set_rc=set_rc;
+            if (cal_before<0 && set_rc!=-999) cal_before=before;
+            if (get_rc==SH2_OK && set_rc==SH2_OK && (after&SH2_CAL_GYRO)) cal_after=after;
+            portEXIT_CRITICAL(&imu_mux);
+            ESP_LOGI(TAG,"BNO calibration before=%d after=%d get_rc=%d set_rc=%d attempts=%u",
+                cal_before,cal_after,get_rc,set_rc,cal_attempts);
+        }
+#endif
         if (now_us - last_state_log_us >= 2000000) {
             last_state_log_us = now_us;
-            ESP_LOGI(TAG, "BNO085 SH-2 state reset_seen=%d report_enabled=%d",
-                     imu_reset_seen, report_enabled);
+            ESP_LOGI(TAG, "BNO085 SH-2 state reset_seen=%d enabled_report_mask=%u",
+                     imu_reset_seen, imu_enabled_reports);
+#ifdef CONFIG_HANMIR_IMU_FALL_SHADOW
+            hanmir_imu_monitor_stack((uint32_t)uxTaskGetStackHighWaterMark(NULL));
+#endif
         }
         // Some breakouts power the BNO085 more slowly than the P4. Retry the
         // standard software reset a few times while the SH-2 reset event is
@@ -282,16 +344,20 @@ static void imu_task(void *arg)
             ESP_LOGW(TAG, "BNO085 SH-2 reset retry %u/3 sent=%d bytes",
                      reset_retries, written);
         }
-        if (imu_reset_seen && !report_enabled && now_us - last_config_attempt_us >= 1000000) {
+        if (imu_reset_seen && imu_enabled_reports != ((1U<<report_count)-1) &&
+            now_us - last_config_attempt_us >= 250000) {
             last_config_attempt_us = now_us;
+            unsigned index = next_report++ % report_count;
+            if (imu_enabled_reports & (1U<<index)) {vTaskDelay(pdMS_TO_TICKS(2));continue;}
             sh2_SensorConfig_t config = {0};
-            config.reportInterval_us = IMU_REPORT_INTERVAL_US;
-            int result = sh2_setSensorConfig(SH2_ROTATION_VECTOR, &config);
+            config.reportInterval_us = (index==0 || index==3) ? IMU_REPORT_INTERVAL_US : 20000;
+            int result = sh2_setSensorConfig(report_ids[index], &config);
             if (result == SH2_OK) {
-                report_enabled = true;
-                ESP_LOGI(TAG, "BNO085 rotation-vector report enabled at 10 Hz");
+                imu_enabled_reports |= 1U<<index;
+                ESP_LOGI(TAG, "BNO085 report id=%u interval_us=%lu enabled",report_ids[index],
+                    (unsigned long)config.reportInterval_us);
             } else {
-                ESP_LOGW(TAG, "BNO085 rotation-vector setup pending rc=%d", result);
+                ESP_LOGW(TAG, "BNO085 report id=%u setup pending rc=%d",report_ids[index], result);
             }
         }
         vTaskDelay(pdMS_TO_TICKS(2));
@@ -300,6 +366,9 @@ static void imu_task(void *arg)
 
 void hanmir_sensors_init(void)
 {
+#ifdef CONFIG_HANMIR_IMU_FALL_SHADOW
+    hanmir_imu_monitor_reset();
+#endif
     if (CONFIG_HANMIR_BAT_SDA_GPIO >= 0 && CONFIG_HANMIR_BAT_SCL_GPIO >= 0) {
         i2c_master_bus_config_t bus_config = {
             .i2c_port = I2C_NUM_1,

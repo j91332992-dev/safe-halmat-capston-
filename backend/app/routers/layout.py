@@ -106,6 +106,15 @@ def apply_draft(site_id: str = Depends(require_site), db: Session = Depends(get_
     if not draft:
         raise HTTPException(404, "저장된 설계안이 없습니다.")
     payload = LayoutDraftIn.model_validate(json.loads(draft.draft_json))
+    from ..services.anchor_survey_service import object_issues, fire_active
+    issues = object_issues(payload.model_dump())
+    if issues:
+        raise HTTPException(409,'지도 적용 전 확인 필요: '+' / '.join(issues))
+    if fire_active(db,site_id):
+        raise HTTPException(409,'화재 대응 중에는 지도를 변경할 수 없습니다.')
+    previous = applied_design(db,site_id)
+    db.add(LayoutVersion(version_id='layout-'+uuid4().hex,site_id=site_id,
+                        name='현장 적용 전 자동 백업',design_json=json.dumps(previous,ensure_ascii=False)))
     layout = current_layout(db, site_id)
     layout.name = payload.site.name
     layout.width = payload.site.width
@@ -161,6 +170,13 @@ def apply_draft(site_id: str = Depends(require_site), db: Session = Depends(get_
         row.max_stay_seconds = item.max_stay_seconds
         row.active = item.active
 
+    from ..models.entities import EvacuationNavigationPolicy, WorkerState
+    from ..services.location_filter_service import reset_location_filter
+    for worker in db.query(WorkerState).filter(WorkerState.site_id==site_id):
+        reset_location_filter(worker.worker_id)
+    policy=db.get(EvacuationNavigationPolicy,site_id)
+    if policy:
+        policy.enabled=False
     db.commit()
     return {"applied": True, "design": applied_design(db, site_id)}
 

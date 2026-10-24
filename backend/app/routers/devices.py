@@ -1,11 +1,12 @@
 import json
 import math
+import asyncio
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
-from ..database import get_db, utcnow
+from ..database import get_db, utcnow, SessionLocal
 from ..models.entities import Anchor, Device, WorkerState
 from ..schemas.api import ComponentResultIn, DeviceCommandIn, DeviceRegister, Heartbeat, HeadingCalibrationIn
 from ..services.command_service import queue_command
@@ -63,12 +64,20 @@ async def register(payload: DeviceRegister, db: Session = Depends(get_db)):
 
 
 @router.post("/heartbeat")
-async def heartbeat(payload: Heartbeat, db: Session = Depends(get_db)):
-    device = update_heartbeat(db, payload)
-    db.commit()
-    result = device_to_dict(device)
+async def heartbeat(payload: Heartbeat, response: Response):
+    result = await asyncio.to_thread(_heartbeat_transaction, payload)
+    from ..config import settings
+    if settings.audio_lossless_transport_enabled:
+        response.headers['X-Hanmir-Audio-Transport'] = 'wav-zlib-v1'
     await manager.broadcast("heartbeat", result)
     return {"ok": True, "server_mode": __import__("app.config", fromlist=["settings"]).settings.operation_mode, "device": result}
+
+
+def _heartbeat_transaction(payload):
+    with SessionLocal() as db:
+        device = update_heartbeat(db, payload)
+        db.commit()
+        return device_to_dict(device)
 
 
 @router.post("/{device_id}/component-result")
@@ -84,6 +93,11 @@ async def component_result(device_id: str, payload: ComponentResultIn, db: Sessi
     db.commit()
     result = device_to_dict(device)
     await manager.broadcast("component_result", result)
+    if payload.component == 'speaker':
+        from ..services.fall_confirmation import speaker_result
+        speaker_result(device_id,payload.command_id,payload.status=='ok')
+        from ..services import zone_warning_service
+        zone_warning_service.speaker_result(device_id,payload.command_id,payload.status=='ok')
     return {"ok": payload.status == "ok", "device": result}
 
 

@@ -101,6 +101,8 @@ function App() {
     item.event_type === "MISSED_CALL" && item.status !== "resolved"
   ) ?? [];
   const latestMissedCall = missedCallEvents[0] ?? null;
+  const fallAlert = data?.events.find(item => item.event_type === 'FALL_CONFIRMATION' &&
+    item.severity === 'emergency' && item.status !== 'resolved') ?? null;
   const callRequestWorker = data?.workers.find(item => item.worker_id === callRequestEvent?.worker_id) ?? null;
   const activeCallWorker = callRequestWorker ?? emergencyWorker ?? worker ?? null;
   const callDevice = data?.devices.find(device =>
@@ -359,6 +361,15 @@ function App() {
               <span>안전모의 관리자 연결 요청에 30초 동안 응답하지 못했습니다.</span>
             </div>
             <button disabled={busy} onClick={() => void action(() => api.resolve(latestMissedCall.event_id))}>확인</button>
+          </div>
+        )}
+
+        {fallAlert && (
+          <div className="missed-call-banner" role="alert" aria-live="assertive">
+            <div><b>낙상 의심 · 작업자 확인 필요</b><span>{fallAlert.message}</span></div>
+            <button disabled={busy} onClick={() => {setSelectedId(fallAlert.worker_id ?? selectedId); navigate('/map');}}>지도 확인</button>
+            <button disabled={busy} onClick={() => void action(() => api.acknowledge(fallAlert.event_id))}>알림 확인</button>
+            <button disabled={busy} onClick={() => void action(() => api.resolve(fallAlert.event_id))}>상황 종료</button>
           </div>
         )}
 

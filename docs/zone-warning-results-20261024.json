@@ -1,0 +1,75 @@
+{
+  "baseline": "C:\\dev\\hanmir-runtime\\call-quality-20261024\\20261024-214522\\samples.jsonl",
+  "latest": "C:\\dev\\hanmir-runtime\\zone-warning-20261024\\20261024-215558\\samples.jsonl",
+  "before": {
+    "seconds": 18.48,
+    "samples": 10,
+    "camera_rx_fps": 13.471,
+    "yolo_fps": 10.387,
+    "detail_fps": 3.517,
+    "jpeg_bytes_s": 739372.971,
+    "heap_min_observed": 235239,
+    "heap_free_last": 238019,
+    "heap_low_water_last": 165924,
+    "psram_free_last": 30745524
+  },
+  "after": {
+    "seconds": 74.09,
+    "samples": 37,
+    "camera_rx_fps": 11.85,
+    "yolo_fps": 10.203,
+    "detail_fps": 3.55,
+    "jpeg_bytes_s": 630400.41,
+    "heap_min_observed": 229295,
+    "heap_free_last": 234547,
+    "heap_low_water_last": 167516,
+    "psram_free_last": 30223280,
+    "uwb_age_median_s": 0.063,
+    "uwb_age_max_s": 2.186
+  },
+  "during_call": {
+    "seconds": 32.7,
+    "samples": 37,
+    "camera_rx_fps": 11.192,
+    "yolo_fps": 9.969,
+    "detail_fps": 3.608,
+    "jpeg_bytes_s": 595642.296,
+    "heap_min_observed": 229295,
+    "heap_free_last": 234547,
+    "heap_low_water_last": 167516,
+    "psram_free_last": 30223280,
+    "uwb_age_median_s": 0.063,
+    "uwb_age_max_s": 2.186
+  },
+  "after_call": {
+    "seconds": 39.34,
+    "samples": 37,
+    "camera_rx_fps": 12.302,
+    "yolo_fps": 10.294,
+    "detail_fps": 3.482,
+    "jpeg_bytes_s": 654274.349,
+    "heap_min_observed": 229295,
+    "heap_free_last": 234547,
+    "heap_low_water_last": 167516,
+    "psram_free_last": 30223280,
+    "uwb_age_median_s": 0.063,
+    "uwb_age_max_s": 2.186
+  },
+  "last_zone": {
+    "interval_seconds": 30,
+    "pending": [
+      {
+        "worker_id": "worker-001",
+        "zone_id": "zone-hot-work",
+        "attempts": 1
+      }
+    ],
+    "counters": {
+      "web_events": 3,
+      "call_deferred": 2,
+      "left_or_stale_or_allowed": 1,
+      "attempts": 2,
+      "played": 1
+    }
+  }
+}

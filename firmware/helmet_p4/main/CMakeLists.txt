@@ -6,6 +6,7 @@ if(CONFIG_HANMIR_LOCAL_WAKE_SHADOW)
 endif()
 idf_component_register(
     SRCS "app_main.c" "network.c" "api_client.c" "camera_transport.c" "camera_source.c" "voice.c" "local_wake.cc" "sensors.c" "speaker.c" "command_client.c" "call_client.c" "pin_guard.c"
+         "fall_detector.c" "imu_monitor.c" "imu_transport.c"
          "bno_sh2/sh2.c" "bno_sh2/shtp.c" "bno_sh2/sh2_util.c" "bno_sh2/sh2_SensorValue.c"
     EMBED_FILES "assets/wake_ack.pcm" ${wake_assets}
     INCLUDE_DIRS "." "bno_sh2"

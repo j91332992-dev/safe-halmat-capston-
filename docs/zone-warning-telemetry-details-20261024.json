@@ -1,0 +1,113 @@
+{
+  "uwb_cycles": 644,
+  "future_frame_rejected": 0,
+  "origin_rebases": 0,
+  "accepted_frames": 644,
+  "zone_processing_ms_max": 219.73,
+  "zone_logs": [
+    {
+      "stage": "zone_warning_web",
+      "trace_id": "2084b859-0734-4602-b0ea-05da8b08bed5",
+      "at": "2026-10-24T12:55:49.258070+00:00",
+      "site_id": "site-001",
+      "worker_id": "worker-001",
+      "event_type": "DANGER_ZONE_ENTERED",
+      "logged_at_unix": 1792846549.2580705
+    },
+    {
+      "stage": "zone_warning_deferred",
+      "trace_id": "2084b859-0734-4602-b0ea-05da8b08bed5",
+      "at": "2026-10-24T12:55:49.266072+00:00",
+      "device_id": "helmet-001-av",
+      "logged_at_unix": 1792846549.2730706
+    },
+    {
+      "stage": "zone_warning_result",
+      "trace_id": "2084b859-0734-4602-b0ea-05da8b08bed5",
+      "at": "2026-10-24T12:56:13.315061+00:00",
+      "outcome": "left_or_stale_or_allowed",
+      "attempts": 0,
+      "elapsed_ms": 24056.2,
+      "logged_at_unix": 1792846573.315061
+    },
+    {
+      "stage": "zone_warning_web",
+      "trace_id": "76de5ef0-f8d5-410e-b166-55038fdac725",
+      "at": "2026-10-24T12:56:19.259339+00:00",
+      "site_id": "site-001",
+      "worker_id": "worker-001",
+      "event_type": "DANGER_ZONE_REMINDER",
+      "logged_at_unix": 1792846579.2603416
+    },
+    {
+      "stage": "zone_warning_deferred",
+      "trace_id": "76de5ef0-f8d5-410e-b166-55038fdac725",
+      "at": "2026-10-24T12:56:19.273848+00:00",
+      "device_id": "helmet-001-av",
+      "logged_at_unix": 1792846579.2758486
+    },
+    {
+      "stage": "zone_warning_attempt",
+      "trace_id": "76de5ef0-f8d5-410e-b166-55038fdac725",
+      "at": "2026-10-24T12:56:33.319160+00:00",
+      "device_id": "helmet-001-av",
+      "attempt": 1,
+      "delivered": 1,
+      "logged_at_unix": 1792846593.3231528
+    },
+    {
+      "stage": "zone_warning_result",
+      "trace_id": "76de5ef0-f8d5-410e-b166-55038fdac725",
+      "at": "2026-10-24T12:56:42.618189+00:00",
+      "outcome": "played",
+      "attempts": 1,
+      "elapsed_ms": 23358.0,
+      "logged_at_unix": 1792846602.6191852
+    },
+    {
+      "stage": "zone_warning_web",
+      "trace_id": "ee5305de-de0d-47a5-8f0c-0e3775dcb0ab",
+      "at": "2026-10-24T12:56:49.306365+00:00",
+      "site_id": "site-001",
+      "worker_id": "worker-001",
+      "event_type": "DANGER_ZONE_REMINDER",
+      "logged_at_unix": 1792846609.3068705
+    },
+    {
+      "stage": "zone_warning_attempt",
+      "trace_id": "ee5305de-de0d-47a5-8f0c-0e3775dcb0ab",
+      "at": "2026-10-24T12:57:03.906769+00:00",
+      "device_id": "helmet-001-av",
+      "attempt": 1,
+      "delivered": 1,
+      "logged_at_unix": 1792846623.90677
+    },
+    {
+      "stage": "zone_warning_result",
+      "trace_id": "ee5305de-de0d-47a5-8f0c-0e3775dcb0ab",
+      "at": "2026-10-24T12:57:14.442247+00:00",
+      "outcome": "played",
+      "attempts": 1,
+      "elapsed_ms": 25135.8,
+      "logged_at_unix": 1792846634.4432476
+    },
+    {
+      "stage": "zone_warning_web",
+      "trace_id": "69d6d8ff-eddd-4f1c-bf56-375c3b78b3a3",
+      "at": "2026-10-24T12:57:19.737108+00:00",
+      "site_id": "site-001",
+      "worker_id": "worker-001",
+      "event_type": "DANGER_ZONE_REMINDER",
+      "logged_at_unix": 1792846639.7371085
+    },
+    {
+      "stage": "zone_warning_result",
+      "trace_id": "69d6d8ff-eddd-4f1c-bf56-375c3b78b3a3",
+      "at": "2026-10-24T12:57:24.899440+00:00",
+      "outcome": "left_or_stale_or_allowed",
+      "attempts": 0,
+      "elapsed_ms": 5158.8,
+      "logged_at_unix": 1792846644.9200804
+    }
+  ]
+}

@@ -95,6 +95,7 @@ bool hanmir_speaker_tone(int frequency, int duration_ms)
     ESP_LOGI(TAG, "tone start frequency=%d duration_ms=%d samples=%d", frequency, duration_ms, total);
     bool ok = true;
     while (produced < total) {
+        if (hanmir_evacuation_audio_cancelled()) { ok = false; break; }
         int count = total - produced > 320 ? 320 : total - produced;
         for (int i = 0; i < count; ++i) {
             pcm[i] = (int16_t)(sin(2.0 * 3.141592653589793 * frequency * (produced + i) / 16000.0) * 9000.0);
@@ -142,6 +143,7 @@ bool hanmir_speaker_play_url(const char *path)
     }
     size_t used = 0;
     while (ok && used < capacity) {
+        if (hanmir_evacuation_audio_cancelled()) { ok = false; break; }
         int n = esp_http_client_read(client, (char *)wav + used, capacity-used > 4096 ? 4096 : capacity-used);
         if (n < 0) { ok = false; break; }
         if (n == 0) break;
@@ -167,7 +169,7 @@ bool hanmir_speaker_play_url(const char *path)
         }
         offset+=8+(size_t)length+(length&1);
     }
-    ok = ok && fmt_ok && pcm_bytes>0 && !(pcm_bytes&1);
+    ok = ok && !hanmir_evacuation_audio_cancelled() && fmt_ok && pcm_bytes>0 && !(pcm_bytes&1);
     ESP_LOGI(TAG, "tts preload ok=%d bytes=%u pcm=%u download_ms=%ld heap_free=%u psram_free=%u",
              ok,(unsigned)used,(unsigned)pcm_bytes,(long)(download_us/1000),
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
@@ -178,6 +180,7 @@ bool hanmir_speaker_play_url(const char *path)
         ok=begin_playback();
         if (ok) {
             for (size_t offset=0;offset<pcm_bytes;) {
+                if (hanmir_evacuation_audio_cancelled()) { ok=false;break; }
                 size_t bytes=pcm_bytes-offset>2048?2048:pcm_bytes-offset,written=0;
                 int64_t before=esp_timer_get_time();
                 esp_err_t err=i2s_channel_write(speaker,wav+pcm_offset+offset,bytes,&written,1000);
@@ -208,6 +211,7 @@ bool hanmir_speaker_ack(void)
     bool ok = true;
     ESP_LOGI(TAG, "local acknowledgement start bytes=%u", (unsigned)length);
     for (size_t offset = 0; offset < length; offset += 640) {
+        if (hanmir_evacuation_audio_cancelled()) { ok=false;break; }
         size_t count = length - offset > 640 ? 640 : length - offset;
         size_t written = 0;
         if (i2s_channel_write(speaker, wake_ack_start + offset, count, &written, 1000) != ESP_OK || written != count) {

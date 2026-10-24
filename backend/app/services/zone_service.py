@@ -19,7 +19,7 @@ def point_in_zone(x: float, y: float, zone) -> bool:
     for i in range(len(points)):
         xi, yi = points[i]["x"], points[i]["y"]
         xj, yj = points[j]["x"], points[j]["y"]
-        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / max(1e-9, yj - yi) + xi:
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
             inside = not inside
         j = i
     return inside

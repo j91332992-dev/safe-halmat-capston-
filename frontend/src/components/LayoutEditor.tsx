@@ -3,6 +3,8 @@ import type {PointerEvent as ReactPointerEvent} from "react";
 import {api} from "../services/api";
 import type {Anchor, LayoutDraft, LayoutVersion, Obstacle, Snapshot, Worker, Zone} from "../types";
 import {AnchorSymbol} from "./AnchorSymbol";
+import {AnchorSurveyPanel} from './AnchorSurveyPanel';
+import {layoutIssues} from '../services/layoutIssues';
 
 interface Props {
   site: Snapshot["site"];
@@ -63,6 +65,7 @@ function LayoutEditorComponent({site, anchors, obstacles, zones, workers, onSave
 
   const width = Math.max(0.5, Number(draftSite.width) || 0.5);
   const height = Math.max(0.5, Number(draftSite.height) || 0.5);
+  const issues = layoutIssues(draftSite, localAnchors, localObstacles, localZones);
 
   useEffect(() => {
     if (loaded.current) return;
@@ -317,6 +320,11 @@ function LayoutEditorComponent({site, anchors, obstacles, zones, workers, onSave
   };
 
   const applyDraft = async () => {
+    if (issues.length) {
+      setSelection({kind: issues[0].kind, id: issues[0].id});
+      setMessage('현장 적용 실패: 아래 경계 밖 항목을 수정한 뒤 다시 저장·적용하세요.');
+      return;
+    }
     if (dirty) {
       setMessage("변경 내용을 먼저 ‘설계 저장’한 뒤 적용하세요.");
       return;
@@ -423,7 +431,14 @@ function LayoutEditorComponent({site, anchors, obstacles, zones, workers, onSave
         <span className={dirty ? "dirty" : "saved"}>{dirty ? "● 저장되지 않은 변경 있음" : "✓ 설계안 저장됨"}</span>
         <small>{savedAt ? "마지막 저장 " + new Date(savedAt).toLocaleString("ko-KR") : "아직 저장된 설계안 없음"}</small>
         <b>현장 적용 전까지 실시간 UWB 지도는 변경되지 않습니다.</b>
+        <b>현재 현장: {site.width.toFixed(2)} × {site.height.toFixed(2)}m</b>
       </div>
+
+      <div className="editor-message" role="status" aria-live="polite">{busy ? '처리 중…' : message}</div>
+      {issues.length > 0 && <div className="layout-issues" role="alert">
+        <strong>현장 적용 전 수정 필요 · 항목을 누르면 편집할 수 있습니다.</strong>
+        {issues.map((issue, index) => <button key={`${issue.kind}-${issue.id}-${index}`} onClick={() => setSelection({kind: issue.kind, id: issue.id})}>{issue.message}</button>)}
+      </div>}
 
       {showVersions && (
         <div className="version-panel">
@@ -449,6 +464,12 @@ function LayoutEditorComponent({site, anchors, obstacles, zones, workers, onSave
         <label>가로 X (m)<input type="number" min=".5" step=".1" value={draftSite.width} onChange={event => {checkpoint(); setDraftSite({...draftSite, width: Number(event.target.value)}); setDirty(true);}} /></label>
         <label>세로 Y (m)<input type="number" min=".5" step=".1" value={draftSite.height} onChange={event => {checkpoint(); setDraftSite({...draftSite, height: Number(event.target.value)}); setDirty(true);}} /></label>
       </div>
+
+      <AnchorSurveyPanel dirty={dirty} onImported={(draft,issues)=>{
+        checkpoint();restore(draft);setDirty(false);setSavedAt(draft.saved_at??null);
+        setMessage(issues.length ? `측정값을 설계안에 넣었습니다. 현장 적용 전 수정 필요: ${issues.join(' / ')}`
+          : '측정값을 설계안에 넣었습니다. 출구·장애물을 확인한 뒤 현장에 적용하세요.');
+      }}/>
 
       <div className="editor-workspace">
         <div className="blueprint-wrap">

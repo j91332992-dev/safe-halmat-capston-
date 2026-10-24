@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
-from ..models.entities import EvacuationIncident, SiteLayout, WorkerState
+from ..models.entities import Device, EvacuationIncident, SiteLayout, WorkerState
 from ..schemas.api import FireCancelIn, FireTriggerIn, FireZoneIn
 from ..services.evacuation_service import (
     calculate_route,
@@ -16,7 +16,7 @@ from ..services.evacuation_service import (
     trigger_fire,
 )
 from ..services.event_service import create_event, event_to_dict
-from ..services.evacuation_guidance_service import assistant_device_id, clear_guidance, send_helmet_guidance
+from ..services.evacuation_guidance_service import assistant_device_id, clear_guidance, send_helmet_guidance, stop_incident_guidance
 from ..services.risk_service import recalculate_risk
 from ..websocket import manager
 from .auth import require_site
@@ -111,7 +111,6 @@ async def cancel(incident_id: str, payload: FireCancelIn, site_id: str = Depends
     if not incident or incident.site_id != site_id or incident.status not in ("pending_manager", "active"):
         raise HTTPException(404, "취소 가능한 화재 사건이 없습니다.")
     cancel_incident(incident, payload.reason)
-    clear_guidance()
     for worker in db.query(WorkerState).filter(WorkerState.site_id == site_id).all():
         hazards = json.loads(worker.hazard_json or "{}")
         for key in ("fire", "large_fire", "fire_reported"):
@@ -128,8 +127,16 @@ async def cancel(incident_id: str, payload: FireCancelIn, site_id: str = Depends
         details={"incident_id": incident.incident_id, "reason": payload.reason},
     )
     db.commit()
-    result = {"incident": incident_to_dict(incident), "routes": {}, "event": event_to_dict(event)}
-    await manager.broadcast("evacuation_cancelled", result)
+    from ..services.evacuation_navigation import stop_navigation_incident
+    stop_navigation_incident(incident_id)
+    for worker in db.query(WorkerState).filter(WorkerState.site_id == site_id).all():
+        clear_guidance(worker.worker_id)
+    device_ids = [d.device_id for d in db.query(Device).filter(
+        Device.site_id == site_id, Device.device_type == "assistant_device").all()]
+    stopped = await stop_incident_guidance(incident_id, device_ids)
+    result = {"incident": incident_to_dict(incident), "routes": {}, "event": event_to_dict(event),
+              "guidance_stop": stopped}
+    await manager.broadcast("evacuation_cancelled", result, site_id=site_id)
     return result
 
 

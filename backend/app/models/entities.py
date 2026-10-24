@@ -261,3 +261,26 @@ class EvacuationNavigationPolicy(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     map_signature: Mapped[str] = mapped_column(String(64))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class AnchorSurvey(Base):
+    __tablename__ = "anchor_surveys"
+    session_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    site_id: Mapped[str] = mapped_column(String(40), index=True)
+    nonce: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(24), default="requested")
+    baseline_json: Mapped[str] = mapped_column(Text)
+    samples_json: Mapped[str] = mapped_column(Text, default="[]")
+    result_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class SurveyCoordinator(Base):
+    __tablename__ = "survey_coordinators"
+    site_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    firmware: Mapped[str] = mapped_column(String(80))
+    protocol: Mapped[int] = mapped_column(Integer)
+    busy: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

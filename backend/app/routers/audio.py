@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from datetime import timedelta
@@ -14,6 +15,7 @@ from ..services.assistant_service import build_response_smart, is_explanation_re
 from ..services.device_service import mark_device_seen
 from ..services.audio_service import save_audio, stt
 from ..services.voice_trace import record_voice
+from ..services.camera_trace import record_analysis
 from ..services.command_service import queue_command
 from ..services.event_service import create_event, event_to_dict
 from ..services.evacuation_service import calculate_route, current_incident, evacuation_snapshot, trigger_fire
@@ -30,6 +32,35 @@ from .auth import require_site
 
 router = APIRouter(prefix="/api/audio", tags=["audio"])
 logger = logging.getLogger(__name__)
+
+
+async def _commit(db: Session) -> None:
+    # The request alone owns this Session; wait before touching it again.
+    # Shield the thread so dependency cleanup cannot close it during a commit.
+    started = perf_counter()
+    task = asyncio.create_task(asyncio.to_thread(db.commit))
+    try:
+        await asyncio.shield(task)
+    except asyncio.CancelledError:
+        try:
+            await task
+        finally:
+            raise
+    finally:
+        if settings.yolo_trace_enabled:
+            record_analysis(lane="voice_db_commit", elapsed_ms=round((perf_counter()-started)*1000, 2))
+
+
+def _prune_audio(path):
+    try:
+        if settings.voice_trace_retain_audio:
+            retained = sorted(path.parent.glob("helmet-*.wav"), key=lambda p: p.stat().st_mtime, reverse=True)
+            for old in retained[settings.voice_trace_audio_files:]:
+                old.unlink(missing_ok=True)
+        else:
+            path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 async def process_text(
@@ -83,7 +114,7 @@ async def process_text(
     agent_plan = build_safety_action_plan(intent, worker_data, text)
 
     # 위험 상태를 먼저 저장해 외부 AI/TTS 대기 중 SQLite 쓰기 잠금을 잡지 않는다.
-    db.commit()
+    await _commit(db)
 
     if intent == "stop_speaking":
         await manager.send_device_command(device_id, {"command_type": "stop_alert", "payload": {}})
@@ -97,7 +128,7 @@ async def process_text(
         feedback_payload = {"frequency": 1850, "duration": 110, "purpose": "intent_recognized"}
         feedback = queue_command(db, device_id, "play_tone", feedback_payload)
         feedback_command_id = feedback.command_id
-        db.commit()
+        await _commit(db)
         feedback_delivered = await manager.send_device_command(
             device_id,
             {
@@ -140,7 +171,7 @@ async def process_text(
         }
         record = queue_command(db, device_id, speaker_command, speaker_payload)
         device_command_id = record.command_id
-        db.commit()
+        await _commit(db)
         delivered = await manager.send_device_command(
             device_id,
             {"command_id": record.command_id, "command_type": speaker_command, "payload": speaker_payload},
@@ -173,7 +204,7 @@ async def process_text(
     db.flush()
     if agent_plan["start_manager_call"]:
         # Commit before the detached timeout task opens its own DB session.
-        db.commit()
+        await _commit(db)
         await call_manager.begin_call_request(device_id, worker_id, event.event_id)
     return {
         "command_id": command.id,
@@ -214,18 +245,18 @@ async def upload_audio(
     path = await save_audio(file, device_id)
     saved_at = perf_counter()
     mark_device_seen(device, "audio")
-    transcript = await stt(path, command_only=wake_detected)
+    from ..services.fall_confirmation import awaiting_reply
+    transcript = await stt(path, command_only=wake_detected, confirmation_mode=awaiting_reply(device_id))
     stt_done = perf_counter()
-    try:
-        if settings.voice_trace_retain_audio:
-            # Opt-in local diagnosis only; cap files and do not publish recordings.
-            retained = sorted(path.parent.glob("helmet-*.wav"), key=lambda p: p.stat().st_mtime, reverse=True)
-            for old in retained[settings.voice_trace_audio_files:]:
-                old.unlink(missing_ok=True)
-        else:
-            path.unlink(missing_ok=True)
-    except OSError:
-        pass
+    from ..services.fall_confirmation import accept_reply
+    fall_reply=accept_reply(device_id,transcript)
+    if fall_reply:
+        await _commit(db)
+        await asyncio.to_thread(_prune_audio,path)
+        fall_reply['timings_ms']={'stt':round((stt_done-saved_at)*1000,1),'total_server':round((perf_counter()-received_at)*1000,1)}
+        record_voice('response',path.name,**fall_reply)
+        return fall_reply
+    await asyncio.to_thread(_prune_audio, path)
 
     if wake_detected:
         decision = (
@@ -255,7 +286,7 @@ async def upload_audio(
             }
             record = queue_command(db, device_id, command_type, payload)
             device_command_id = record.command_id
-            db.commit()
+            await _commit(db)
             delivered = await manager.send_device_command(
                 device_id,
                 {
@@ -266,7 +297,7 @@ async def upload_audio(
             )
             record.status = "delivered" if delivered else "queued"
 
-        db.commit()
+        await _commit(db)
         result = {
             "status": decision.status,
             "text": decision.transcript,
@@ -291,7 +322,7 @@ async def upload_audio(
     allowed, execution_reason = voice_execution_gate.allow(device_id, decision.command_text)
     if not allowed:
         record_voice("execution_gate", path.name, status="ignored", reason=execution_reason)
-        db.commit()
+        await _commit(db)
         return {
             "status": "ignored",
             "text": decision.transcript,
@@ -321,7 +352,7 @@ async def upload_audio(
     logger.info("voice_pipeline status=command reason=%s timings_ms=%s", decision.reason, result["timings_ms"])
     record_voice("response", path.name, status="command", intent=result.get("intent"),
                  delivered_connections=result.get("delivered_connections"), timings_ms=result["timings_ms"])
-    db.commit()
+    await _commit(db)
     await manager.broadcast("voice_command", result)
     return result
 
@@ -338,7 +369,7 @@ async def text_command(
     if not device or device.site_id != site_id or not worker or worker.site_id != site_id:
         raise HTTPException(404, "선택한 안전모 장치가 등록되지 않았습니다.")
     result = await process_text(db, payload.worker_id, payload.device_id, payload.text, payload.sound_db)
-    db.commit()
+    await _commit(db)
     await manager.broadcast("voice_command", result)
     return result
 

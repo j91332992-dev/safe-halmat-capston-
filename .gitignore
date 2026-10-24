@@ -31,6 +31,7 @@ backend/tts_output/*
 firmware/helmet_av_device/include/device_secrets.h
 firmware/helmet_p4/sdkconfig
 firmware/helmet_p4/sdkconfig.old
+firmware/helmet_p4/main/wifi_profiles.local.h
 firmware/helmet_p4/build/
 firmware/helmet_p4/managed_components/
 firmware/helmet_p4_voice_lab/sdkconfig

@@ -1,17 +1,32 @@
 #include <stdio.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include "hanmir.h"
+#include "imu_monitor.h"
 #include "cJSON.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_websocket_client.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
 
-typedef struct { bool local_ack; char kind[32]; char id[64]; char url[192]; int frequency; int duration; int repeats; int send_timeout_ms; } command_t;
+typedef struct { bool zone_warning; int64_t expires_us; bool evacuation; unsigned evacuation_epoch; bool local_ack; char kind[32]; char id[64]; char url[192]; int frequency; int duration; int repeats; int send_timeout_ms; } command_t;
 static const char *TAG = "hanmir_command";
 static QueueHandle_t commands;
+// Only successful zone notices are deduplicated; other voice commands retain their behavior.
+static char zone_completed[16][64];
+static unsigned zone_completed_index;
+static atomic_uint evacuation_epoch;
+static atomic_uint playing_epoch;
+static atomic_bool playing_evacuation;
+
+bool hanmir_evacuation_audio_cancelled(void)
+{
+    return atomic_load(&playing_evacuation) &&
+           atomic_load(&playing_epoch) != atomic_load(&evacuation_epoch);
+}
 static esp_websocket_client_handle_t client;
 
 static void command_event(void *arg, esp_event_base_t base, int32_t id, void *event_data)
@@ -28,6 +43,45 @@ static void command_event(void *arg, esp_event_base_t base, int32_t id, void *ev
     cJSON *payload = cJSON_GetObjectItem(root, "payload");
     if (cJSON_IsString(kind)) strlcpy(command.kind, kind->valuestring, sizeof(command.kind));
     if (cJSON_IsString(id_field)) strlcpy(command.id, id_field->valuestring, sizeof(command.id));
+#ifdef CONFIG_HANMIR_IMU_FALL_SHADOW
+    if (!strcmp(command.kind,"set_imu_capture")) {
+        cJSON *enabled=cJSON_GetObjectItem(payload,"enabled");
+        cJSON *duration=cJSON_GetObjectItem(payload,"duration_s");
+        bool ok=cJSON_IsBool(enabled) && hanmir_imu_capture_set(cJSON_IsTrue(enabled),
+            cJSON_IsNumber(duration) && duration->valueint>0 ? (unsigned)duration->valueint : 600);
+        ESP_LOGI(TAG,"IMU capture command accepted=%d",ok);
+        cJSON_Delete(root);return;
+    }
+    if (!strcmp(command.kind,"imu_set_baseline")) {
+        hanmir_imu_baseline_request();
+        ESP_LOGI(TAG,"IMU baseline requested; requires 1s stable samples and operator upright confirmation");
+        cJSON_Delete(root);return;
+    }
+#endif
+    if (!strcmp(command.kind, "set_camera_fps")) {
+        cJSON *fps = cJSON_GetObjectItem(payload, "fps");
+        bool ok = cJSON_IsNumber(fps) && hanmir_camera_set_target_fps(fps->valueint);
+        ESP_LOGI(TAG, "camera FPS update ok=%d target=%d", ok, hanmir_camera_target_fps());
+        cJSON_Delete(root);
+        return;
+    }
+    if (!strcmp(command.kind, "stop_evacuation")) {
+        // Process outside the playback FIFO, including while downloading TTS.
+        atomic_fetch_add(&evacuation_epoch, 1);
+        ESP_LOGI(TAG, "evacuation stop received epoch=%u", (unsigned)atomic_load(&evacuation_epoch));
+        cJSON_Delete(root);
+        return;
+    }
+    cJSON *scope = cJSON_GetObjectItem(payload, "audio_scope");
+    command.evacuation = cJSON_IsString(scope) && !strcmp(scope->valuestring, "evacuation");
+    command.zone_warning = cJSON_IsString(scope) && !strcmp(scope->valuestring, "zone_warning");
+    if (command.zone_warning) {
+        cJSON *ttl = cJSON_GetObjectItem(payload, "valid_for_ms");
+        int ms = cJSON_IsNumber(ttl) ? ttl->valueint : 5000;
+        if (ms < 1 || ms > 10000) ms = 5000;
+        command.expires_us = esp_timer_get_time() + (int64_t)ms * 1000;
+    }
+    command.evacuation_epoch = atomic_load(&evacuation_epoch);
     cJSON *asset = cJSON_GetObjectItem(payload, "local_asset");
     command.local_ack = cJSON_IsString(asset) && !strcmp(asset->valuestring, "acknowledgement");
     cJSON *url = cJSON_GetObjectItem(payload, "audio_url");
@@ -51,6 +105,28 @@ static void command_task(void *arg)
     command_t cmd;
     for (;;) {
         if (xQueueReceive(commands, &cmd, portMAX_DELAY) != pdTRUE) continue;
+        if (cmd.zone_warning) {
+            bool duplicate = false;
+            for (unsigned i = 0; i < 16; ++i)
+                if (cmd.id[0] && !strcmp(zone_completed[i], cmd.id)) duplicate = true;
+            if (duplicate) {
+                ESP_LOGI(TAG, "zone duplicate skipped id=%s", cmd.id);
+                hanmir_report_speaker(cmd.id, true);
+                continue;
+            }
+            if (hanmir_call_active() || esp_timer_get_time() > cmd.expires_us) {
+                ESP_LOGI(TAG, "zone deferred/expired id=%s call=%d", cmd.id, hanmir_call_active());
+                hanmir_report_speaker(cmd.id, false);
+                continue;
+            }
+        }
+        atomic_store(&playing_epoch, cmd.evacuation_epoch);
+        atomic_store(&playing_evacuation, cmd.evacuation);
+        if (hanmir_evacuation_audio_cancelled()) {
+            ESP_LOGI(TAG, "discard cancelled evacuation audio");
+            atomic_store(&playing_evacuation, false);
+            continue;
+        }
         ESP_LOGI(TAG, "execute kind=%s id=%s", cmd.kind, cmd.id);
         bool ok = false;
         if (!strcmp(cmd.kind, "play_tone")) ok = hanmir_speaker_tone(cmd.frequency, cmd.duration);
@@ -60,7 +136,7 @@ static void command_task(void *arg)
             hanmir_call_interrupt();
             ok = true;
             int n = cmd.repeats > 5 ? 5 : cmd.repeats;
-            for (int i = 0; i < n; ++i) {
+            for (int i = 0; i < n && !hanmir_evacuation_audio_cancelled(); ++i) {
                 ok &= hanmir_speaker_tone(1400, 220);
                 vTaskDelay(pdMS_TO_TICKS(100));
             }
@@ -72,6 +148,10 @@ static void command_task(void *arg)
         else {
             ESP_LOGW(TAG, "command %s needs P4 hardware integration", cmd.kind);
         }
+        if (cmd.zone_warning && ok && cmd.id[0]) {
+            strlcpy(zone_completed[zone_completed_index++ % 16], cmd.id, 64);
+        }
+        atomic_store(&playing_evacuation, false);
         ESP_LOGI(TAG, "complete kind=%s id=%s ok=%d", cmd.kind, cmd.id, ok);
         if (cmd.id[0]) hanmir_report_speaker(cmd.id, ok);
     }

@@ -1,0 +1,14 @@
+{
+  "python_syntax_checked": 60,
+  "syntax_errors": [],
+  "secret_pattern_findings": [],
+  "files_over_25mib": [],
+  "p4_source_mirror_differences": [],
+  "hardware_tests_run_in_this_publication": false,
+  "frontend_production_build": "passed",
+  "tests_run_in_this_publication": false,
+  "staged_files_audited": 158,
+  "staged_private_runtime_artifacts": 0,
+  "staged_secret_pattern_findings": 0,
+  "hash_basis": "Git blob content, not machine-specific checkout line endings"
+}

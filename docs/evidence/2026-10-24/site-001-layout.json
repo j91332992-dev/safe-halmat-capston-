@@ -1,0 +1,63 @@
+{
+  "site": {
+    "name": "한미르 UWB 테스트 공간",
+    "width": 5.2,
+    "height": 3.6
+  },
+  "anchors": [
+    {
+      "anchor_id": "anchor-001",
+      "name": "anchor-001",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 2.1
+    },
+    {
+      "anchor_id": "anchor-002",
+      "name": "anchor-002",
+      "x": 5.2,
+      "y": 0.0,
+      "z": 2.1
+    },
+    {
+      "anchor_id": "anchor-003",
+      "name": "anchor-003",
+      "x": 5.2,
+      "y": 3.6,
+      "z": 2.1
+    },
+    {
+      "anchor_id": "anchor-004",
+      "name": "anchor-004",
+      "x": 0.0,
+      "y": 3.6,
+      "z": 2.1
+    }
+  ],
+  "obstacles": [
+    {
+      "obstacle_id": "exit-main",
+      "object_type": "emergency_exit",
+      "name": "주 비상구",
+      "x": 4.84,
+      "y": 3.21,
+      "width": 0.36,
+      "height": 0.39
+    },
+    {
+      "obstacle_id": "central-table",
+      "object_type": "obstacle",
+      "name": "중앙 책상",
+      "x": 1.6,
+      "y": 1.63,
+      "width": 2.4,
+      "height": 1.2
+    }
+  ],
+  "zones": [],
+  "_notes": [
+    "Read-only export; no accounts, event history or credentials.",
+    "Use only after checking actual anchor, obstacle and exit positions.",
+    "The applied map takes priority over SITE_WIDTH_M/SITE_HEIGHT_M fallback settings."
+  ]
+}

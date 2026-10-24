@@ -232,3 +232,8 @@ bool hanmir_camera_connected(void)
 }
 
 uint32_t hanmir_camera_dropped(void) { return dropped; }
+
+bool hanmir_camera_can_encode(void)
+{
+    return latest_frame && hanmir_camera_connected() && uxQueueMessagesWaiting(latest_frame) == 0;
+}

@@ -14,6 +14,7 @@ CAPTURE_DIR.mkdir(exist_ok=True)
 LIVE_CAPTURE_DIR = CAPTURE_DIR / "_live"
 LIVE_CAPTURE_DIR.mkdir(exist_ok=True)
 _raw_lock = Lock()
+_preview_lock = Lock()
 _latest_raw: dict[str, tuple[bytes, dict]] = {}
 _latest_preview: dict[str, tuple[bytes, dict]] = {}
 
@@ -21,15 +22,25 @@ _latest_preview: dict[str, tuple[bytes, dict]] = {}
 def remember_raw_frame(device_id: str, jpeg: bytes, frame_id: int | None = None) -> None:
     """Keep a live preview independent of the slower YOLO result."""
     received = monotonic()
-    preview = preview_jpeg(jpeg)
     with _raw_lock:
         metadata = {"frame_id": frame_id, "received_monotonic": received}
         _latest_raw[device_id] = (jpeg, metadata)
-        _latest_preview[device_id] = (preview, metadata)
 
 def latest_preview_frame(device_id: str):
-    with _raw_lock:
-        return _latest_preview.get(device_id)
+    # Generate identical brightness/color output only when a viewer needs it.
+    # Serialize preview builders so multiple viewers share one encoded result.
+    with _preview_lock:
+        with _raw_lock:
+            raw = _latest_raw.get(device_id)
+            cached = _latest_preview.get(device_id)
+        if raw is None:
+            return None
+        if cached and cached[1]['received_monotonic'] == raw[1]['received_monotonic']:
+            return cached
+        result = (preview_jpeg(raw[0]), raw[1])
+        with _raw_lock:
+            _latest_preview[device_id] = result
+        return result
 
 
 def latest_raw_frame(device_id: str) -> tuple[bytes, dict] | None:

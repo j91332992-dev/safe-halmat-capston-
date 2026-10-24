@@ -24,6 +24,8 @@ class BoundedJsonlLog:
         self.retention_seconds = retention_days * 86400
         self.expiry_check_seconds = max(0, expiry_check_seconds)
         self.last_expiry_check = time.monotonic()
+        self.rotation_retry_after = 0.0
+        self.rotation_blocked = 0
         self.lock = Lock()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._expire()
@@ -55,23 +57,35 @@ class BoundedJsonlLog:
             if time.monotonic() - self.last_expiry_check >= self.expiry_check_seconds:
                 self._expire()
                 self.last_expiry_check = time.monotonic()
-            if self.path.exists() and self.path.stat().st_size + len(data) > self.max_bytes:
-                self._file(self.backups).unlink(missing_ok=True)
-                for index in range(self.backups - 1, -1, -1):
-                    source = self._file(index)
-                    if source.exists():
-                        source.replace(self._file(index + 1))
+            size = self.path.stat().st_size if self.path.exists() else 0
+            if size + len(data) > self.max_bytes and time.monotonic() >= self.rotation_retry_after:
+                try:
+                    self._file(self.backups).unlink(missing_ok=True)
+                    for index in range(self.backups - 1, -1, -1):
+                        source = self._file(index)
+                        if source.exists():
+                            source.replace(self._file(index + 1))
+                    size = 0
+                except PermissionError:
+                    # A Windows reader can briefly deny rename. Preserve the
+                    # current file and defer rotation rather than blocking UWB.
+                    self.rotation_blocked += 1
+                    self.rotation_retry_after = time.monotonic() + 1
+            if size + len(data) > 2 * self.max_bytes:
+                raise OSError('JSONL rotation blocked; bounded overflow exhausted')
             with self.path.open("ab") as stream:
                 stream.write(data)
 
 
 _log = None
 _init_lock = Lock()
+_last_error_log = 0.0
+_write_errors = 0
 
 
 def record_observation(record: dict) -> bool:
     from ..config import settings
-    global _log
+    global _log, _last_error_log, _write_errors
     try:
         with _init_lock:
             if _log is None:
@@ -81,5 +95,12 @@ def record_observation(record: dict) -> bool:
         _log.append(record)
         return True
     except (OSError, ValueError):
-        logging.getLogger(__name__).exception("UWB observation log write failed")
+        _write_errors += 1
+        if time.monotonic() - _last_error_log >= 5:
+            _last_error_log = time.monotonic()
+            logging.getLogger(__name__).exception("UWB observation log write failed")
         return False
+
+
+def observation_log_stats():
+    return {'write_errors': _write_errors, 'rotation_blocked': _log.rotation_blocked if _log else 0}

@@ -11,6 +11,8 @@ class AnchorTransitionGuard:
 
     def check(self, key, session, anchors, x, y, now=None):
         now = time.monotonic() if now is None else now
+        if not all(math.isfinite(v) for v in (x, y)):
+            return dict(accepted=False, reason='nonfinite_candidate')
         anchors = tuple(sorted(anchors))
         with self.lock:
             self.states = {k:v for k,v in self.states.items() if now-v['touched'] < 60}

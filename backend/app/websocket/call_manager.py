@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from hmac import compare_digest
@@ -14,6 +15,7 @@ from ..models.entities import Event
 from ..services.command_service import queue_command
 from ..services.event_service import create_event, event_to_dict
 from ..services.tts_generator_service import generate_tts
+from ..services.call_voice_control import CallVoiceControl
 from .manager import manager
 
 
@@ -34,9 +36,26 @@ class CallConnectionManager:
         self.pending_requests: dict[str, PendingCallRequest] = {}
         self.active_request_events: dict[str, str] = {}
         self.traffic: dict[str, dict[str, int]] = {}
+        self.operator_audio_metrics = {}
         self.outputs = {}
+        self.voice_control = CallVoiceControl(self.end_call)
         self.relay_stats = defaultdict(lambda: {"sent": 0, "dropped": 0, "errors": 0,
             "max_queue": 0, "max_send_ms": 0.0, "max_wait_ms": 0.0, "sent_frames": 0, "sent_bytes": 0, "dropped_bytes": 0, "capacity_drop_bytes": 0, "age_drop_bytes": 0, "control_drop_bytes": 0, "max_enqueue_gap_ms": 0.0})
+
+    def record_operator_metrics(self, device_id, payload):
+        if not isinstance(payload,dict):return
+        previous=self.operator_audio_metrics.get(device_id,{})
+        now=monotonic()
+        if now-previous.get('at',-10)<4:return
+        keys=('rxSamples','rxClipped','overflowSamples','underrunOutputSamples','rebufferCount',
+              'txSamples','txClipped','txPeak','rxPeak','txRms','queueMs','outputRate','webDroppedSamples')
+        values={key:value for key,value in payload.items() if key in keys and type(value) in (int,float) and math.isfinite(value) and 0<=value<=1e12}
+        if not values:return
+        if len(self.operator_audio_metrics)>=256 and device_id not in self.operator_audio_metrics:
+            self.operator_audio_metrics.pop(next(iter(self.operator_audio_metrics)))
+        self.operator_audio_metrics[device_id]={'at':now,**values}
+        from ..services.voice_trace import record_voice
+        record_voice('call_audio_metrics',device_id,device_id=device_id,**values)
 
     async def begin_call_request(self, device_id: str, worker_id: str, event_id: str) -> None:
         if device_id in self.pending_requests:
@@ -167,6 +186,7 @@ class CallConnectionManager:
         self._start_writer(websocket, device_id, "to_helmet")
         self.devices[device_id].append(websocket)
         if self.operators.get(device_id):
+            self.voice_control.start(device_id)
             await self.cancel_call_request(device_id, reason="answered")
             await self._send_text(self.devices[device_id], '{"type":"call_start"}')
             await self._send_text(self.operators[device_id], '{"type":"call_status","status":"connected"}')
@@ -186,6 +206,7 @@ class CallConnectionManager:
         self.operators[device_id].append(websocket)
         self.traffic[device_id] = {"helmet_packets": 0, "helmet_bytes": 0, "operator_packets": 0, "operator_bytes": 0}
         if self.devices.get(device_id):
+            self.voice_control.start(device_id)
             await self.cancel_call_request(device_id, reason="answered")
             await self._send_text(self.devices[device_id], '{"type":"call_start"}')
             await self._send_text([websocket], '{"type":"call_status","status":"connected"}')
@@ -197,12 +218,14 @@ class CallConnectionManager:
         await self._stop_writer(websocket)
         self._remove(self.devices, device_id, websocket)
         if not self.devices.get(device_id):
+            self.voice_control.stop(device_id)
             await self._send_text(self.operators.get(device_id, []), '{"type":"call_status","status":"device_offline"}')
 
     async def disconnect_operator(self, device_id: str, websocket: WebSocket) -> None:
         await self._stop_writer(websocket)
         self._remove(self.operators, device_id, websocket)
         if not self.operators.get(device_id):
+            self.voice_control.stop(device_id)
             await self._send_text(self.devices.get(device_id, []), '{"type":"call_stop"}')
             await self._resolve_active_request(device_id)
 
@@ -214,6 +237,8 @@ class CallConnectionManager:
             stats["helmet_packets"] += 1
             stats["helmet_bytes"] += len(payload)
         await self._send_bytes(self.operators.get(device_id, []), payload)
+        # Relay first; recognition never waits on STT in this receive loop.
+        self.voice_control.feed(device_id, payload)
 
     async def relay_operator_bytes(self, device_id: str, payload: bytes) -> None:
         if not payload or len(payload) > 4096 or len(payload) % 2:
@@ -225,6 +250,7 @@ class CallConnectionManager:
         await self._send_bytes(self.devices.get(device_id, []), payload)
 
     async def end_call(self, device_id: str) -> None:
+        self.voice_control.stop(device_id)
         await self.cancel_call_request(device_id, reason="cancelled")
         await self._send_text(self.devices.get(device_id, []), '{"type":"call_stop"}')
         await self._send_text(self.operators.get(device_id, []), '{"type":"call_status","status":"ended"}')
@@ -254,8 +280,10 @@ class CallConnectionManager:
                 pass
 
     def diagnostics(self, device_id):
-        return {key: dict(value) for key, value in self.relay_stats.items()
-                if key.startswith(device_id + ":")}
+        result = {key: dict(value) for key, value in self.relay_stats.items()
+                  if key.startswith(device_id + ":")}
+        result[device_id + ':voice_control'] = self.voice_control.diagnostics(device_id)
+        return result
 
     async def _writer(self, socket, state):
         stats = self.relay_stats[state["key"]]

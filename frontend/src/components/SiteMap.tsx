@@ -134,6 +134,7 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, devi
         <div className={"map-alert-strip evacuation " + (evacuationRoute.mode === "fire_confirmed" ? "avoidance" : "official")} role="alert">
           <b>{evacuationRoute.mode === "fire_confirmed" ? "화재 위치 확인됨" : "화재 위치 확인 중"}</b>
           <span>{evacuationRoute.message ?? evacuationRoute.instructions[0] ?? "비상 유도등을 확인하고 즉시 대피하세요."}</span>
+          {evacuationRoute.corridor_status && <em>{evacuationRoute.corridor_status === "following" ? "경로 따라 대피 중" : evacuationRoute.corridor_status === "replanned" ? "대피 경로 갱신" : "대피 경로 안내"} · 중심선 좌우 30cm 기준</em>}
           {evacuationRoute.distance_m != null && <em>비상구 {evacuationRoute.distance_m.toFixed(1)}m</em>}
         </div>
       )}      {dangerZone && !offline && (
@@ -155,9 +156,24 @@ export function SiteMap({width, height, anchors, obstacles, zones, workers, devi
           <text x="55" y="55">A 구역 · 조립/이동 통로</text>
           <text x="730" y="550">화기 작업 구역</text>
         </g>
-        {evacuationRoute?.navigation_enabled && evacuationRoute.available && evacuationRoute.path.length > 1 && <polyline
-          points={evacuationRoute.path.map(p => `${scaleX(p.x)},${scaleY(p.y)}`).join(" ")}
-          fill="none" stroke="#06b6d4" strokeWidth="5" strokeDasharray="10 6" aria-label="등록 지도 기준 대피 경로" />}
+        {evacuationRoute?.navigation_enabled && evacuationRoute.available && evacuationRoute.path.length > 1 && <g aria-label="대피 안내 경로와 추종 허용 범위">
+          <defs><mask id="evacuation-corridor-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1000" height="600">
+            <rect x={scaleX(0)} y={scaleY(height)} width="900" height="520" fill="white" />
+            {obstacles.filter(o => o.object_type === "obstacle" || o.object_type === "wall").map(o => <rect key={o.obstacle_id}
+              x={scaleX(o.x - .25)} y={scaleY(o.y + o.height + .25)}
+              width={(o.width + .5) / width * 900} height={(o.height + .5) / height * 520} fill="black" />)}
+            {fireZone && <rect x={scaleX(fireZone.x - .75)} y={scaleY(fireZone.y + fireZone.height + .75)}
+              width={(fireZone.width + 1.5) / width * 900} height={(fireZone.height + 1.5) / height * 520} fill="black" />}
+          </mask></defs>
+          <g mask="url(#evacuation-corridor-mask)">
+            <polyline points={evacuationRoute.path.map(p => `${p.x},${p.y}`).join(" ")}
+              transform={`translate(50 560) scale(${900 / width} ${-520 / height})`}
+              fill="none" stroke="#06b6d4" strokeOpacity=".25"
+              strokeWidth={2 * (evacuationRoute.corridor_half_width_m ?? .3)} strokeLinecap="round" strokeLinejoin="round" />
+            <polyline points={evacuationRoute.path.map(p => `${scaleX(p.x)},${scaleY(p.y)}`).join(" ")}
+              fill="none" stroke="#0891b2" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+          </g>
+        </g>}
         {obstacles.map(obstacle => (
           <g key={obstacle.obstacle_id} className={"map-obstacle " + (obstacle.object_type ?? "obstacle")}>
             <rect

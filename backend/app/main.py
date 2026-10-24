@@ -31,10 +31,17 @@ async def lifespan(_: FastAPI):
     await start_camera_processor()
     from .services.evacuation_navigation import run_navigation
     navigation_task = asyncio.create_task(run_navigation())
+    from .services import fall_confirmation
+    fall_startup_task = asyncio.create_task(fall_confirmation.restore())
     try:
         yield
     finally:
         navigation_task.cancel()
+        fall_startup_task.cancel()
+        await asyncio.gather(fall_startup_task,return_exceptions=True)
+        await fall_confirmation.shutdown()
+        from .services import zone_warning_service
+        await zone_warning_service.shutdown()
         await asyncio.gather(navigation_task, return_exceptions=True)
         await stop_camera_processor()
 
@@ -167,6 +174,7 @@ def call_status(device_id: str, site_id: str = Depends(require_site), db: Sessio
         raise HTTPException(404, "장치를 찾을 수 없습니다.")
     return {"device_id": device_id, "channel_online": call_manager.device_online(device_id),
             "operator_connected": bool(call_manager.operators.get(device_id)),
+            "browser_audio": call_manager.operator_audio_metrics.get(device_id),
             "traffic": call_manager.traffic.get(device_id, {}),
             "relay": call_manager.diagnostics(device_id)}
 
@@ -207,6 +215,13 @@ async def call_operator_socket(websocket: WebSocket, device_id: str, ticket: str
             if message.get("text") == '{"type":"call_stop"}':
                 break
             if message.get("text") is not None:
+                text=message['text']
+                if len(text)<=2048:
+                    try:
+                        payload=json.loads(text)
+                        if isinstance(payload,dict) and payload.get('type')=='call_audio_metrics':
+                            call_manager.record_operator_metrics(device_id,payload.get('metrics'))
+                    except (ValueError,TypeError):pass
                 continue
             if message.get("bytes") is not None:
                 await call_manager.relay_operator_bytes(device_id, message["bytes"])

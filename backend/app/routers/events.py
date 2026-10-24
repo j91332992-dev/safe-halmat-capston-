@@ -52,6 +52,9 @@ async def change_status(event_id: str, status: str, site_id: str, db: Session) -
             worker.emergency = False
             recalculate_risk(db, worker)
     db.commit()
+    if row.event_type=='FALL_CONFIRMATION' and status=='resolved':
+        from ..services.fall_confirmation import resolve_pending
+        resolve_pending(row.event_id)
     if status == "resolved" and intent == "call_manager" and row.device_id:
         await call_manager.cancel_call_request(row.device_id, row.event_id, reason="dismissed")
         db.refresh(row)

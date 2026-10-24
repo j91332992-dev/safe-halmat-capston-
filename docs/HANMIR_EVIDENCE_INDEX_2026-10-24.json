@@ -1,0 +1,201 @@
+{
+  "date_kst": "2026-10-24",
+  "rule": "Historical evidence; latest final report takes precedence. SHA256 hashes refer to canonical source MD content in the Git index, avoiding Windows checkout line-ending differences.",
+  "documents": [
+    {
+      "file": "docs/HANMIR_2.0_FULL_HANDOFF_2026-10-09_10.md",
+      "bytes": 173981,
+      "sha256": "510f6b1168a99f240061cdfcd9c8c4110a34031effd74c184e0042c4fac0e430"
+    },
+    {
+      "file": "docs/HANMIR_2.0_FULL_WORK_REPORT_2026-10-16_17.md",
+      "bytes": 242948,
+      "sha256": "80b4e4cf2124b849fd77a332fc406b1c44209b4212c0da748ce286f0fde1d485"
+    },
+    {
+      "file": "docs/HANMIR_2_DAILY_REPORT_2026-10-02.md",
+      "bytes": 25861,
+      "sha256": "72f8bb17d36a150bff8fb5bfe7a21791398181e8df7808d7f7f7679ecc5571f1"
+    },
+    {
+      "file": "docs/HANMIR_2_P4_COMMUNICATION_PLAN_2026-10-02.md",
+      "bytes": 24634,
+      "sha256": "d27979454d3d420d9025627e66f8de6afd6590022c5d2e8a65d33c03b414c79c"
+    },
+    {
+      "file": "docs/HANMIR_2_P4_FIRST_BOOT_2026-10-09.md",
+      "bytes": 14459,
+      "sha256": "67a9d4dc1eb5686c1bdeb65eff72a374b2c289b8b080aec8bde0211cdeafa9a0"
+    },
+    {
+      "file": "docs/HANMIR_2_PC_HANDOFF_2026-10-09.md",
+      "bytes": 23441,
+      "sha256": "b9ce876983b690c32f741b55dbcf354d78cb0238c4926890640e94efbc440480"
+    },
+    {
+      "file": "docs/HANMIR_2_VOICE_PREP_2026-10-02.md",
+      "bytes": 4395,
+      "sha256": "797e6b4d0fdc8c4367e3e156b2e8b4ab9197e661482f2c43c2d443c501bc2fb5"
+    },
+    {
+      "file": "docs/HANMIR_BATTERY_30MIN_LOAD_REPORT_2026-10-24.md",
+      "bytes": 10633,
+      "sha256": "3fee3816c97b057032a3cb3210526b8b0edbb4fd85e21edeaaa34ad21a71d84c"
+    },
+    {
+      "file": "docs/HANMIR_BNO_FALL_PREFLASH_2026-10-24.md",
+      "bytes": 13564,
+      "sha256": "a0d1ce5047ace966b3e6c6220f3268d6cd2d4abfc2d5b454668c92b265071a92"
+    },
+    {
+      "file": "docs/HANMIR_BNO_ORIENTATION_20_TRIALS_2026-10-24.md",
+      "bytes": 12546,
+      "sha256": "5b992e14a57e2ebfcc5a0d31039a789b3c43189f72e6478ad35d61648d33894c"
+    },
+    {
+      "file": "docs/HANMIR_BNO_POSTFLASH_RUNTIME_2026-10-24.md",
+      "bytes": 5129,
+      "sha256": "73bcb55c40297201ff337a8ecbd46319c88a53f1ab3aefefbc9c5e6c922624fc"
+    },
+    {
+      "file": "docs/HANMIR_CALL_AUDIO_QUALITY_2026-10-24.md",
+      "bytes": 9186,
+      "sha256": "ea64247570148b43f6420768dcd3a4ed8361a399d795f8dca217051138b4fda9"
+    },
+    {
+      "file": "docs/HANMIR_CALL_RX_QUEUE_INVESTIGATION_2026-10-24.md",
+      "bytes": 14834,
+      "sha256": "42354e376acb1838ee75a22017a57a1fd4f9f6388bbcd6f8541cc43cf4610653"
+    },
+    {
+      "file": "docs/HANMIR_CALL_VOICE_END_2026-10-24.md",
+      "bytes": 3325,
+      "sha256": "f80e120dc91ce3e4c15774b8d9187101ff3829959827fc109afaf694f71aaeb0"
+    },
+    {
+      "file": "docs/HANMIR_CAMERA_RECHECK_AND_TUNING_2026-10-10.md",
+      "bytes": 9005,
+      "sha256": "517af73a7222455a504b00f6364440144a35dc01735b57a6b86e3aa973c992ee"
+    },
+    {
+      "file": "docs/HANMIR_DUAL_WIFI_2026-10-24.md",
+      "bytes": 17001,
+      "sha256": "42d0840e9bc583748a8fc765f56ed683d870e4286c031fe1ad02f1067a0d3675"
+    },
+    {
+      "file": "docs/HANMIR_EVACUATION_CORRIDOR_2026-10-24.md",
+      "bytes": 2963,
+      "sha256": "f365507814ed38e0ca505015592165259d3ec1edb5359fb45713ad3a9e98cc9b"
+    },
+    {
+      "file": "docs/HANMIR_FALL_BATTERY_RETEST_2026-10-24.md",
+      "bytes": 5430,
+      "sha256": "20589f5a8c227aa846924a44d7fda5726b4e280f445d4ae6bc5402f155f6fcab"
+    },
+    {
+      "file": "docs/HANMIR_FALL_CONFIRMATION_2026-10-24.md",
+      "bytes": 10230,
+      "sha256": "70c5839ab8c9fe41b44f3b79c738caafbff5608bd3430c1ce89db3ed57278aeb"
+    },
+    {
+      "file": "docs/HANMIR_FALL_INCIDENT_2026-10-24_211232.md",
+      "bytes": 5570,
+      "sha256": "2605e52ac4204c7fe6606c5eb3f7d5aab547f2f7ae630d820e5bbf3566c12036"
+    },
+    {
+      "file": "docs/HANMIR_FIRE_GUIDANCE_STOP_2026-10-24.md",
+      "bytes": 1938,
+      "sha256": "3fc841bb6eb5ba25cbba9fba937d741546e48f9667ee98ff69c0770456284b56"
+    },
+    {
+      "file": "docs/HANMIR_FIRMWARE_UPLOAD_2026-10-24.md",
+      "bytes": 7079,
+      "sha256": "db84d3e8ae144636dee89d2c1ecbb16b3a2e472298e9d1c8afcecf910660d5e8"
+    },
+    {
+      "file": "docs/HANMIR_INTEGRATED_DIAGNOSTICS_2026-10-10.md",
+      "bytes": 23667,
+      "sha256": "822df777dfbf420c3f2c8f7dad45e494c3a4b4d59ad326f2f407f07bf5bcbc82"
+    },
+    {
+      "file": "docs/HANMIR_LAYOUT_APPLY_FIX_2026-10-24.md",
+      "bytes": 1883,
+      "sha256": "7f30127b78adc67a01aa440801bedeb4407ed47a22c8c26de06269917e6c8e4d"
+    },
+    {
+      "file": "docs/HANMIR_PPE_ADMIN_POLICY_2026-10-24.md",
+      "bytes": 5630,
+      "sha256": "545b1bc4e578d8575f4695cc70cd6307b57c29d5cbaea1ba55b4cf9caca906da"
+    },
+    {
+      "file": "docs/HANMIR_TRANSPORT_OPTIMIZATION_2026-10-24.md",
+      "bytes": 10869,
+      "sha256": "e2800d1f38c5122cc31e923d77bfb9fcf8bffbf51908818b8979103a9839a829"
+    },
+    {
+      "file": "docs/HANMIR_UWB_DISTANCE_BIAS_2026-10-24.md",
+      "bytes": 18606,
+      "sha256": "28d852ca69dcd52c0ee682947574c436ac038a4e8c02b53fdcabeeb793736b6c"
+    },
+    {
+      "file": "docs/HANMIR_UWB_REVIEWED_SURVEY_IMPLEMENTATION_2026-10-24.md",
+      "bytes": 13833,
+      "sha256": "055a2111458dc3f3e17b1c8fcace3009a7e933d76919cd3b1553502a0b3abe22"
+    },
+    {
+      "file": "docs/HANMIR_UWB_REVIEWED_SURVEY_PLAN_2026-10-24.md",
+      "bytes": 11758,
+      "sha256": "447b95e40c0c91e79c84b39567304536200ab70a3e6bca157227c8f3a2a5316b"
+    },
+    {
+      "file": "docs/HANMIR_UWB_STATIONARY_5.2x3.6_2026-10-24.md",
+      "bytes": 3517,
+      "sha256": "52a203e88596f57506fa5319f5634addc7eaadc20a6c41cd859eed8f501c155d"
+    },
+    {
+      "file": "docs/HANMIR_UWB_STATIONARY_AND_SURVEY_UI_2026-10-24.md",
+      "bytes": 10506,
+      "sha256": "9d324a0dc7a952f0f875dab2a776934ab56e1b0dafc4406f6bc786f63ebc6c84"
+    },
+    {
+      "file": "docs/HANMIR_UWB_WALK_TEST_2026-10-24.md",
+      "bytes": 4206,
+      "sha256": "b30b3d5d7bf69257104b300fc9c6264410646bbfd56b46cc45e8a7d7828dfe6f"
+    },
+    {
+      "file": "docs/HANMIR_UWB_WEIGHTED_JUMP_2026-10-24.md",
+      "bytes": 5887,
+      "sha256": "cf4ebd920b897f7c8a108c50c9116a37ef652ba83abf11921d310548c6fbc322"
+    },
+    {
+      "file": "docs/HANMIR_ZONE_WARNINGS_2026-10-24.md",
+      "bytes": 12054,
+      "sha256": "668918d338273f366d4ffa8daa08e16485428abdd61c617c5f72361af2cbf7e6"
+    },
+    {
+      "file": "docs/MAP_LIVE_HEADING_2026-10-10.md",
+      "bytes": 4596,
+      "sha256": "6cc72d1919549f84cef71bf73e3672e198a13fcef744ff2b95116a98bf667535"
+    },
+    {
+      "file": "docs/TUTUS_PILOT_TRAINING_2026-10-16.md",
+      "bytes": 15170,
+      "sha256": "8a78f7ebe61172a56cd908f715fcaa088052b4cbab5e614a858138505aac8f86"
+    },
+    {
+      "file": "docs/YOLO_DETAIL_3TO5FPS_2026-10-16.md",
+      "bytes": 6228,
+      "sha256": "3cccde31e6ac138e8d3556555c0d37fc1fd00eedfd9d7ac7c97a4d38ee68ecd5"
+    },
+    {
+      "file": "docs/VEST_RECALL_AND_BOX_REFRESH_2026-10-16.md",
+      "bytes": 5083,
+      "sha256": "6e019d3723bad7d2b5faf4b59b4c917436588efb7a854144dbdea726f3141bec"
+    },
+    {
+      "file": "docs/VOICE_RESTORE_2026-10-17.md",
+      "bytes": 2408,
+      "sha256": "964eea648b42d88dff820c69bb5b03d28834e93caaa22e276ae06e2339a86fa1"
+    }
+  ]
+}

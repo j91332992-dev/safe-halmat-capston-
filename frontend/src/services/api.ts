@@ -90,6 +90,10 @@ export const operationsApi = {
 };
 
 export const api = {
+  anchorSurvey: () => request<AnchorSurveyState>('/api/anchor-survey'),
+  startAnchorSurvey: () => request<SurveySession>('/api/anchor-survey/start', {method:'POST',body:JSON.stringify({corners_confirmed:true,heights_confirmed:true})}),
+  cancelAnchorSurvey: (id:string) => request<SurveySession>(`/api/anchor-survey/${encodeURIComponent(id)}/cancel`, {method:'POST'}),
+  importAnchorSurvey: (id:string) => request<{draft:LayoutDraft;issues:string[]}>(`/api/anchor-survey/${encodeURIComponent(id)}/import`, {method:'POST'}),
   updateWorkerProfile: (workerId: string, worker_name: string, worker_role: Worker["worker_role"], notes: string) => request<Worker>("/api/workers/" + encodeURIComponent(workerId), {method: "PUT", body: JSON.stringify({worker_name, worker_role, notes})}),
   snapshot: () => request<Snapshot>("/api/dashboard/snapshot"),
   locationHistory: (workerId: string, limit = 300) =>
@@ -154,3 +158,11 @@ export const api = {
   resolve: (eventId: string) => request(`/api/events/${eventId}/resolve`, {method: "POST"}),
   resolveAllEvents: () => request<{resolved_count: number}>("/api/events/resolve-all", {method: "POST"})
 };
+
+export interface SurveySession {
+  session_id:string; status:string; elapsed_seconds:number;
+  old_site:{width:number;height:number}; anchor_ids:string[];
+  result:{passed?:boolean;width?:number;height?:number;reasons?:string[];notice?:string;
+    pairs?:{pair:string;count:number;total:number;estimate_m:number|null;spread_m:number|null;passed:boolean;span_seconds?:number;multimodal?:boolean}[]};
+}
+export interface AnchorSurveyState {supported:boolean;coordinator_online:boolean;coordinator_busy:boolean;firmware:string|null;session:SurveySession|null;notice:string}

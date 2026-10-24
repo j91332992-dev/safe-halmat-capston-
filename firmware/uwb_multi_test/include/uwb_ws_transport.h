@@ -41,12 +41,8 @@ static void ws_telemetry_task(void *) {
     });
     ws.begin(host, port, "/api/uwb/stream", "");
     ws.setReconnectInterval(1000);
-    uint32_t last_wifi_attempt = millis();
     for (;;) {
-        if (WiFi.status() != WL_CONNECTED && millis()-last_wifi_attempt >= WIFI_RETRY_INTERVAL_MS) {
-            WiFi.disconnect(); WiFi.begin(HANMIR_WIFI_SSID, HANMIR_WIFI_PASSWORD);
-            last_wifi_attempt = millis();
-        }
+        hanmir_wifi_maintain();
         ws.loop();
         uint64_t now = esp_timer_get_time();
         bool stale = false;

@@ -7,7 +7,8 @@ def quality_policy(cfg):
         "uwb_quality_gap_warn_db", "uwb_quality_gap_bad_db", "uwb_quality_path_warn_samples",
         "uwb_quality_path_bad_samples", "uwb_quality_rx_weak_dbm", "uwb_quality_fp_weak_dbm",
         "uwb_quality_gap_tolerance_db", "uwb_quality_suspect_weight", "uwb_quality_unknown_weight",
-        "uwb_quality_unknown_policy", "uwb_quality_recovery_samples", "uwb_quality_recovery_span_seconds")}
+        "uwb_quality_unknown_policy", "uwb_quality_recovery_samples", "uwb_quality_recovery_span_seconds",
+        "uwb_quality_nlos_weight", "uwb_quality_weight_recovery_step")}
 
 
 def classify_signal(diagnostics, cfg):

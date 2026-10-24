@@ -1,4 +1,5 @@
 #include "hanmir.h"
+#include "imu_monitor.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
@@ -24,6 +25,8 @@ void app_main(void)
         ESP_LOGI(TAG, "speaker I2S initialized");
     }
     ESP_ERROR_CHECK(hanmir_command_start());
+    err = hanmir_imu_transport_start();
+    if (err != ESP_OK) ESP_LOGE(TAG,"IMU diagnostic transport unavailable: %s",esp_err_to_name(err));
     if (xTaskCreate(hanmir_api_task, "hanmir_api", 6144, NULL, 3, NULL) != pdPASS) {
         ESP_LOGE(TAG, "API task allocation failed");
     }

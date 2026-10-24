@@ -14,9 +14,12 @@ from ..database import SessionLocal
 from ..models.entities import Device, EvacuationIncident, Obstacle, SiteLayout, WorkerState
 from ..websocket import manager
 from .evacuation_service import calculate_route, incident_to_dict
+from .evacuation_corridor import follow_corridor
 from .evacuation_guidance_service import send_helmet_guidance
 from .serializers import device_to_dict
 from .uwb_log_service import BoundedJsonlLog
+
+_pending: dict = {}
 
 _latest: dict[str, dict] = {}
 _state: dict[str, dict] = {}
@@ -78,6 +81,15 @@ def navigation_step(db, worker, incident, signature):
     else:
         # Route is recomputed off the UWB ingestion loop. Fixed upper frequency 2Hz.
         route = calculate_route(db, worker, incident)
+        if route.get("available") and route.get("path"):
+            layout = db.get(SiteLayout, worker.site_id)
+            from ..config import settings
+            objects = db.query(Obstacle).filter(Obstacle.site_id == worker.site_id).all()
+            fire_zone = json.loads(incident.fire_zone_json or "{}") if incident.status == "active" else None
+            origin = route.get("route_origin") if route.get("start_correction", {}).get("applied") else {"x": worker.x, "y": worker.y}
+            route = follow_corridor(route, state, origin, objects, fire_zone,
+                layout.width if layout else settings.site_width_m,
+                layout.height if layout else settings.site_height_m)
         path = route.get("path") or []
         if not route.get("available") or not path:
             action, message = "no_route", "대피 경로 확인이 필요합니다."
@@ -86,20 +98,20 @@ def navigation_step(db, worker, incident, signature):
         else:
             # First bend is never skipped by a lookahead through a wall.
             target = path[1] if len(path) > 1 else path[0]
-            origin = route.get("route_origin") or {"x": worker.x, "y": worker.y}
+            origin = (route.get("route_origin") if route.get("start_correction", {}).get("applied") else None) or {"x": worker.x, "y": worker.y}
             dx, dy = target["x"] - origin["x"], target["y"] - origin["y"]
             bearing = math.degrees(math.atan2(dy, dx)) % 360
             delta = (bearing - heading["heading_deg"] + 180) % 360 - 180
             distance = math.hypot(dx, dy)
             if abs(delta) <= 30:
-                action, message = "forward", "앞으로 가세요."
+                action, message = "forward", "앞으로 쭉 가세요."
                 if len(path) > 2 and distance < 1.5:
                     nxt = path[2]
                     following = math.degrees(math.atan2(nxt["y"] - target["y"], nxt["x"] - target["x"]))
                     turn = (following - bearing + 180) % 360 - 180
                     if abs(turn) > 35:
                         action = "prepare_left" if turn > 0 else "prepare_right"
-                        message = "앞에서 왼쪽으로 도세요." if turn > 0 else "앞에서 오른쪽으로 도세요."
+                        message = "앞으로 가다가 다음 모퉁이에서 왼쪽으로 도세요." if turn > 0 else "앞으로 가다가 다음 모퉁이에서 오른쪽으로 도세요."
             elif abs(delta) >= 150:
                 action, message = "turn_back", "주변을 확인하고 뒤로 돌아서세요."
             elif delta > 0:
@@ -162,8 +174,19 @@ def collect():
     return result
 
 
+def stop_navigation_incident(incident_id):
+    for worker_id, (key, task) in list(_pending.items()):
+        if key[0] == incident_id:
+            task.cancel()
+            _pending.pop(worker_id, None)
+            _latest.pop(worker_id, None)
+    for key in list(_state):
+        if key.startswith(incident_id + ":"):
+            _state.pop(key, None)
+
+
 async def run_navigation():
-    pending = {}
+    pending = _pending
     try:
         while True:
             tick = time.monotonic()

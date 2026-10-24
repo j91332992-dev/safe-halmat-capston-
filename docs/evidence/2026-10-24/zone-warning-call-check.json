@@ -1,0 +1,14 @@
+{
+  "started_elapsed_s": 45.01499999999942,
+  "received_audio_bytes": 1398784,
+  "controls": [
+    {
+      "at": "2026-10-24T12:55:47.832308+00:00",
+      "control": {
+        "type": "call_status",
+        "status": "connected"
+      }
+    }
+  ],
+  "note": "Received PCM discarded. This verifies control flow, not bidirectional acoustic quality."
+}

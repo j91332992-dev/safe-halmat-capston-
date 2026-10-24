@@ -11,6 +11,27 @@ def overlap(a,b):
     return intersection/max(1,area(a)+area(b)-intersection)
 
 def merge_detail(analysis, cached, now, max_age):
+    if cached and 'ppe_people' in cached['analysis']:
+        from .ppe_observation import iou
+        age = now-cached['submitted_at']
+        current_people = [d for d in analysis.get('detections', []) if d.get('category') == 'person'
+                          and d.get('positive', True) and d.get('confidence', 0) >= .35]
+        evidence = cached['analysis']['ppe_people'] if age <= max_age else []
+        matches = [[i for i, p in enumerate(current_people) if iou(person['box'], p['box']) >= .5]
+                   for person in evidence]
+        people = [person for person, indices in zip(evidence, matches)
+                  if len(indices) == 1 and sum(indices[0] in m for m in matches) == 1]
+        analysis['ppe_people'] = people
+        # Aggregate PPE across people would falsely assign one person's equipment
+        # to another. Legacy fields are intentionally unknown for multiple people.
+        analysis['ppe'] = {k: (True if people[0]['items'][k]['status'] == 'worn' else
+                              False if people[0]['items'][k]['status'] == 'missing_suspected' else None)
+                           if len(people) == 1 else None for k in ('helmet', 'vest', 'glove')}
+        analysis['ppe_judgement'] = dict(cached['analysis']['ppe_judgement'], active=bool(people),
+                                        detail_age_ms=round(age*1000, 1))
+        analysis['detail_evidence'] = dict(valid=bool(people), age_ms=round(age*1000, 1),
+            frame_id=cached['frame_id'], detections=cached['analysis'].get('detections', []) if people else [])
+        return analysis
     current=person_box(analysis)
     valid=False
     age=None

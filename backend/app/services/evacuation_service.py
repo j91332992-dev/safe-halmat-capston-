@@ -103,6 +103,9 @@ def set_fire_zone(item: EvacuationIncident, zone: dict) -> None:
 
 def cancel_incident(item: EvacuationIncident, reason: str) -> None:
     item.status = "resolved" if reason == "resolved" else "cancelled"
+    details = json.loads(item.details_json or "{}")
+    details["navigation_enabled"] = False
+    item.details_json = json.dumps(details, ensure_ascii=False)
     item.cancel_reason = reason
     item.updated_at = datetime.utcnow()
 

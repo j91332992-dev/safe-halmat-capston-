@@ -19,7 +19,7 @@ menu "HANMIR P4 integration"
     config HANMIR_CAMERA_WS_BUFFER_BYTES
         int "Camera WebSocket buffer bytes"
         range 1024 65536
-        default 16384
+        default 65536
     config HANMIR_CAMERA_SEND_TIMEOUT_MS
         int "Camera frame send timeout milliseconds"
         range 100 5000
@@ -29,6 +29,12 @@ menu "HANMIR P4 integration"
         default ""
     config HANMIR_WIFI_PASSWORD
         string "Wi-Fi password"
+        default ""
+    config HANMIR_WIFI_SSID_2
+        string "Second 2.4 GHz Wi-Fi SSID (optional fallback)"
+        default ""
+    config HANMIR_WIFI_PASSWORD_2
+        string "Second Wi-Fi password"
         default ""
     config HANMIR_SERVER_HOST
         string "FastAPI server IPv4 address or DNS name"
@@ -113,4 +119,16 @@ menu "HANMIR P4 integration"
     config HANMIR_ENABLE_BNO_SH2
         bool "Enable BNO085 UART-SHTP orientation driver"
         default n
+    config HANMIR_IMU_FALL_SHADOW
+        bool "IMU acceleration/gyro capture and experimental fall candidate logs (no alarms)"
+        depends on HANMIR_ENABLE_BNO_SH2
+        default y
+    config HANMIR_POSTURE_TILT_DEG
+        int "Experimental sustained posture candidate angle"
+        range 45 90
+        default 60
+    config HANMIR_POSTURE_HOLD_MS
+        int "Experimental posture hold duration (sensor time, ms)"
+        range 1000 10000
+        default 3000
 endmenu

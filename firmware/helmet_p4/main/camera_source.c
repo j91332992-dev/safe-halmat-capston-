@@ -17,6 +17,18 @@ bool hanmir_camera_source_ready(void) { return capturing; }
 #include "esp_video_device.h"
 #include "linux/videodev2.h"
 #include "driver/jpeg_encode.h"
+#include <stdatomic.h>
+
+static atomic_int target_fps = CONFIG_HANMIR_CAMERA_TARGET_FPS;
+static atomic_uint encode_skipped;
+int hanmir_camera_target_fps(void) { return atomic_load(&target_fps); }
+uint32_t hanmir_camera_encode_skipped(void) { return atomic_load(&encode_skipped); }
+bool hanmir_camera_set_target_fps(int fps)
+{
+    if (fps < 10 || fps > 30) return false;
+    atomic_store(&target_fps, fps);
+    return true;
+}
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -52,6 +64,7 @@ static void capture_task(void *arg)
 {
     unsigned frames = 0, recoveries = 0;
     int64_t logged = esp_timer_get_time();
+    int64_t next_encode = 0;
     uint32_t max_dq_ms = 0, max_encode_ms = 0;
     for (;;) {
         struct v4l2_buffer frame = {.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
@@ -74,7 +87,9 @@ static void capture_task(void *arg)
         }
         uint32_t dq_ms = (esp_timer_get_time() - begin) / 1000;
         if (dq_ms > max_dq_ms) max_dq_ms = dq_ms;
-        if (frame.index < 2 && (frame.flags & V4L2_BUF_FLAG_DONE)) {
+        bool encode_due = esp_timer_get_time() >= next_encode && hanmir_camera_can_encode();
+        if (frame.index < 2 && (frame.flags & V4L2_BUF_FLAG_DONE) && encode_due) {
+            next_encode = esp_timer_get_time() + 1000000 / hanmir_camera_target_fps();
             uint32_t size = 0;
             begin = esp_timer_get_time();
             esp_err_t err = jpeg_encoder_process(encoder, &encoding,
@@ -86,7 +101,7 @@ static void capture_task(void *arg)
                 hanmir_camera_submit_jpeg(jpeg_buffer, size, encoding.width, encoding.height);
                 if (++frames % 100 == 0) ESP_LOGI(TAG, "captured %u JPEG frames; transport drops=%lu", frames, (unsigned long)hanmir_camera_dropped());
             } else ESP_LOGW(TAG, "JPEG encoding: %s", esp_err_to_name(err));
-        }
+        } else atomic_fetch_add(&encode_skipped, 1);
         if (ioctl(camera_fd, VIDIOC_QBUF, &frame) != 0) break;
         if (esp_timer_get_time() - logged > 5000000) {
             ESP_LOGI(TAG, "capture stats frames=%u dq_max_ms=%lu encode_max_ms=%lu recoveries=%u stack_free=%u",
@@ -94,7 +109,12 @@ static void capture_task(void *arg)
                      (unsigned)uxTaskGetStackHighWaterMark(NULL));
             max_dq_ms = max_encode_ms = 0; logged = esp_timer_get_time();
         }
-        vTaskDelay(pdMS_TO_TICKS(1000 / CONFIG_HANMIR_CAMERA_TARGET_FPS));
+        // Do not add a full frame period AFTER capture/encode time, and round
+        // waits up to RTOS ticks instead of accidentally exceeding the FPS cap.
+        int64_t remaining_us = next_encode - esp_timer_get_time();
+        uint32_t wait_ms = remaining_us > 0 ? (uint32_t)((remaining_us + 999) / 1000) : 1;
+        TickType_t wait_ticks = (wait_ms + portTICK_PERIOD_MS - 1) / portTICK_PERIOD_MS;
+        vTaskDelay(wait_ticks ? wait_ticks : 1);
     }
     release_camera();
     vTaskDelete(NULL);
@@ -153,6 +173,9 @@ failed:
     return ESP_FAIL;
 }
 #else
+int hanmir_camera_target_fps(void) { return 0; }
+uint32_t hanmir_camera_encode_skipped(void) { return 0; }
+bool hanmir_camera_set_target_fps(int fps) { (void)fps; return false; }
 esp_err_t hanmir_camera_source_start(void)
 {
     ESP_LOGW(TAG, "Camera disabled in HANMIR configuration");

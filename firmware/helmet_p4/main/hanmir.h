@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "esp_err.h"
+struct cJSON;
 
 esp_err_t hanmir_network_start(void);
 esp_err_t hanmir_pin_guard_validate(void);
@@ -14,6 +15,10 @@ esp_err_t hanmir_camera_transport_start(void);
 bool hanmir_camera_submit_jpeg(const uint8_t *jpeg, size_t length, uint16_t width, uint16_t height);
 bool hanmir_camera_connected(void);
 uint32_t hanmir_camera_dropped(void);
+bool hanmir_camera_can_encode(void);
+int hanmir_camera_target_fps(void);
+bool hanmir_camera_set_target_fps(int fps);
+uint32_t hanmir_camera_encode_skipped(void);
 int hanmir_camera_send_timeout_ms(void);
 esp_err_t hanmir_camera_set_send_timeout_ms(int value);
 esp_err_t hanmir_camera_source_start(void);
@@ -31,6 +36,7 @@ bool hanmir_speaker_call_write(const uint8_t *pcm, size_t bytes);
 void hanmir_speaker_call_end(void);
 esp_err_t hanmir_call_start(void);
 bool hanmir_call_active(void);
+void hanmir_call_diagnostics(struct cJSON *object);
 void hanmir_call_interrupt(void);
 void hanmir_call_feed(const int16_t *pcm, size_t samples);
 esp_err_t hanmir_command_start(void);
@@ -41,3 +47,6 @@ bool hanmir_imu_ready(void);
 bool hanmir_imu_orientation(float *yaw, float *pitch, float *roll);
 
 bool hanmir_speaker_ack(void);
+
+// Cancellation applies only to tagged evacuation playback commands.
+bool hanmir_evacuation_audio_cancelled(void);

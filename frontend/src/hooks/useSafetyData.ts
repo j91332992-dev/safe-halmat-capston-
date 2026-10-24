@@ -3,6 +3,7 @@ import {App} from "@capacitor/app";
 import {Network} from "@capacitor/network";
 import {api, auth} from "../services/api";
 import {getWsBaseUrl} from "../services/config";
+import {mergeWorkerPosition,positionTimestamp} from "../services/positionUpdates";
 import type {LocationPoint, Snapshot, Worker, EvacuationSnapshot} from "../types";
 
 export type ConnectionState = "connected" | "connecting" | "reconnecting" | "offline" | "error";
@@ -32,7 +33,9 @@ export function useSafetyData(enabled = true) {
     refreshInFlightRef.current = true;
     try {
       const snapshot = await api.snapshot();
-      setData(current => ({...snapshot, devices: snapshot.devices.map(device => {
+      setData(current => ({...snapshot,
+        workers:snapshot.workers.map(worker=>mergeWorkerPosition(worker,current?.workers.find(item=>item.worker_id===worker.worker_id))),
+        devices: snapshot.devices.map(device => {
         const live = current?.devices.find(item => item.device_id === device.device_id);
         if (!live?.heading_at || Date.parse(live.heading_at) <= Date.parse(device.heading_at ?? "1970-01-01")) return device;
         return {...device, heading_deg: live.heading_deg, heading_at: live.heading_at,
@@ -139,6 +142,9 @@ export function useSafetyData(enabled = true) {
           if (message.type === "pong") {
             return;
           }
+          // Raw IMU diagnostics have their own capture API. Do not reload the
+          // complete dashboard twice a second while a diagnostic run is active.
+          if (message.type === 'imu_summary' || message.type === 'imu_candidate') return;
           if (message.type === "orientation" && message.data?.device_id) {
             const sample = message.data;
             if (typeof sample.imu_yaw_deg !== "number" || !Number.isFinite(sample.imu_yaw_deg) || !sample.heading_at) return;
@@ -157,16 +163,19 @@ export function useSafetyData(enabled = true) {
           if (message.type === "location" && message.data?.worker && message.data.location) {
             const worker = message.data.worker;
             const location = message.data.location;
-            const receivedAt = new Date().toISOString();
+            const receivedAt = worker.position_status?.server_received_at ?? new Date().toISOString();
             setData(current => current ? {
               ...current,
-              workers: current.workers.map(item => item.worker_id === worker.worker_id ? worker : item),
+              workers: current.workers.map(item => item.worker_id === worker.worker_id ? mergeWorkerPosition(worker,item) : item),
               devices: current.devices.map(device => device.worker_id === worker.worker_id && device.device_type === "position_device"
                 ? {...device, online: true, last_uwb_at: receivedAt, last_seen: receivedAt}
                 : device)
             } : current);
             setLocationHistory(current => {
-              const points = [...(current[worker.worker_id] ?? []), {
+              const existing=current[worker.worker_id]??[];
+              const last=existing[existing.length-1];
+              if(last && positionTimestamp(worker)<=Date.parse(last.created_at))return current;
+              const points = [...existing, {
                 x: location.x,
                 y: location.y,
                 confidence: location.confidence,

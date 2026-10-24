@@ -9,6 +9,24 @@ class PositionSolveError(ValueError):
         self.diagnostics = diagnostics
 
 
+def solution_diagnostics(anchors, measurements, x, y):
+    anchor_map = {a['anchor_id']: a for a in anchors}
+    rows = []
+    for m in measurements:
+        a = anchor_map.get(m['anchor_id'])
+        if not a or m.get('excluded'):
+            continue
+        predicted = math.hypot(x-a['x'], y-a['y'])
+        rows.append(dict(anchor_id=m['anchor_id'], distance_m=m['distance_m'],
+                         predicted_distance_m=round(predicted, 6),
+                         residual_m=round(predicted-m['distance_m'], 6),
+                         weight=m.get('quality', 1.0)))
+    weight_sum = sum(max(.05, r['weight']) for r in rows)
+    return dict(anchors=rows,
+        rmse_m=round(math.sqrt(sum(r['residual_m']**2 for r in rows)/len(rows)), 6) if rows else None,
+        weighted_rmse_m=round(math.sqrt(sum(max(.05,r['weight'])*r['residual_m']**2 for r in rows)/weight_sum), 6) if weight_sum else None)
+
+
 def solve_position(anchors: list[dict], measurements: list[dict]) -> tuple[float, float, float]:
     """가중 Gauss-Newton 최소제곱. 유효 앵커가 3개 미만이면 예외."""
     anchor_map = {a["anchor_id"]: a for a in anchors}

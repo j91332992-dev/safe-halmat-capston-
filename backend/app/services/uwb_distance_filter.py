@@ -29,7 +29,18 @@ class DistanceFilter:
         with closing(sqlite3.connect(path, timeout=10)) as db, db:
             # This file contains recoverable filter history, not event records.
             # WAL/NORMAL avoids full journal fsync for every 100 ms sample.
-            db.execute("PRAGMA journal_mode=WAL")
+            # Concurrent first connections can collide while SQLite switches
+            # journal mode even with a connection timeout. Retry only this
+            # transient setup lock; steady-state WAL has no added sleep.
+            deadline = time.monotonic()+0.5
+            while True:
+                try:
+                    db.execute("PRAGMA journal_mode=WAL")
+                    break
+                except sqlite3.OperationalError as exc:
+                    if 'locked' not in str(exc).lower() or time.monotonic() >= deadline:
+                        raise
+                    time.sleep(.01)
             db.execute("PRAGMA synchronous=NORMAL")
             db.execute("CREATE TABLE IF NOT EXISTS distance_state (key TEXT PRIMARY KEY, touched REAL, data TEXT)")
             db.execute("BEGIN IMMEDIATE")
@@ -85,6 +96,23 @@ class DistanceFilter:
                 latest_uptime = max([p.measured_uptime_us] + [o.measured_uptime_us for o in p.observations if o.measured_uptime_us is not None])
                 state.update(session=p.session_id, retired=retired[-64:], origin=now-latest_uptime/1e6, histories={}, seen=[])
             event_time = p.measured_at.timestamp() if p.measured_at else state["origin"] + p.measured_uptime_us/1e6
+            if p.measured_at is None and 1 < event_time-now <= 5:
+                # An uptime clock has no UTC epoch. Its arrival-time origin can
+                # drift (or Windows wall time can be corrected) while the tag
+                # retains the same boot ID. Do not reject every subsequent
+                # ordered frame until the persisted state expires. Re-anchor
+                # only this small forward offset; retain boot/replay checks,
+                # absolute timestamp validation and the stale-frame limit.
+                latest_uptime = max([p.measured_uptime_us] + [o.measured_uptime_us
+                    for o in p.observations if o.measured_uptime_us is not None])
+                new_origin = now-latest_uptime/1e6
+                result['clock_origin_rebase_ms'] = round((new_origin-state['origin'])*1000,3)
+                state['origin'] = new_origin
+                state['histories'] = {}
+                state['quality_states'] = {}
+                state.pop('quality_weights',None)
+                reset = 'clock_origin_rebased'
+                event_time = state['origin']+p.measured_uptime_us/1e6
             if now-event_time > cfg.uwb_frame_max_age_seconds:
                 return reject("stale_frame")
             if event_time-now > 1:
@@ -92,6 +120,7 @@ class DistanceFilter:
             if now-state.get("accepted_at", now) > cfg.uwb_filter_reset_seconds:
                 state["histories"] = {}
                 state["quality_states"] = {}
+                state.pop("quality_weights", None)
                 reset = "long_gap_reset"
             # Prune missing anchors too; missing data never produces a distance.
             state["histories"] = {anchor: [s for s in samples if now-s[0] <= cfg.uwb_median_sample_ttl_seconds]
@@ -100,12 +129,14 @@ class DistanceFilter:
         else:
             event_time = now
             state = {"histories": {}}
-        policy = [cfg.uwb_quality_mode, quality_policy(cfg) if cfg.uwb_quality_mode == "enforce" else None]
+        policy = [cfg.uwb_quality_mode, quality_policy(cfg) if cfg.uwb_quality_mode != "observe" else None,
+                  cfg.uwb_quality_nlos_weight, cfg.uwb_quality_weight_recovery_step]
         previous_policy = state.get("signal_policy")
-        policy_reset = previous_policy != policy and (cfg.uwb_quality_mode == "enforce" or previous_policy is not None and previous_policy[0] == "enforce")
+        policy_reset = previous_policy != policy and (cfg.uwb_quality_mode != "observe" or previous_policy is not None and previous_policy[0] != "observe")
         if policy_reset:
             state["histories"] = {}
             state["quality_states"] = {}
+            state.pop("quality_weights", None)
         state.update(signal_policy=policy)
         state.setdefault("quality_states", {})
         result.update(quality_mode=cfg.uwb_quality_mode, quality_policy_reset=policy_reset,
@@ -154,6 +185,20 @@ class DistanceFilter:
                 record["reason"] = "stale_or_future_sample"
                 continue
             effective_quality = item.quality
+            if cfg.uwb_quality_mode == "weighted":
+                weights = state.setdefault("quality_weights", {})
+                target = {"nominal": 1.0, "suspect": cfg.uwb_quality_suspect_weight,
+                          "nlos_suspected": cfg.uwb_quality_nlos_weight,
+                          "unknown": cfg.uwb_quality_unknown_weight}[decision["classification"]]
+                previous = weights.get(anchor, target)
+                factor = min(target, previous+cfg.uwb_quality_weight_recovery_step)
+                weights[anchor] = factor
+                # Signal degradation applies immediately; recovery is gradual.
+                # Never promote a range above the client's existing quality.
+                effective_quality = max(.05, min(item.quality, factor))
+                decision.update(applied_action="downweight" if factor < 1 else "use",
+                    gate_reason="weighted_keep_geometry", target_weight=target,
+                    previous_weight=previous, weight_recovery_limited=factor < target)
             if cfg.uwb_quality_mode == "enforce":
                 gated.add(anchor)
                 allowed, gate_reason, cleared = quality_gate(state, anchor, decision, cfg, sample_time)
@@ -189,6 +234,7 @@ class DistanceFilter:
         used = [m["anchor_id"] for m in result["measurements"]]
         result["quality_summary"] = {
             "mode": cfg.uwb_quality_mode, "usable_anchor_ids": used,
+            "effective_weights": {m['anchor_id']: m['quality'] for m in result['measurements']},
             "excluded_anchor_ids": [r["anchor_id"] for r in result["anchor_processing"] if r["signal_quality"]["applied_action"] == "exclude"],
             "degraded_reasons": sorted({reason for r in result["anchor_processing"] for reason in
                                         (r["signal_quality"]["reasons"] if r["signal_quality"]["classification"] != "nominal" else [])} |
@@ -200,4 +246,6 @@ class DistanceFilter:
             # Bound even clients which continually invent anchor identifiers.
             state["histories"] = dict(sorted(state["histories"].items(), key=lambda kv: kv[1][-1][0], reverse=True)[:64])
             state["quality_states"] = dict(sorted(state["quality_states"].items(), key=lambda kv: kv[1]["touched"], reverse=True)[:64])
+            if "quality_weights" in state:
+                state["quality_weights"] = {k:v for k,v in state["quality_weights"].items() if k in state["histories"]}
         return result

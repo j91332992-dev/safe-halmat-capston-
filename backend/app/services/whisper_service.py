@@ -26,7 +26,7 @@ def _get_client():
     return _client
 
 
-async def transcribe_audio(audio_path: Path, *, command_only: bool = False) -> str | None:
+async def transcribe_audio(audio_path: Path, *, command_only: bool = False, confirmation_mode: bool = False) -> str | None:
     started = perf_counter()
     metrics = {}
     try:
@@ -41,7 +41,7 @@ async def transcribe_audio(audio_path: Path, *, command_only: bool = False) -> s
                                    clipped_fraction=round(float(np.mean(np.abs(pcm) >= 32767)), 6))
     except (OSError, ValueError, EOFError, wave.Error):
         metrics["wav_status"] = "unreadable"
-    record_voice("audio_received", audio_path.name, model=settings.stt_model, **metrics)
+    record_voice("audio_received", audio_path.name, model=settings.stt_model,confirmation_mode=confirmation_mode, **metrics)
     if metrics.get("peak") == 0:
         record_voice("stt", audio_path.name, status="skipped", reason="PCM_ALL_ZERO",
                      duration_ms=round((perf_counter()-started)*1000, 1))
@@ -57,6 +57,9 @@ async def transcribe_audio(audio_path: Path, *, command_only: bool = False) -> s
                 file=audio_file,
                 prompt=settings.stt_command_prompt if command_only else settings.stt_prompt,
             )
+            if confirmation_mode:
+                # Short yes/help responses: do not prime a sentence that can be echoed as speech.
+                request.pop('prompt',None)
             if settings.stt_model == "gpt-transcribe":
                 request["extra_body"] = {"languages": [settings.stt_language]}
             else:

@@ -73,24 +73,14 @@ export function CameraMonitor({workers, devices}: Props) {
   const analysisFresh = Boolean(latest?.received && latest.analyzed_at
     && Date.now() - Date.parse(latest.analyzed_at) < 3000
     && live?.received && (live.age_ms ?? Infinity) < 3000);
-  const evidenceLabel = (item: string) => {
-    if (!analysisFresh) return "";
-    const fresh = [...(latest?.analysis?.detections ?? []), ...(detail?.valid ? detail.detections : [])]
-      .filter(d => d.category === item && d.positive !== false && typeof d.confidence === "number")
-      .sort((a,b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
-    if (!fresh) return " · 유효 검출 대기";
-    const assisted = fresh.red_pixel_ratio != null || fresh.class?.includes("red");
-    return ` · ${assisted ? "색상 보조 점수" : "검출 신뢰도"} ${Math.round((fresh.confidence ?? 0)*100)}%`;
-  };
-  const observedPpe = analysisFresh ? latest?.analysis?.ppe ?? {} : {};
-  const ppeLabel = (item: "helmet" | "vest" | "glove") => {
-    if (!analysisFresh) return "확인 불가";
-    if (observedPpe[item] === true) return "착용 중";
-    if (observedPpe[item] === false && judgement?.active) return "미착용";
-    return "분석 대기";
-  };
-  const ppeClass = (item: "helmet" | "vest" | "glove") => observedPpe[item] === true ? "good"
-    : observedPpe[item] === false && judgement?.active ? "bad" : "pending";
+  const people = analysisFresh && (detail?.age_ms ?? Infinity) <= 1500
+    ? [...(latest?.analysis?.ppe_people ?? [])].sort((a,b) => a.box.x1-b.box.x1) : [];
+  const statusLabels: Record<string, string> = {unknown: '확인 불가', pending: '관측 중',
+    observed: '착용 검출 · 확인 중', worn: '착용 확인', missing_suspected: '미착용 의심',
+    check_required: '착용 확인 필요', recovering: '착용 재확인 중'};
+  const reasonLabels: Record<string, string> = {body_part_not_visible: '부위가 보이지 않음',
+    part_clipped: '화면 가장자리에서 잘림', part_too_small: '너무 작게 보임',
+    part_blurred: '흐린 영상', person_overlap: '사람이 겹쳐 구분 불가'};
 
   return (
     <section className="page-panel camera-page">
@@ -130,13 +120,26 @@ export function CameraMonitor({workers, devices}: Props) {
             <h3>안전모 착용자가 바라보는 전방 작업자</h3>
             <div className="detection-list">
               <div><span>PPE 판정</span><b className={judgement?.active ? "good" : ""}>{judgement?.active ? "전방 사람 추적 중" : latest?.analysis?.person_seen ? "사람 감지 · 상세 분석 대기" : "전방 사람 없음 · 판정 보류"}</b></div>
-              <div><span>안전모</span><b className={ppeClass("helmet")}>{ppeLabel("helmet")}{evidenceLabel("helmet")}</b></div>
-              <div><span>안전조끼</span><b className={ppeClass("vest")}>{ppeLabel("vest")}{evidenceLabel("vest")}</b></div>
-              <div><span>장갑</span><b className={ppeClass("glove")}>{ppeLabel("glove")}{evidenceLabel("glove")}</b></div>
               <div><span>화재</span><b className={worker?.hazards.fire ? "bad" : "good"}>{worker?.hazards.fire ? "감지 · 관리자 경고" : `확인 중 ${Number(worker?.hazards.fire_confirm_frames ?? 0)}/3`}</b></div>
               <div><span>연기</span><b className={worker?.hazards.smoke ? "bad" : "good"}>{worker?.hazards.smoke ? "감지" : "없음"}</b></div>
             </div>
-            <small>상세 결과 경과: {detail?.age_ms != null ? `${Math.round(detail.age_ms)}ms` : "확인 불가"} · 장비별 신뢰도 기준 적용. 신뢰도·색상 보조 점수는 실제 정확도가 아닙니다. 유효한 상세 분석에서 {judgement?.missing_frames_required ?? 3}회 연속 미검출되면 미착용으로 판정합니다.</small>
+            {!people.length && <p>사람별 보호구 상태 확인 불가 · 최신 상세 관측을 기다립니다.</p>}
+            {people.map((person, index) => <section key={person.track_id} aria-label={`전방 사람 ${index+1} 보호구`}>
+              <h4>화면 왼쪽부터 {index+1}번째 · 추적 #{person.track_id.split('-').pop()}</h4>
+              <div className="detection-list">
+                {([['helmet','안전모'],['vest','안전조끼'],['glove','장갑']] as const).map(([key,label]) => {
+                  const item = person.items[key];
+                  return <div key={key}><span>{label}</span><span>
+                    <b className={item.status === 'worn' ? 'good' : ['missing_suspected','check_required'].includes(item.status) ? 'bad' : 'pending'}>
+                      {statusLabels[item.status] ?? '확인 불가'}</b>
+                    <small>{reasonLabels[item.reason] ?? `유효 ${item.valid_samples}회 중 미검출 ${item.missing_samples}회 · ${item.span_seconds.toFixed(1)}초`}
+                      {item.confidence != null ? ` · 검출 점수 ${item.confidence.toFixed(2)}` : ''}</small>
+                  </span></div>;
+                })}
+              </div>
+            </section>)}
+            <small>최근 2초 · 유효 관측 6회 이상 및 1.5초 이상 · 미검출 80% 이상일 때 관리자에게 알립니다. 같은 사람·보호구는 최초 알림 후 15초 지속 시 한 번만 재알림합니다. 장갑은 보이는 손 기준이며 양손 착용을 보장하지 않습니다.</small>
+            <small>상세 결과 경과: {detail?.age_ms != null ? `${Math.round(detail.age_ms)}ms` : '확인 불가'} · 신뢰도는 실제 정확도가 아닙니다. 보호구 알림은 관리자 전용이며 안전모 음성으로 재생하지 않습니다.</small>
             <div className={`camera-risk level-${worker?.risk_level ?? "정상"}`}><span>통합 위험도</span><strong>{worker?.risk_score ?? 0}점 · {worker?.risk_level ?? "정상"}</strong></div>
           </article>
         </div>
