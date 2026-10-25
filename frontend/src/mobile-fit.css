@@ -33,3 +33,7 @@
  .main-area .device-row > [data-label]::before { content:attr(data-label); display:block; margin-bottom:5px; color:#b9c9d6; font:11px/1.4 sans-serif; }
  .main-area .device-row > strong { grid-column:1 / -1; }
 }
+
+/* The clock text glyph rendered smaller than the other navigation symbols. */
+.worker-app .worker-nav button > span { display:flex; align-items:center; justify-content:center; height:28px; }
+.worker-app .worker-nav button > span > .safety-icon { display:block; width:28px; height:28px; flex:none; }
