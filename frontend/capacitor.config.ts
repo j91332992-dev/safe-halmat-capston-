@@ -6,7 +6,7 @@ const config: CapacitorConfig = {
   webDir: "dist",
   server: {androidScheme: "https", cleartext: true, allowNavigation: ["*"]},
   plugins: {
-    StatusBar: {style: "LIGHT", backgroundColor: "#06101a", overlaysWebView: false},
+    StatusBar: {style: "DARK", backgroundColor: "#06101a", overlaysWebView: false},
     CapacitorCookies: {enabled: true},
     CapacitorHttp: {enabled: true}
   },

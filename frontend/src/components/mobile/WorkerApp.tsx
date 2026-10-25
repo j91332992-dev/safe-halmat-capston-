@@ -19,6 +19,7 @@ const batteryMessage = (stage: number) => stage === 5 ? "긴급: 배터리 5% �
 
 export function WorkerApp({onLogout}: {onLogout: () => Promise<void>}) {
   const [tab, setTab] = useState<Tab>("home");
+  useEffect(() => { window.scrollTo(0, 0); }, [tab]);
   const [data, setData] = useState<WorkerAppData | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
