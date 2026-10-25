@@ -1,0 +1,64 @@
+name: Build iOS personal-device IPA
+on:
+  push:
+    branches: [integration/hanmir-final-prd-20261016]
+    paths: [frontend/**, tools/verify_ios_bundle.py, .github/workflows/ios-personal-device.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Show Xcode environment
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+      - name: Build shared production UI and sync iOS
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          npx cap sync ios
+      - name: Compile arm64 device app without a signing identity
+        run: |
+          set -o pipefail
+          xcodebuild -project frontend/ios/App/App.xcodeproj -scheme App \
+            -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build/ios-device \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' \
+            DEVELOPMENT_TEAM='' COMPILER_INDEX_STORE_ENABLE=NO build \
+            2>&1 | tee ios-xcodebuild.log
+      - name: Verify parity and package IPA for personal signing
+        run: |
+          mkdir -p ios-output/Payload
+          cp -R build/ios-device/Build/Products/Debug-iphoneos/App.app ios-output/Payload/
+          python3 tools/verify_ios_bundle.py --app ios-output/Payload/App.app \
+            --web frontend/dist --output ios-output/IOS_BUILD_MANIFEST.json
+          lipo -archs ios-output/Payload/App.app/App
+          cd ios-output
+          ditto -c -k --keepParent Payload HanmirSafety-ios-v1.8-build27-unsigned.ipa
+          shasum -a 256 HanmirSafety-ios-v1.8-build27-unsigned.ipa > SHA256SUMS.txt
+          printf '%s\n' 'Unsigned iPhone device app built from the current shared Android/iOS UI.' \
+            'Requires your own Apple account signing before installation; this is not a TestFlight/App Store release.' \
+            'Do not reuse the expired build10 provisioning profile.' > INSTALL-NOTE.txt
+          rm -r Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HanmirSafety-iOS-personal-build27
+          path: ios-output/
+          retention-days: 14
+      - name: Upload compile diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HanmirSafety-iOS-build27-diagnostics
+          path: ios-xcodebuild.log
+          retention-days: 7

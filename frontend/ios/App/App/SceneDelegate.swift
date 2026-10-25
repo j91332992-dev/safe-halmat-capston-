@@ -3,9 +3,9 @@ import Capacitor
 
 final class AppBridgeViewController: CAPBridgeViewController {
     private let appBackgroundColor = UIColor(
-        red: 7.0 / 255.0,
-        green: 19.0 / 255.0,
-        blue: 29.0 / 255.0,
+        red: 12.0 / 255.0,
+        green: 14.0 / 255.0,
+        blue: 18.0 / 255.0,
         alpha: 1.0
     )
 
@@ -38,6 +38,11 @@ final class AppBridgeViewController: CAPBridgeViewController {
         view.backgroundColor = appBackgroundColor
         webView?.backgroundColor = appBackgroundColor
         webView?.isOpaque = true
+        #if DEBUG
+        if #available(iOS 16.4, *) {
+            webView?.isInspectable = true
+        }
+        #endif
         webView?.scrollView.backgroundColor = appBackgroundColor
         webView?.scrollView.bounces = false
         webView?.scrollView.alwaysBounceVertical = false
@@ -57,7 +62,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
-        window?.backgroundColor = UIColor(red: 7.0 / 255.0, green: 19.0 / 255.0, blue: 29.0 / 255.0, alpha: 1.0)
+        window?.backgroundColor = UIColor(red: 12.0 / 255.0, green: 14.0 / 255.0, blue: 18.0 / 255.0, alpha: 1.0)
         window?.rootViewController = AppBridgeViewController()
         window?.makeKeyAndVisible()
 
