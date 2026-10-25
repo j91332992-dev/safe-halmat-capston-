@@ -37,3 +37,14 @@
 /* The clock text glyph rendered smaller than the other navigation symbols. */
 .worker-app .worker-nav button > span { display:flex; align-items:center; justify-content:center; height:28px; }
 .worker-app .worker-nav button > span > .safety-icon { display:block; width:28px; height:28px; flex:none; }
+
+/* Shared typography and outline treatment across worker and administrator UI. */
+:root { --hanmir-ui-font:"Pretendard","Segoe UI","Malgun Gothic",sans-serif; --hanmir-icon-stroke:2.2; }
+body,button,input,select,textarea { font-family:var(--hanmir-ui-font); }
+:is(.app-frame,.worker-app,.mobile-drawer-card,.mobile-modal-card) :is(h1,h2,h3,h4,p,label,button,input,select,textarea) { font-family:var(--hanmir-ui-font); }
+:is(.safety-icon,.nav-icon),.mobile-header svg { stroke-width:var(--hanmir-icon-stroke); stroke-linecap:round; stroke-linejoin:round; }
+.worker-app .worker-nav button,.mobile-bottom-nav .bottom-tab { font-family:var(--hanmir-ui-font); font-size:11px; font-weight:600; line-height:1.35; }
+.worker-app .worker-nav button.active,.mobile-bottom-nav .bottom-tab.is-active { font-weight:700; }
+.mobile-bottom-nav .bottom-tab .safety-icon { display:block; width:28px; height:28px; flex:0 0 28px; }
+.mobile-header .safety-icon { width:24px; height:24px; flex:0 0 24px; }
+@media(max-width:360px) { .worker-app .worker-nav button,.mobile-bottom-nav .bottom-tab { font-size:10px; } }

@@ -1,8 +1,12 @@
 import type {ReactNode} from "react";
 
-export type SafetyIconName = "shield" | "alert" | "bell" | "map" | "camera" | "worker" | "battery" | "signal" | "voice" | "history" | "settings" | "grid";
+export type SafetyIconName = "shield" | "alert" | "bell" | "map" | "camera" | "worker" | "battery" | "signal" | "voice" | "history" | "settings" | "grid" | "home" | "clock" | "chat" | "menu";
 export function SafetyIcon({name}: {name: SafetyIconName}) {
   const paths: Record<SafetyIconName, ReactNode> = {
+    home: <><path d="m3 10 9-7 9 7v11H3Z"/><path d="M9 21v-7h6v7"/></>,
+    clock: <><circle cx="12" cy="12" r="9"/><path d="M12 6v6h6"/></>,
+    chat: <><path d="M3 4h18v13H9l-6 4Z"/><path d="M7 9h10M7 13h6"/></>,
+    menu: <><path d="M4 6h16M4 12h16M4 18h16"/></>,
     shield: <><path d="m12 3 8 3v5c0 5-4 8-8 10-4-2-8-5-8-10V6Z"/><path d="m8 12 3 3 5-6"/></>,
     alert: <><path d="m12 3 10 18H2Z"/><path d="M12 9v5m0 3v1"/></>,
     bell: <><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4"/></>,
@@ -16,5 +20,5 @@ export function SafetyIcon({name}: {name: SafetyIconName}) {
     settings: <><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></>,
     grid: <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></>
   };
-  return <svg className="safety-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+  return <svg className="safety-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }

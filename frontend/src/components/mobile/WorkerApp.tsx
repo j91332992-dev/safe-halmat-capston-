@@ -6,13 +6,14 @@ import {WorkCalendar, duration} from "./WorkCalendar";
 import {WorkerMap} from "./WorkerMap";
 import {TeamChat} from "../TeamChat";
 import {SafetyIcon} from "./SafetyIcon";
+import type {SafetyIconName} from "./SafetyIcon";
 import "./worker-app.css";
 
 type Tab = "home" | "map" | "work" | "chat" | "alerts" | "me";
-const tabs: {id: Tab; icon: string; label: string}[] = [
-  {id: "home", icon: "⌂", label: "홈"}, {id: "map", icon: "◎", label: "내 위치"},
-  {id: "work", icon: "◷", label: "내 작업"}, {id: "chat", icon: "☏", label: "팀 채팅"},
-  {id: "alerts", icon: "", label: "알림"}, {id: "me", icon: "♙", label: "내 정보"}
+const tabs: {id: Tab; icon: SafetyIconName; label: string}[] = [
+  {id: "home", icon: "home", label: "홈"}, {id: "map", icon: "map", label: "내 위치"},
+  {id: "work", icon: "clock", label: "내 작업"}, {id: "chat", icon: "chat", label: "팀 채팅"},
+  {id: "alerts", icon: "bell", label: "알림"}, {id: "me", icon: "worker", label: "내 정보"}
 ];
 const dateText = (value: string) => new Date(value).toLocaleString("ko-KR", {timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit"});
 const batteryStage = (battery: number | null | undefined) => typeof battery !== "number" ? 0 : battery <= 5 ? 5 : battery <= 10 ? 10 : battery <= 20 ? 20 : 0;
@@ -140,7 +141,7 @@ export function WorkerApp({onLogout}: {onLogout: () => Promise<void>}) {
       </>}
     </main>
     <div className="worker-sos"><button onClick={() => void sendSos()} disabled={sosState === "sending"}>SOS <span>긴급 도움 요청</span></button>{sosState !== "idle" && <p role="status">{sosState === "sending" ? "전송 중…" : sosState === "failed" ? "전송 실패 · 관리자에게 전화하거나 다시 시도하세요." : latestSos?.status === "resolved" ? "관리자가 상황을 종료했습니다." : latestSos?.status === "acknowledged" ? "관리자가 확인했습니다." : "서버 접수 완료 · 관리자 확인 대기"}</p>}</div>
-    <nav className="worker-nav" aria-label="근로자 메뉴">{tabs.map(item => <button key={item.id} aria-label={item.label} aria-current={tab === item.id ? "page" : undefined} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}><span aria-hidden="true">{item.id === "work" ? <SafetyIcon name="history" /> : item.id === "alerts" ? <SafetyIcon name="bell" /> : item.icon}</span>{item.label}</button>)}</nav>
+    <nav className="worker-nav" aria-label="근로자 메뉴">{tabs.map(item => <button key={item.id} aria-label={item.label} aria-current={tab === item.id ? "page" : undefined} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}><span aria-hidden="true"><SafetyIcon name={item.icon} /></span>{item.label}</button>)}</nav>
     {checklist && <div className="worker-modal-backdrop"><section className="worker-checklist" role="dialog" aria-modal="true" aria-labelledby="checklist-title"><h2 id="checklist-title">⚠ 잠깐! 안전장비를 확인하세요</h2><p>작업 시작 전 모두 착용하셨나요?</p>{([['helmet', '안전모 착용·고정 확인'], ['vest', '작업 조끼 착용'], ['glove', '장갑 착용']] as const).map(([key, label], i) => <label key={key}><input autoFocus={i === 0} type="checkbox" checked={checks[key]} onChange={e => setChecks({...checks, [key]: e.target.checked})}/>{label}</label>)}{error && <p role="alert">{error}</p>}<div className="worker-actions"><button disabled={busy || !checks.helmet || !checks.vest || !checks.glove} onClick={() => void workAction("start")}>{busy ? "저장 중" : "확인하고 작업 시작"}</button><button disabled={busy} onClick={() => setChecklist(false)}>취소</button></div></section></div>}
   </div>;
 }
