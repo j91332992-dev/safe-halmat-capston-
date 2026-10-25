@@ -463,8 +463,8 @@ function App() {
               <div className="device-row head"><span>장치 ID</span><span>종류</span><span>상태</span><span>IP / RSSI</span><span>마지막 수신</span></div>
               {data.devices.map(device => (
                 <div className="device-row" key={device.device_id}>
-                  <strong>{device.device_id}</strong><span>{device.device_type}</span><StatusPill active={device.online} activeText="온라인" inactiveText="오프라인" />
-                  <span>{device.ip ?? "-"} / {device.rssi ?? "-"} dBm</span><span>{elapsedTime(device.last_seen)}</span>
+                  <strong data-label="장치 ID">{device.device_id}</strong><span data-label="종류">{device.device_type === "assistant_device" ? "안전모 AV" : device.device_type === "position_device" ? "UWB 태그" : device.device_type}</span><span data-label="상태"><StatusPill active={device.online} activeText="온라인" inactiveText="오프라인" /></span>
+                  <span data-label="IP / RSSI">{device.ip ?? "-"} / {device.rssi ?? "-"} dBm</span><span data-label="마지막 수신">{elapsedTime(device.last_seen)}</span>
                 </div>
               ))}
             </div>
