@@ -60,5 +60,5 @@
  .mobile-modal-card :is(.mobile-modal-desc,.mobile-input-label,.mobile-quick-ips) { color:#bdc9da; }
  .mobile-modal-card button { min-height:44px; }
  .mobile-modal-card .mobile-modal-close { min-width:44px; }
- :is(.ops-alert-sheet,.alerts-modal) header p { color:#bdc9da; }
+ :is(.ops-alert-sheet,.alerts-modal) header p { color:#bdc9da !important; }
 }
