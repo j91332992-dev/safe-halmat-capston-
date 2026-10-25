@@ -64,9 +64,8 @@ function App() {
   const [accountRole, setAccountRole] = useState<string | null>(null);
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-    const workerTheme = authenticated && accountRole === "worker";
-    void StatusBar.setStyle({style: workerTheme ? Style.Light : Style.Dark}).catch(() => {});
-    void StatusBar.setBackgroundColor({color: workerTheme ? "#ffffff" : "#06101a"}).catch(() => {});
+    void StatusBar.setStyle({style: Style.Dark}).catch(() => {});
+    void StatusBar.setBackgroundColor({color: "#0c0e12"}).catch(() => {});
   }, [authenticated, accountRole]);
   const {data, locationHistory, connected, serverReachable, connectionState, reconnectAttempts, error, refresh, forceReconnect} = useSafetyData(authenticated && !checkingSession && accountRole !== "worker");
   const [selectedId, setSelectedId] = useState("worker-001");
