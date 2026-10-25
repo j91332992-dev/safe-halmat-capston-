@@ -48,3 +48,4 @@ body,button,input,select,textarea { font-family:var(--hanmir-ui-font); }
 .mobile-bottom-nav .bottom-tab .safety-icon { display:block; width:28px; height:28px; flex:0 0 28px; }
 .mobile-header .safety-icon { width:24px; height:24px; flex:0 0 24px; }
 @media(max-width:360px) { .worker-app .worker-nav button,.mobile-bottom-nav .bottom-tab { font-size:10px; } }
+.mobile-bottom-nav .bottom-tab > span:last-child { font-size:inherit !important; font-weight:inherit; font-family:inherit; }
