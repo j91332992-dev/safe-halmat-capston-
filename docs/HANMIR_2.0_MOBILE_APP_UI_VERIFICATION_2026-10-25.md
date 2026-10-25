@@ -101,3 +101,14 @@
 캡처에 개인 영상/현장 정보가 포함될 수 있어 원본 이미지는 GitHub에 올리지 않았다. 캡처는 이번 실기기 점검에서 새로 생성하고 직접 확인했다.
 
 남은 사항: iPhone 실제 설치/서명, 장시간 모바일 통화 버퍼 손실과 YOLO 10FPS 유지의 별도 성능 개선, UWB 실제 모서리 배치 후 위치 정확도 검증. 기존 낙상/화재/금지구역 알림을 이번 UI 작업에서 새로 유발하지 않았다.
+
+
+## 후속 수정 — 내 작업 아이콘 (build18)
+
+사용자 확인에서 ‘내 작업’의 문자 시계 아이콘이 다른 메뉴보다 작게 보였다. 문자 `◷`는 같은 font-size에서도 실제 도형이 작아지는 글꼴 차이가 있어, 프로젝트의 기존 SafetyIcon(history) SVG를 재사용했다. SVG 크기는 28×28px로 지정하고 6개 메뉴 아이콘의 정렬 영역 높이를 28px로 통일했다. 메뉴 글자·터치 영역·기능 로직은 유지한다.
+
+소스 커밋: `c912ef7b813ec7e224e56fed6f632da1bf37b1c8`. [build18 CI](https://github.com/j91332992-dev/safe-halmat-capston-/actions/runs/40171497874). build17 검증 수치는 앞 절의 당시 결과로 유지한다.
+
+추가 요청을 반영해 알림의 클로버 문자를 기존 SafetyIcon(bell) 종 SVG로 교체했다. 최종 배포 후보는 두 아이콘 수정이 함께 포함된 build19로 올린다.
+
+최종 build19 CI 성공 후 Galaxy S24+에 삭제 없이 업데이트 설치 성공. 근로자 로그인 후 내 작업(history)·알림(bell) SVG 모두 실제 28×28px로 표시됨을 DOM 및 새 기기 캡처 `09-worker-icons-build19.png`로 확인했다. 화면 폭/문서 폭은 모두 384px. [최종 build19 APK](../releases/HanmirSafety-p4-mobile-v1.8-build19.apk). 기존 iOS 소스 ZIP은 build17 스냅샷이므로 최신 아이콘은 브랜치 소스로 다시 빌드한다.
