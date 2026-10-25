@@ -62,3 +62,12 @@
  .mobile-modal-card .mobile-modal-close { min-width:44px; }
  :is(.ops-alert-sheet,.alerts-modal) header p { color:#bdc9da !important; }
 }
+
+/* A reduced viewport plus a focused chat field indicates the phone keyboard.
+   Move SOS into document flow instead of covering the message/send controls. */
+@media(max-height:600px) and (max-width:900px) {
+ .worker-app:has(.team-chat textarea:focus) .worker-nav,
+ .app-frame:has(.team-chat textarea:focus) .mobile-bottom-nav { display:none; }
+ .worker-app:has(.team-chat textarea:focus) { padding-bottom:env(safe-area-inset-bottom); }
+ .worker-app:has(.team-chat textarea:focus) .worker-sos { position:static; transform:none; width:100%; margin:0 auto; }
+}
