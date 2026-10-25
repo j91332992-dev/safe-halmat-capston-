@@ -58,6 +58,11 @@ static void command_event(void *arg, esp_event_base_t base, int32_t id, void *ev
         cJSON_Delete(root);return;
     }
 #endif
+    if (!strcmp(command.kind, "restart_camera")) {
+        ESP_LOGI(TAG, "camera-only restart accepted=%d", hanmir_camera_source_restart());
+        cJSON_Delete(root);
+        return;
+    }
     if (!strcmp(command.kind, "set_camera_fps")) {
         cJSON *fps = cJSON_GetObjectItem(payload, "fps");
         bool ok = cJSON_IsNumber(fps) && hanmir_camera_set_target_fps(fps->valueint);

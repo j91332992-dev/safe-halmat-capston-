@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-25",
+  "firmware": "2.0.0-p4-cal2-call1-zone1-camretry1-20261025",
+  "original_firmware_reflashed_and_hash_verified": true,
+  "new_firmware_flash_hash_verified": true,
+  "settings_sha256_unchanged": true,
+  "original_app_bytes": 1965808,
+  "new_app_bytes": 1968912,
+  "app_growth_bytes": 3104,
+  "new_app_sha256": "261e474c58fb9d5a753f4bf5b7abfc0ec915ce94540f3addecc7937aca85b7e9",
+  "app_partition_bytes": 4194304,
+  "sample_count": 17,
+  "sample_start": "2026-10-25T12:09:22.273126+00:00",
+  "sample_end": "2026-10-25T12:10:43.201586+00:00",
+  "last_camera_diagnostics": {
+    "stage": "retry_wait",
+    "last_failure_stage": "device_open",
+    "last_error": "ESP_FAIL",
+    "last_errno": 2,
+    "init_attempts": 5,
+    "failures": 5,
+    "recoveries": 0,
+    "stream_recoveries": 0,
+    "frames": 0,
+    "frame_age_ms": null,
+    "retry_ms": 30000,
+    "stack_min": 5536
+  },
+  "memory_during_samples": {
+    "heap_free": {
+      "min": 243019,
+      "max": 258299
+    },
+    "heap_min": {
+      "min": 178256,
+      "max": 209768
+    },
+    "heap_largest": {
+      "min": 143360,
+      "max": 155648
+    },
+    "psram_free": {
+      "min": 32456144,
+      "max": 33170036
+    },
+    "rssi": {
+      "min": -60,
+      "max": -54
+    }
+  },
+  "p4_online_samples": 17,
+  "uwb_online_samples": 17,
+  "observed_failure": "OV5647 pid_h SCCB read failed at address 0x36; capture device open errno=2",
+  "sensor_failure_recovered": false,
+  "brightness_quality_inference_settings_changed": false,
+  "live_audio_call_quality_retested": false,
+  "remaining": "Check camera power/FPC/sensor response. Recovered video FPS and runtime-stream recovery success path not yet verifiable with no sensor response.",
+  "after_complete_power_cycle": {
+    "sample_time_utc": "2026-10-25T12:14:33.015724+00:00",
+    "p4_online": true,
+    "camera": "unavailable",
+    "diagnostics": {
+      "stage": "retry_wait",
+      "last_failure_stage": "device_open",
+      "last_error": "ESP_FAIL",
+      "last_errno": 2,
+      "init_attempts": 6,
+      "failures": 6,
+      "recoveries": 0,
+      "stream_recoveries": 0,
+      "frames": 0,
+      "frame_age_ms": null,
+      "retry_ms": 30000,
+      "stack_min": 5536
+    },
+    "mic": "initialized",
+    "speaker": "initialized",
+    "heading_at": "2026-10-25T12:14:32.981724Z",
+    "uwb_online": true
+  }
+}

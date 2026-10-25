@@ -97,7 +97,7 @@ void hanmir_api_task(void *arg)
         cJSON *body = common_body();
         if (!registered) {
             cJSON_AddStringToObject(body, "device_type", "assistant_device");
-            cJSON_AddStringToObject(body, "firmware_version", "2.0.0-p4-cal2-call1-zone1-20261024");
+            cJSON_AddStringToObject(body, "firmware_version", "2.0.0-p4-cal2-call1-zone1-camretry1-20261025");
             registered = post_json("/api/devices/register", body);
             cJSON_Delete(body);
             vTaskDelay(pdMS_TO_TICKS(registered ? 100 : 5000));
@@ -110,6 +110,7 @@ void hanmir_api_task(void *arg)
         cJSON *components = cJSON_AddObjectToObject(body, "component_status");
         cJSON_AddStringToObject(components, "network", "ready");
         cJSON_AddStringToObject(components, "camera", hanmir_camera_source_ready() ? "capturing" : "unavailable");
+        hanmir_camera_source_diagnostics(cJSON_AddObjectToObject(components, "camera_diagnostics"));
         cJSON_AddStringToObject(components, "battery", battery_ready ? "ready" : "unavailable");
         cJSON_AddStringToObject(components, "imu", hanmir_imu_ready() ? "ready" : "unverified");
 #ifdef CONFIG_HANMIR_IMU_FALL_SHADOW

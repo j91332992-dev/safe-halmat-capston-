@@ -23,6 +23,8 @@ int hanmir_camera_send_timeout_ms(void);
 esp_err_t hanmir_camera_set_send_timeout_ms(int value);
 esp_err_t hanmir_camera_source_start(void);
 bool hanmir_camera_source_ready(void);
+bool hanmir_camera_source_restart(void);
+void hanmir_camera_source_diagnostics(struct cJSON *object);
 esp_err_t hanmir_voice_start(void);
 bool hanmir_voice_ready(void);
 bool hanmir_voice_ns_ready(void);
