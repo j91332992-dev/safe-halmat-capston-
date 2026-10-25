@@ -19,7 +19,7 @@ document.documentElement.style.removeProperty("--app-viewport-width");
 
 // 1. Configure Native Mobile Status Bar for iOS & Android
 if (Capacitor.isNativePlatform()) {
-  void StatusBar.setStyle({style: Style.Light}).catch(() => {});
+  void StatusBar.setStyle({style: Style.Dark}).catch(() => {});
   void StatusBar.setBackgroundColor({color: "#06101a"}).catch(() => {});
   void StatusBar.setOverlaysWebView({overlay: false}).catch(() => {});
 }

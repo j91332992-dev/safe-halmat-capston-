@@ -6,6 +6,8 @@ import {CameraFrame} from "./components/CameraFrame";
 import {useEffect, useMemo, useState} from "react";
 import {useLocation, useNavigate} from "react-router-dom";
 import {App as CapApp} from "@capacitor/app";
+import {Capacitor} from "@capacitor/core";
+import {StatusBar, Style} from "@capacitor/status-bar";
 import {CameraMonitor} from "./components/CameraMonitor";
 import {DiagnosticPanel} from "./components/DiagnosticPanel";
 import {EventLog} from "./components/EventLog";
@@ -60,6 +62,12 @@ function App() {
   const [authenticated, setAuthenticated] = useState(() => auth.hasSession());
   const [checkingSession, setCheckingSession] = useState(() => auth.hasSession());
   const [accountRole, setAccountRole] = useState<string | null>(null);
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const workerTheme = authenticated && accountRole === "worker";
+    void StatusBar.setStyle({style: workerTheme ? Style.Light : Style.Dark}).catch(() => {});
+    void StatusBar.setBackgroundColor({color: workerTheme ? "#ffffff" : "#06101a"}).catch(() => {});
+  }, [authenticated, accountRole]);
   const {data, locationHistory, connected, serverReachable, connectionState, reconnectAttempts, error, refresh, forceReconnect} = useSafetyData(authenticated && !checkingSession && accountRole !== "worker");
   const [selectedId, setSelectedId] = useState("worker-001");
   const [busy, setBusy] = useState(false);
