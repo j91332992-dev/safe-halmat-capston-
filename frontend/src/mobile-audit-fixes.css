@@ -57,4 +57,7 @@
  .main-area[data-page] .layout-issues { background:#302817; border-color:#8b692e; color:#ffd28d; }
  .main-area[data-page] .layout-issues strong { color:#ffd28d; }
  .main-area[data-page] .layout-issues button { background:#49351e; border-color:#8b692e; color:#ffd28d; min-height:44px; }
+ .mobile-modal-card :is(.mobile-modal-desc,.mobile-input-label,.mobile-quick-ips) { color:#bdc9da; }
+ .mobile-modal-card button { min-height:44px; }
+ .mobile-modal-card .mobile-modal-close { min-width:44px; }
 }
