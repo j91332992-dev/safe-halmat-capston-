@@ -1,5 +1,13 @@
 # 🦺 HANMIR — 산업용 AI 스마트 안전모
 
+## 최신 Android 앱·전체 화면 점검 — 2026-10-25
+
+- [최신 Android APK build26](releases/HanmirSafety-p4-mobile-v1.8-build26.apk) · 관리자/근로자 다크 UI 및 아이콘 통일, 실기기 설치 확인.
+- [관리자 13개·근로자 6개 화면 점검/수정/남은 문제](docs/HANMIR_2.0_FULL_MOBILE_UI_AUDIT_2026-10-25.md) · [수치 요약](docs/evidence/2026-10-25/mobile-ui-audit-summary.json).
+- 위치 계산 실패 알림은 현장·작업자별 10분에 한 번. 원시 로그/좌표 품질 검사는 유지하며 서버 재시작 후에도 대기 시간을 이어갑니다.
+- iPhone 최신 서명 IPA/실기기 검증은 별도입니다. 아래 10/24 장비 성능 수치는 당시 시험 결과입니다.
+
+
 ## 최신 개발 마무리 기록 — 2026-10-24
 
 최신 통합 브랜치: **`integration/hanmir-final-prd-20261016`**. P4/C6 영상·음성·UWB·방향·통화·낙상 확인·대피 경로·비인가 구역 경고의 수정 코드와 실측 기록을 함께 보존합니다.

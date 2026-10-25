@@ -159,3 +159,8 @@
 - build21 상단 로고가 Android 상태 표시줄과 겹치는 문제를 발견해 관리자 헤더와 같이 `env(safe-area-inset-top)`을 반영했다. 고정 작업 배너도 상단 안전 영역을 반영한다. 최종 소스 `0ce1d4e`, [build22 CI](https://github.com/j91332992-dev/safe-halmat-capston-/actions/runs/40172712203) 성공.
 - build22 ADB 업데이트 설치 Success, 기기 versionCode=22 확인. 근로자 로그인 및 홈 캡처 확인: 헤더 padding-top=48px, 로고 top=48px로 상태 표시줄 겹침 해소, 문서/viewport 모두 384px. 화면 `build22-worker-home.png`는 로컬 보관했다.
 - [현재 최종 APK build22](../releases/HanmirSafety-p4-mobile-v1.8-build22.apk). 역할별 기능/메뉴/권한은 그대로이며 디자인 및 네이티브 상태 표시줄만 변경했다. iPhone 실기기 검증은 포함하지 않는다.
+
+
+## 후속 전체 점검과 최신 앱
+
+관리자 13개·근로자 6개 전체 화면 점검, 이벤트 페이지 분할, 다크 색상/대비/키보드 가림 수정, 위치 실패 알림 10분 제한은 [전체 UI 점검 보고서](HANMIR_2.0_FULL_MOBILE_UI_AUDIT_2026-10-25.md)를 참고한다. 현재 설치·배포본은 [build26](../releases/HanmirSafety-p4-mobile-v1.8-build26.apk)이다. 앞의 build10~25 내용은 당시 이력이다.

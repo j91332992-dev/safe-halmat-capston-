@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-25",
+  "device": "Galaxy S24+",
+  "viewport_css_px": [
+    384,
+    832
+  ],
+  "admin_screen_count": 13,
+  "worker_screen_count": 6,
+  "installed_android_version_code": 26,
+  "apk_sha256": "6934baf4c294426ed466ab25d626973d76e404ff4fca56d4f43994a1b913541a",
+  "event_page_size": 50,
+  "location_failure_notice_seconds": 600,
+  "observed_notice_gap_before_seconds": 5.031533,
+  "observed_notice_gap_after_seconds": 600.078682,
+  "new_notice_tests_passed": 4,
+  "related_quality_tests_passed": 8,
+  "related_quality_tests_baseline_failure": 1,
+  "keyboard": {
+    "height_css_px": 473,
+    "send_bottom_css_px": 443.8667,
+    "navigation_hidden": true,
+    "sos_in_document_flow": true
+  },
+  "limitations": [
+    "Single Android device; iPhone not tested",
+    "Intermittent server latency observed during audit",
+    "Physical camera and sensor function acceptance excluded"
+  ]
+}
