@@ -5,13 +5,20 @@ import type {SafetyEvent} from "../types";
 interface Props {events: SafetyEvent[]; onRefresh: () => void; expanded?: boolean}
 
 export function EventLog({events, onRefresh, expanded = false}: Props) {
+  const [page, setPage] = useState(0);
+  const pageSize = 50;
+  const pageCount = Math.max(1, Math.ceil(events.length / pageSize));
+  const currentPage = Math.min(page, pageCount - 1);
+  const visibleEvents = expanded ? events.slice(currentPage * pageSize, (currentPage + 1) * pageSize) : events;
+  const pagination = expanded && events.length > pageSize ? <div className="event-pagination" role="navigation" aria-label="이벤트 페이지"><span>{currentPage + 1} / {pageCount}페이지 · {events.length.toLocaleString()}건</span><div><button disabled={currentPage === 0} onClick={() => setPage(0)}>처음</button><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>이전</button><button disabled={currentPage >= pageCount - 1} onClick={() => setPage(currentPage + 1)}>다음</button><button disabled={currentPage >= pageCount - 1} onClick={() => setPage(pageCount - 1)}>마지막</button></div></div> : null;
   const [photo, setPhoto] = useState<string | null>(null);
   const change = async (id: string, action: "ack" | "resolve") => {action === "ack" ? await api.acknowledge(id) : await api.resolve(id); await onRefresh();};
   const imageUrl = (event: SafetyEvent) => typeof event.details?.url === "string" ? api.assetUrl(event.details.url) : null;
   return <>
+    {pagination}
     <div className={`event-table ${expanded ? "expanded" : ""}`}>
       <div className="event-row event-head"><span>시간</span><span>등급</span><span>이벤트</span><span>작업자/장치</span><span>상태</span><span /></div>
-      {events.map(event => {
+      {visibleEvents.map(event => {
         const image = imageUrl(event);
         return <div className="event-row" key={event.event_id}>
           <span className="event-time">{new Date(event.created_at).toLocaleTimeString("ko-KR")}</span>
@@ -24,6 +31,7 @@ export function EventLog({events, onRefresh, expanded = false}: Props) {
       })}
       {!events.length && <div className="event-empty-state"><span aria-hidden="true">✓</span><b>현재 확인할 이벤트가 없습니다</b><p>새로운 안전 알림이 수신되면 시간과 처리 상태가 이곳에 표시됩니다.</p></div>}
     </div>
+    {pagination}
     {photo && <div className="photo-modal" role="dialog" aria-modal="true" aria-label="카메라 이벤트 사진" onClick={() => setPhoto(null)}><div onClick={event => event.stopPropagation()}><button onClick={() => setPhoto(null)}>닫기</button><img src={photo} alt="카메라 이벤트 감지 화면" /></div></div>}
   </>;
 }
