@@ -77,8 +77,10 @@
     "analysis_completed": 2.923,
     "detail_completed": 1.048
   },
-  "physical_voice_test_complete": false,
+  "physical_voice_test_complete": true,
   "missed_call_suppression_physical_test_complete": false,
   "p4_firmware_changed": false,
-  "note": "FPS sample after server restart, no fire active. Not an evacuation simultaneous-load or 10-FPS pass. Voice-first and missed-call behavior tested in isolated DB with speech delivery mocked."
+  "note": "Original FPS collection had no active fire. Later live voice fire_report and permitted mock-zone change produced valid routes; separate live evidence records this. Exact fire_confirm STT and combined call/FPS test remain unverified.",
+  "physical_voice_intent_observed": "fire_report",
+  "final_live_evidence": "evacuation-wall-live-result.json"
 }

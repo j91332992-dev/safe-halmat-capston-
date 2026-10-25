@@ -1,0 +1,108 @@
+{
+  "incident_id": "fire-a1468e3d09eb497b8c49c9b041c9eba1",
+  "voice_intent_observed": "fire_report",
+  "initial_failure": "User-confirmed fire zone plus 0.75m margin overlapped the only registered exit. Route correctly unavailable.",
+  "approved_mock_zone": {
+    "x": 0.8,
+    "y": 0.2,
+    "width": 0.6,
+    "height": 0.6
+  },
+  "route_samples": 363,
+  "available_route_samples": 68,
+  "guidance_sent": 16,
+  "compute_ms": {
+    "median": 15.0,
+    "p95": 31.0,
+    "max": 31.0
+  },
+  "last_valid_route": {
+    "incident_id": "fire-a1468e3d09eb497b8c49c9b041c9eba1",
+    "worker_id": "worker-001",
+    "available": true,
+    "mode": "fire_confirmed",
+    "exit_name": "주 비상구",
+    "distance_m": 2.2,
+    "path": [
+      {
+        "x": 3.0,
+        "y": 3.2
+      },
+      {
+        "x": 5.0,
+        "y": 3.2
+      },
+      {
+        "x": 5.0,
+        "y": 3.4
+      }
+    ],
+    "instructions": [
+      "벽면을 따라 앞으로 가세요."
+    ],
+    "message": "벽면을 따라 앞으로 가세요.",
+    "reason": null,
+    "fire_zone": {
+      "name": "모의시험 화재구역",
+      "x": 0.8,
+      "y": 0.2,
+      "width": 0.6,
+      "height": 0.6
+    },
+    "fire_location_name": "모의시험 화재구역",
+    "fire_distance_m": 3.36,
+    "updated_at": "2026-10-25T13:06:22.877499+00:00",
+    "start_correction": {
+      "applied": false,
+      "distance_m": 0.0,
+      "original": {
+        "x": 2.9934657784709016,
+        "y": 3.279162455294386
+      },
+      "reason": "clear"
+    },
+    "route_origin": {
+      "x": 3.0,
+      "y": 3.2
+    },
+    "exit_id": "exit-main",
+    "planning": {
+      "style": "wall_first_orthogonal",
+      "turn_angle_deg": 90,
+      "wall_approach_cell": [
+        15,
+        16
+      ],
+      "wall_lane_m": 0.45,
+      "search_states": 13,
+      "wall_lane_fraction": 1.0
+    },
+    "wall_approach": {
+      "x": 3.0,
+      "y": 3.2
+    },
+    "corridor_half_width_m": 0.3,
+    "corridor_status": "replanned",
+    "cross_track_error_m": null,
+    "corridor_note": "경로 추종 허용 범위이며 실제 안전 통로 폭을 보장하지 않습니다.",
+    "target": {
+      "x": 5.0,
+      "y": 3.2
+    },
+    "target_distance_m": 2.0,
+    "heading_deg": 342.376,
+    "target_bearing_deg": 0.0,
+    "relative_angle_deg": 17.6,
+    "action": "forward",
+    "navigation_enabled": true,
+    "instruction_stable": true,
+    "location_age_ms": 100,
+    "heading_age_ms": 78,
+    "compute_ms": 0.0,
+    "logged_at_unix": 1792933582.8806655
+  },
+  "physical_user_feedback": "User accepted current behavior; no further logic change requested.",
+  "exact_fire_confirm_stt_tested": false,
+  "walking_accuracy_and_call_overlap_fps_tested": false,
+  "mock_fire_resolved": true
+}
