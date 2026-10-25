@@ -10,6 +10,7 @@ import "./mobile-operations.css";
 import "./contrast.css";
 import "./control-room.css";
 import "./admin-green-theme.css";
+import "./mobile-fit.css";
 
 // Let the browser calculate the actual mobile viewport.  Hard-coding a
 // visualViewport value here can be stale during iOS Home Screen startup and

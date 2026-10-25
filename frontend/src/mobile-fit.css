@@ -1,0 +1,26 @@
+/* Mobile roles must not inherit collapsed desktop sidebar sizing. */
+.worker-app .worker-nav button { flex:1 1 0; min-width:0; min-height:48px; padding:4px 1px; font-size:11px; line-height:1.35; white-space:nowrap; }
+.worker-app .worker-nav button span { font-size:24px; line-height:1; }
+.worker-app .worker-card { min-width:0; overflow-wrap:anywhere; }
+.worker-app .worker-actions { flex-wrap:wrap; }
+.worker-app .worker-actions button { min-height:44px; }
+.worker-app .worker-checklist { box-sizing:border-box; }
+.worker-app .team-chat form label { min-width:0; }
+.worker-app .team-chat textarea { box-sizing:border-box; }
+@media(max-width:900px) {
+ .main-area[data-page] .camera-performance > div { min-width:0; background:#142534; border-color:#385264; }
+ .main-area[data-page] .camera-performance strong { color:#f7f9fc !important; font-size:clamp(16px,4.6vw,20px); }
+ .main-area[data-page] .camera-performance span { color:#c1d2df !important; line-height:1.4; }
+ .camera-toolbar { flex-wrap:wrap; min-width:0; }
+ .camera-toolbar select { min-width:0; max-width:100%; }
+ .camera-card-head { flex-wrap:wrap; gap:6px; }
+ .camera-page .camera-live-card { min-width:0; }
+ .shared-operator-controls .quick-actions { flex-wrap:wrap; }
+ .shared-operator-controls .quick-actions > * { min-width:0; max-width:100%; }
+}
+@media(max-width:360px) {
+ .worker-content { padding-inline:12px; }
+ .worker-grid { gap:8px; }
+ .worker-card { padding:13px; }
+ .worker-app .worker-nav button { font-size:10px; }
+}
