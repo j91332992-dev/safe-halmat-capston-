@@ -112,3 +112,15 @@
 추가 요청을 반영해 알림의 클로버 문자를 기존 SafetyIcon(bell) 종 SVG로 교체했다. 최종 배포 후보는 두 아이콘 수정이 함께 포함된 build19로 올린다.
 
 최종 build19 CI 성공 후 Galaxy S24+에 삭제 없이 업데이트 설치 성공. 근로자 로그인 후 내 작업(history)·알림(bell) SVG 모두 실제 28×28px로 표시됨을 DOM 및 새 기기 캡처 `09-worker-icons-build19.png`로 확인했다. 화면 폭/문서 폭은 모두 384px. [최종 build19 APK](../releases/HanmirSafety-p4-mobile-v1.8-build19.apk). 기존 iOS 소스 ZIP은 build17 스냅샷이므로 최신 아이콘은 브랜치 소스로 다시 빌드한다.
+
+
+## 아이콘/글꼴 통일 — build20
+
+- 근로자 하단 6개를 문자 그림에서 동일 SafetyIcon SVG로 통일: 홈/지도/시계/채팅/종/작업자.
+- ‘내 작업’은 회전 화살표가 있는 이력 그림에서 원형 테두리와 직각 시침·분침의 단순 시계로 변경했다.
+- 관리자 하단 5개와 상단 알림/설정도 같은 SafetyIcon 컴포넌트를 사용한다. 관리자 지도/카메라/작업자와 근로자 동일 의미 메뉴가 같은 그림을 공유한다.
+- 하단 크기 28px, 상단 24px, 아이콘 선 굵기 2.2, 둥근 선 끝/연결을 공통 규칙으로 적용했다. 관리자 사이드바 nav-icon도 같은 선 굵기를 적용한다.
+- 관리자/근로자 UI의 본문/제목/입력/버튼은 공통 폰트 스택을 사용하고, 하단 메뉴는 11px/600, 선택 700으로 통일했다. 360px 이하에서는 양쪽 모두 10px이다. 역할별 배경/기능/권한은 유지한다.
+- TypeScript/Vite 빌드 및 Capacitor 동기화 성공. 소스 커밋 `c26743c`.
+
+최종 build20 소스 `34c193e`의 [CI 40172008493](https://github.com/j91332992-dev/safe-halmat-capston-/actions/runs/40172008493)가 성공했다. [build20 APK](../releases/HanmirSafety-p4-mobile-v1.8-build20.apk)를 준비했으나, 설치 시 Galaxy USB가 사라져 `device not found`로 중단됐다. 따라서 build20 실기기 설치/검증은 휴대폰 USB 재연결 후 진행해야 한다. build19 실기기 확인 결과와 혼동하지 않는다.
