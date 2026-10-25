@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-import heapq
 import json
 import math
 from uuid import uuid4
@@ -92,6 +91,25 @@ def trigger_fire(db: Session, source: str, worker_id: str | None, details: dict 
     db.add(item)
     db.flush()
     return item, True
+
+
+def activate_voice_fire(db: Session, worker_id: str, text: str, confirmed: bool = False):
+    incident, created = trigger_fire(db, "voice", worker_id, {"text": text})
+    from .evacuation_navigation import map_signature
+    from ..models.entities import EvacuationNavigationPolicy
+    policy = db.get(EvacuationNavigationPolicy, incident.site_id)
+    details = json.loads(incident.details_json or "{}")
+    signature = map_signature(db, incident.site_id)
+    verified = bool(policy and policy.enabled and policy.map_signature == signature)
+    details.update(navigation_enabled=verified, navigation_auto=verified,
+                   navigation_map_signature=signature if verified else None)
+    if confirmed:
+        # Confirmation does not invent a fire location or set it to the worker.
+        incident.status = "active"
+        details.update(voice_confirmed=True, confirmed_at=datetime.utcnow().isoformat()+"Z")
+    incident.details_json = json.dumps(details, ensure_ascii=False)
+    db.flush()
+    return incident, created
 
 
 def set_fire_zone(item: EvacuationIncident, zone: dict) -> None:
@@ -256,44 +274,23 @@ def calculate_route(db: Session, worker: WorkerState, incident: EvacuationIncide
         return _alert_result(worker, fire_zone, available=False, reason="화재구간으로 인해 사용 가능한 비상구가 없습니다.")
 
     goals = {cell: item for item, cell in candidates}
-    open_heap = [(0.0, start)]
-    cost = {start: 0.0}
-    came_from: dict[tuple[int, int], tuple[int, int]] = {}
-    goal = None
-    directions = ((1, 0, 1.0), (-1, 0, 1.0), (0, 1, 1.0), (0, -1, 1.0), (1, 1, 1.414), (1, -1, 1.414), (-1, 1, 1.414), (-1, -1, 1.414))
-
-    while open_heap:
-        _, current = heapq.heappop(open_heap)
-        if current in goals:
-            goal = current
-            break
-        for dx, dy, step in directions:
-            nxt = (current[0] + dx, current[1] + dy)
-            if not (0 <= nxt[0] <= max_x and 0 <= nxt[1] <= max_y) or blocked(nxt):
-                continue
-            if dx and dy and (blocked((current[0] + dx, current[1])) or blocked((current[0], current[1] + dy))):
-                continue
-            new_cost = cost[current] + step
-            if new_cost >= cost.get(nxt, float("inf")):
-                continue
-            cost[nxt] = new_cost
-            came_from[nxt] = current
-            heuristic = min(math.hypot(nxt[0] - cell[0], nxt[1] - cell[1]) for cell in goals)
-            heapq.heappush(open_heap, (new_cost + heuristic, nxt))
-
-    if goal is None:
-        return _alert_result(worker, fire_zone, available=False, reason="현재 구조와 화재구간을 고려한 비상구 거리를 계산하지 못했습니다.")
-
-    cells = [goal]
-    while cells[-1] != start:
-        cells.append(came_from[cells[-1]])
-    cells.reverse()
+    from .orthogonal_evacuation import wall_first_path
+    cells, planning = wall_first_path(start, goals, blocked, width, height, GRID_M)
+    if not cells:
+        result = _alert_result(worker, fire_zone, available=False,
+            reason="장애물과 화재구간을 피하는 벽면 대피 경로를 확인하지 못했습니다.")
+        result["planning"] = planning
+        return result
+    goal = cells[-1]
     exit_item = goals[goal]
-    total_m = round(cost[goal] * GRID_M, 2)
+    # Weighted search cost is NOT the physical walking distance.
+    total_m = round((len(cells) - 1) * GRID_M, 2)
     result = _alert_result(worker, fire_zone, available=True, exit_name=exit_item.name, distance_m=total_m)
     result["start_correction"] = correction
     result["route_origin"] = to_point(start)
     result["exit_id"] = exit_item.obstacle_id
+    result["planning"] = planning
+    result["wall_approach"] = to_point(planning["wall_approach_cell"])
     result["path"] = _simplify([to_point(cell) for cell in cells])
     return result
 

@@ -48,6 +48,17 @@ def _incident_active(incident_id: str) -> bool:
         return bool(incident and incident.status in ("active", "pending_manager"))
 
 
+def evacuation_voice_active(device_id: str) -> bool:
+    """For rare notification arbitration, never called in PCM receive loops."""
+    from ..database import SessionLocal
+    from .evacuation_service import current_incident
+    import json
+    with SessionLocal() as db:
+        device = db.get(Device, device_id)
+        incident = current_incident(db, device.site_id) if device else None
+        return bool(incident and json.loads(incident.details_json or "{}").get("navigation_enabled"))
+
+
 async def stop_incident_guidance(incident_id: str, device_ids: list[str]) -> list[dict]:
     # The caller commits closure first. Serialize against the final audio send.
     results = []

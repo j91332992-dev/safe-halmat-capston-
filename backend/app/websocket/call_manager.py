@@ -95,8 +95,12 @@ class CallConnectionManager:
         self.pending_requests.pop(device_id, None)
         await manager.send_device_command(device_id, {"command_type": "stop_call_ringing", "payload": {}})
 
+        from ..services.evacuation_guidance_service import evacuation_voice_active
+        suppress_audio = await asyncio.to_thread(evacuation_voice_active, device_id)
         message = "상대방이 전화를 받지 않습니다."
-        audio_path = await generate_tts(message)
+        audio_path = await generate_tts(message) if not suppress_audio else None
+        # Fire may start while call-status speech is being synthesized.
+        suppress_audio = suppress_audio or await asyncio.to_thread(evacuation_voice_active, device_id)
         audio_url = f"/tts/{audio_path.name}" if audio_path else None
         command_type = "play_audio" if audio_url else "play_tone"
         command_payload = {
@@ -120,22 +124,25 @@ class CallConnectionManager:
                 "warning",
                 pending.worker_id,
                 device_id,
-                {"original_event_id": event_id, "reason": "no_answer", "timeout_seconds": settings.call_answer_timeout_seconds},
+                {"original_event_id": event_id, "reason": "no_answer", "timeout_seconds": settings.call_answer_timeout_seconds, "helmet_audio_suppressed": suppress_audio},
             )
-            record = queue_command(db, device_id, command_type, command_payload)
+            record = None if suppress_audio else queue_command(db, device_id, command_type, command_payload)
             db.commit()
             missed_data = event_to_dict(missed)
             original_data = event_to_dict(original) if original else None
 
-        delivered = await manager.send_device_command(
-            device_id,
-            {"command_id": record.command_id, "command_type": command_type, "payload": command_payload},
-        )
-        with SessionLocal() as db:
-            saved_record = db.get(type(record), record.command_id)
-            if saved_record:
-                saved_record.status = "delivered" if delivered else "queued"
-                db.commit()
+        # A missed call still reaches the web, but does not interrupt evacuation
+        # speech, consume its audio queue, or change incident/navigation state.
+        if record is not None:
+            delivered = await manager.send_device_command(
+                device_id,
+                {"command_id": record.command_id, "command_type": command_type, "payload": command_payload},
+            )
+            with SessionLocal() as db:
+                saved_record = db.get(type(record), record.command_id)
+                if saved_record:
+                    saved_record.status = "delivered" if delivered else "queued"
+                    db.commit()
         if original_data:
             await manager.broadcast("event_status", original_data)
         await manager.broadcast("missed_call", missed_data)

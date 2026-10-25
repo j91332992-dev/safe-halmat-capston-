@@ -106,7 +106,7 @@ def test_unanswered_request_creates_one_missed_call(monkeypatch):
 
     async def scenario():
         await manager.begin_call_request("helmet-001-av", "worker-001", event_id)
-        await asyncio.sleep(0.05)
+        await asyncio.wait_for(manager.pending_requests["helmet-001-av"].timeout_task, timeout=2)
 
     try:
         asyncio.run(scenario())

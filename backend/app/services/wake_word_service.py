@@ -61,7 +61,7 @@ class WakeWordGate:
 
         # 생명안전 명령은 웨이크워드 없이도 즉시 처리한다.
         intent, confidence = resolve_intent(text)
-        if intent in {"emergency", "help", "fire_report", "stop_speaking", "hang_up"} and confidence >= 0.75:
+        if intent in {"emergency", "help", "fire_report", "fire_confirm", "stop_speaking", "hang_up"} and confidence >= 0.75:
             with self._lock:
                 self._armed_until.pop(device_id, None)
                 self._retry_armed.discard(device_id)

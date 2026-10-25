@@ -35,8 +35,10 @@ def follow_corridor(route, state, origin, objects, fire_zone, width, height):
                 candidates.append((lateral, i, remaining))
     if candidates:
         lateral, _, path = min(candidates, key=lambda item: item[0])
-        while len(path) > 2 and math.hypot(path[1]["x"]-origin["x"], path[1]["y"]-origin["y"]) < 0.25 and clear(origin, path[2]):
-            path = [origin, *path[2:]]
+        # Keep right-angle vertices. Do not replace a nearby corner with a
+        # diagonal shortcut from the measured worker position.
+        while len(path) > 1 and math.hypot(path[1]["x"]-path[0]["x"], path[1]["y"]-path[0]["y"]) < .05:
+            path = path[1:]
         route["path"] = path
         route["distance_m"] = round(lateral + sum(math.hypot(b["x"]-a["x"], b["y"]-a["y"]) for a,b in zip(path,path[1:])), 2)
         status = "following"

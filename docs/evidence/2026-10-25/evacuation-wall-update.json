@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-25",
+  "tests_passed": 47,
+  "registered_map_user_confirmed": true,
+  "automatic_policy_applied": true,
+  "planner_preview": {
+    "route": {
+      "worker_id": "worker-001",
+      "available": true,
+      "mode": "fire_unconfirmed",
+      "exit_name": "주 비상구",
+      "distance_m": 4.0,
+      "path": [
+        {
+          "x": 2.6,
+          "y": 1.8
+        },
+        {
+          "x": 4.8,
+          "y": 1.8
+        },
+        {
+          "x": 4.8,
+          "y": 3.4
+        },
+        {
+          "x": 5.0,
+          "y": 3.4
+        }
+      ],
+      "instructions": [
+        "화재가 감지되었습니다. 발생 위치를 확인 중입니다. 가장 가까운 비상구는 주 비상구이며 이동거리는 약 4.0미터입니다. 비상 유도등을 확인하고 즉시 대피하세요."
+      ],
+      "message": "화재가 감지되었습니다. 발생 위치를 확인 중입니다. 가장 가까운 비상구는 주 비상구이며 이동거리는 약 4.0미터입니다. 비상 유도등을 확인하고 즉시 대피하세요.",
+      "reason": null,
+      "fire_zone": null,
+      "fire_location_name": "화재 발생 위치 확인 중",
+      "fire_distance_m": null,
+      "updated_at": "2026-10-25T12:59:13.253655Z",
+      "start_correction": {
+        "applied": false,
+        "distance_m": 0.0,
+        "original": {
+          "x": 2.5592058611896147,
+          "y": 1.8451928535981708
+        },
+        "reason": "clear"
+      },
+      "route_origin": {
+        "x": 2.6,
+        "y": 1.8
+      },
+      "exit_id": "exit-main",
+      "planning": {
+        "style": "wall_first_orthogonal",
+        "turn_angle_deg": 90,
+        "wall_approach_cell": [
+          24,
+          9
+        ],
+        "wall_lane_m": 0.45,
+        "search_states": 176,
+        "wall_lane_fraction": 0.476
+      },
+      "wall_approach": {
+        "x": 4.8,
+        "y": 1.8
+      }
+    },
+    "compute_ms": 15.663199999835342
+  },
+  "live_sample_seconds": 99.21899999998277,
+  "live_samples": 97,
+  "actual_fire_samples": 0,
+  "camera_fps": {
+    "received_frames": 3.296,
+    "analysis_completed": 2.923,
+    "detail_completed": 1.048
+  },
+  "physical_voice_test_complete": false,
+  "missed_call_suppression_physical_test_complete": false,
+  "p4_firmware_changed": false,
+  "note": "FPS sample after server restart, no fire active. Not an evacuation simultaneous-load or 10-FPS pass. Voice-first and missed-call behavior tested in isolated DB with speech delivery mocked."
+}

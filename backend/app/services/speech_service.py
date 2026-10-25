@@ -17,6 +17,7 @@ COMMANDS = {
     "help": ["도와줘", "도와주세요", "도움요청", "도움이필요해요", "구해줘", "구해주세요"],
     "emergency": ["비상상황", "비상상황입니다", "살려줘", "살려주세요", "긴급상황", "응급상황"],
     "fire_report": ["화재상황발생", "화재상황이발생", "화제상황발생", "화재발생", "화재가발생", "화제발생", "불이야", "불이났어", "불이났어요", "불이났습니다", "불났어", "불났어요", "불났습니다"],
+    "fire_confirm": ["화재확정", "화재확정해", "화재확정해줘", "화재확정입니다", "화재확정됐어", "화재확정이야", "화재가맞아", "화재맞아", "화재가확실해"],
     "repeat_warning": ["경고다시말해줘"],
     "evacuation_route": ["대피경로", "어디로대피", "비상구알려줘"],
 }
@@ -45,6 +46,8 @@ def resolve_intent(text: str) -> tuple[str, float]:
     normalized = normalize(text)
     if not normalized:
         return "unknown", 0.0
+    if normalized in COMMANDS["fire_confirm"]:
+        return "fire_confirm", 1.0
     # Emergency phrases take priority over generic status or call phrases.
     for phrase, intent in LIFE_CRITICAL.items():
         if phrase in normalized:
@@ -90,6 +93,8 @@ def resolve_intent(text: str) -> tuple[str, float]:
     if any(phrase in normalized for phrase in ("손이끼", "기계에끼", "숨을못쉬", "호흡이안", "피가나", "쓰러졌", "다쳤어", "다쳤습니다")):
         return "emergency", 0.98
     for intent, samples in COMMANDS.items():
+        if intent == "fire_confirm":
+            continue
         # Only match a complete known phrase inside the transcript. Reversing
         # this check made one-syllable STT noise such as "어" match "불이났어요".
         if any(sample in normalized for sample in samples):
@@ -100,7 +105,7 @@ def resolve_intent(text: str) -> tuple[str, float]:
         best = ("unknown", 0.0)
         for intent, samples in COMMANDS.items():
             # 통화는 오작동 영향이 크므로 대상/명시 문구가 확인된 경우에만 실행한다.
-            if intent in {"call_manager", "emergency", "fire_report"}:
+            if intent in {"call_manager", "emergency", "fire_report", "fire_confirm"}:
                 continue
             score = max(fuzz.ratio(normalized, sample) for sample in samples) / 100
             if score > best[1]:

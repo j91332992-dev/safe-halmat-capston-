@@ -11,7 +11,8 @@ from app.services.wake_word_service import wake_word_gate
 def test_p4_local_wake_sends_command_only_to_stt(monkeypatch):
     seen = []
 
-    async def fake_stt(_path, *, command_only=False):
+    async def fake_stt(_path, *, command_only=False, confirmation_mode=False):
+        assert confirmation_mode is False
         seen.append(command_only)
         return "내 위치 알려줘"
 
@@ -37,7 +38,8 @@ def test_p4_local_wake_sends_command_only_to_stt(monkeypatch):
 
 
 def test_s3_quiet_fire_report_bypasses_wake(monkeypatch):
-    async def fake_stt(_path, *, command_only=False):
+    async def fake_stt(_path, *, command_only=False, confirmation_mode=False):
+        assert confirmation_mode is False
         assert command_only is False
         return "불이야"
 

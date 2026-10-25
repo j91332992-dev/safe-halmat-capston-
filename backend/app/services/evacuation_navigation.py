@@ -99,33 +99,38 @@ def navigation_step(db, worker, incident, signature):
             # First bend is never skipped by a lookahead through a wall.
             target = path[1] if len(path) > 1 else path[0]
             origin = (route.get("route_origin") if route.get("start_correction", {}).get("applied") else None) or {"x": worker.x, "y": worker.y}
-            dx, dy = target["x"] - origin["x"], target["y"] - origin["y"]
+            # Follow the checked segment bearing, not a diagonal to its endpoint
+            # caused by a small UWB lateral offset inside the corridor.
+            segment_origin = path[0]
+            dx, dy = target["x"] - segment_origin["x"], target["y"] - segment_origin["y"]
             bearing = math.degrees(math.atan2(dy, dx)) % 360
             delta = (bearing - heading["heading_deg"] + 180) % 360 - 180
             distance = math.hypot(dx, dy)
-            if abs(delta) <= 30:
-                action, message = "forward", "앞으로 쭉 가세요."
+            if abs(delta) <= 25:
+                action, message = "forward", "벽면을 따라 앞으로 가세요."
                 if len(path) > 2 and distance < 1.5:
                     nxt = path[2]
                     following = math.degrees(math.atan2(nxt["y"] - target["y"], nxt["x"] - target["x"]))
                     turn = (following - bearing + 180) % 360 - 180
                     if abs(turn) > 35:
                         action = "prepare_left" if turn > 0 else "prepare_right"
-                        message = "앞으로 가다가 다음 모퉁이에서 왼쪽으로 도세요." if turn > 0 else "앞으로 가다가 다음 모퉁이에서 오른쪽으로 도세요."
-            elif abs(delta) >= 150:
-                action, message = "turn_back", "주변을 확인하고 뒤로 돌아서세요."
-            elif delta > 0:
-                action, message = "turn_left", "왼쪽으로 도세요."
+                        message = "앞으로 간 뒤 왼쪽으로 90도 돌아가세요." if turn > 0 else "앞으로 간 뒤 오른쪽으로 90도 돌아가세요."
+            elif abs(delta) >= 155:
+                action, message = "turn_back", "오른쪽으로 90도씩 두 번 돌아가세요."
+            elif 65 <= abs(delta) <= 115:
+                action = "turn_left" if delta > 0 else "turn_right"
+                message = "왼쪽으로 90도 돌아가세요." if delta > 0 else "오른쪽으로 90도 돌아가세요."
             else:
-                action, message = "turn_right", "오른쪽으로 도세요."
+                # An arbitrary initial helmet yaw is not a 90-degree turn.
+                action = "align_left" if delta > 0 else "align_right"
+                message = "왼쪽으로 돌아 경로 방향을 맞추세요." if delta > 0 else "오른쪽으로 돌아 경로 방향을 맞추세요."
+            approach = route.get("wall_approach")
+            if action == "forward" and approach and math.hypot(origin["x"]-approach["x"], origin["y"]-approach["y"]) > .5:
+                if abs(origin["x"]-approach["x"]) <= .1 or abs(origin["y"]-approach["y"]) <= .1:
+                    message = "앞쪽 벽면을 향해 가세요."
             route.update(target=target, target_distance_m=round(distance, 2),
                          heading_deg=heading["heading_deg"], target_bearing_deg=round(bearing, 1),
                          relative_angle_deg=round(delta, 1))
-    if (started - state["started_at"] < 7 and route.get("available")
-            and action not in {"map_unverified", "location_stale", "heading_stale", "no_route"}):
-        action = "announce"
-        prefix = "모의 대피 훈련입니다." if details.get("drill") else "화재가 감지됐습니다."
-        message = f"{prefix} 비상구로 안내합니다."
     # A brief head turn must not immediately produce another spoken instruction.
     if state.get("candidate") != action:
         state.update(candidate=action, candidate_at=started)

@@ -7,7 +7,7 @@ an external LLM or network call before creating the SOS and call request.
 from typing import Any
 
 
-EMERGENCY_INTENTS = {"help", "emergency", "fire_report"}
+EMERGENCY_INTENTS = {"help", "emergency", "fire_report", "fire_confirm"}
 
 
 def build_safety_action_plan(intent: str, worker: dict[str, Any], text: str) -> dict[str, Any]:
@@ -42,6 +42,10 @@ def build_safety_action_plan(intent: str, worker: dict[str, Any], text: str) -> 
             {"type": "share_location", "label": "현재 위치 전달", "status": "ready"},
         ]
 
+    # Fire navigation must not depend on an automatically dialled phone being answered.
+    auto_call = (emergency and intent not in {"fire_report", "fire_confirm"}) or intent == "call_manager"
+    if not auto_call:
+        actions = [action for action in actions if action["type"] != "manager_call"]
     return {
         "mode": "emergency" if emergency else "assist",
         "source_text": text,
@@ -49,5 +53,5 @@ def build_safety_action_plan(intent: str, worker: dict[str, Any], text: str) -> 
         "risk": {"score": worker.get("risk_score", 0), "level": worker.get("risk_level", "정상")},
         "camera_context": camera_state,
         "actions": actions,
-        "start_manager_call": emergency or intent == "call_manager",
+        "start_manager_call": auto_call,
     }

@@ -13,7 +13,7 @@ SYSTEM_PROMPT = """당신은 스마트 안전모의 한국어 안전 AI '투투�
 제공되지 않은 사실이나 센서 값을 만들어내지 마세요."""
 
 
-FAST_INTENTS = {"call_manager", "status_report", "location_query", "risk_query", "help", "emergency", "fire_report", "evacuation_route", "repeat_warning"}
+FAST_INTENTS = {"call_manager", "status_report", "location_query", "risk_query", "help", "emergency", "fire_report", "fire_confirm", "evacuation_route", "repeat_warning"}
 FAST_INTENTS.update({"battery_query", "ppe_query", "device_query", "heading_query"})
 
 
@@ -47,6 +47,7 @@ def build_response(intent: str, worker: dict) -> tuple[str, str | None]:
         "risk_query": (current_warning if decision.get("priority", 5) < 5 else f"현재 위험도는 {worker.get('risk_score', 0)}점, {worker.get('risk_level', '알 수 없음')} 단계입니다.", "play_alert" if decision.get("priority", 5) <= 2 else "play_tone"),
         "help": ("도움 요청을 관제실에 전송했습니다. 안전한 장소에서 대기하세요.", "play_alert"),
         "emergency": ("비상 신고를 접수했습니다. 즉시 위험 장소에서 대피하세요.", "play_alert"),
+        "fire_confirm": ("화재가 확정됐습니다. " + route_instruction, "play_alert"),
         "fire_report": ("화재 신고를 접수했습니다. " + route_instruction, "play_alert"),
         "evacuation_route": (route_instruction, "play_alert"),
         "repeat_warning": (current_warning, "play_alert"),

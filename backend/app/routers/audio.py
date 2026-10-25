@@ -18,7 +18,7 @@ from ..services.voice_trace import record_voice
 from ..services.camera_trace import record_analysis
 from ..services.command_service import queue_command
 from ..services.event_service import create_event, event_to_dict
-from ..services.evacuation_service import calculate_route, current_incident, evacuation_snapshot, trigger_fire
+from ..services.evacuation_service import calculate_route, current_incident, evacuation_snapshot, trigger_fire, activate_voice_fire
 from ..services.risk_service import recalculate_risk
 from ..services.safety_agent_service import build_safety_action_plan
 from ..services.serializers import worker_to_dict
@@ -88,11 +88,11 @@ async def process_text(
     )
     db.add(command)
     evacuation_created = False
-    if intent == "fire_report":
+    if intent in {"fire_report", "fire_confirm"}:
         hazards = json.loads(worker.hazard_json or "{}")
         hazards.update({"fire": True, "fire_reported": True})
         worker.hazard_json = json.dumps(hazards, ensure_ascii=False)
-        _, evacuation_created = trigger_fire(db, "voice", worker_id, {"text": text, "sound_db": sound_db})
+        _, evacuation_created = activate_voice_fire(db, worker_id, text, intent == "fire_confirm")
     if intent in ("emergency", "help"):
         worker.emergency = True
     recalculate_risk(db, worker)
@@ -108,9 +108,12 @@ async def process_text(
     av = next((device for device in live if device.device_id == device_id), None)
     worker_data["battery"] = av.battery if av else None
     incident = current_incident(db, worker.site_id)
+    live_fire_route = None
     if incident:
-        from ..services.evacuation_navigation import latest_route
-        worker_data["evacuation"] = latest_route(worker.worker_id) or calculate_route(db, worker, incident)
+        from ..services.evacuation_navigation import latest_route, navigation_step, map_signature
+        if intent in {"fire_report", "fire_confirm"} and json.loads(incident.details_json or "{}").get("navigation_enabled"):
+            _, live_fire_route = navigation_step(db, worker, incident, map_signature(db, worker.site_id))
+        worker_data["evacuation"] = live_fire_route or latest_route(worker.worker_id) or calculate_route(db, worker, incident)
     agent_plan = build_safety_action_plan(intent, worker_data, text)
 
     # 위험 상태를 먼저 저장해 외부 AI/TTS 대기 중 SQLite 쓰기 잠금을 잡지 않는다.
@@ -124,7 +127,7 @@ async def process_text(
     # 명령을 이해한 즉시 짧은 성공음을 내어, TTS 생성 중에도 작업자가 인식 성공을 알 수 있게 한다.
     feedback_delivered = 0
     feedback_command_id = None
-    if intent not in {"unknown", "stop_speaking", "hang_up"}:
+    if intent not in {"unknown", "stop_speaking", "hang_up", "fire_report", "fire_confirm"}:
         feedback_payload = {"frequency": 1850, "duration": 110, "purpose": "intent_recognized"}
         feedback = queue_command(db, device_id, "play_tone", feedback_payload)
         feedback_command_id = feedback.command_id
@@ -142,12 +145,19 @@ async def process_text(
     complex_request = intent == "unknown" and is_explanation_request(text)
     terminal_unknown = intent == "unknown" and not allow_retry and not complex_request
     response_started = perf_counter()
-    if terminal_unknown or intent in {"stop_speaking", "hang_up"}:
+    fire_delivery = None
+    if live_fire_route:
+        from ..services.evacuation_guidance_service import send_helmet_guidance
+        prefix = "화재가 확정됐습니다. " if intent == "fire_confirm" else "화재 신고를 접수했습니다. "
+        first_route = dict(live_fire_route)
+        fire_delivery = await send_helmet_guidance(worker_id, device_id, incident.incident_id, first_route, force=True)
+        message, speaker_command = prefix + first_route["message"], None
+    elif terminal_unknown or intent in {"stop_speaking", "hang_up"}:
         message, speaker_command = "", None
     else:
         message, speaker_command = await build_response_smart(intent, worker_data, text)
     response_done = perf_counter()
-    audio_path = await generate_tts(message) if message else None
+    audio_path = await generate_tts(message) if message and not live_fire_route else None
     tts_done = perf_counter()
     audio_url = f"/tts/{audio_path.name}" if audio_path else None
     if audio_url and speaker_command:
@@ -160,7 +170,7 @@ async def process_text(
     if listen_again:
         wake_word_gate.arm(device_id)
 
-    delivered = 0
+    delivered = int(bool(fire_delivery and fire_delivery.get("sent")))
     device_command_id = None
     if speaker_command:
         speaker_payload = {
@@ -182,7 +192,7 @@ async def process_text(
         db,
         "VOICE_COMMAND",
         f"음성 명령: {text} → {intent}",
-        "emergency" if intent in ("emergency", "help", "fire_report") else "info",
+        "emergency" if intent in ("emergency", "help", "fire_report", "fire_confirm") else "info",
         worker_id,
         device_id,
         {
@@ -198,6 +208,7 @@ async def process_text(
             "feedback_command_id": feedback_command_id,
             "feedback_delivered_connections": feedback_delivered,
             "evacuation_created": evacuation_created,
+            "evacuation_guidance": fire_delivery,
             "safety_agent": agent_plan,
         },
     )

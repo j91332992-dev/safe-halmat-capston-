@@ -16,7 +16,7 @@ class ExecutedCommand:
 class VoiceExecutionGate:
     """Allow one ordinary action per short wake-command capture window."""
 
-    _SAFETY_INTENTS = {"emergency", "help", "fire_report"}
+    _SAFETY_INTENTS = {"emergency", "help", "fire_report", "fire_confirm"}
     _CONTROL_INTENTS = {"stop_speaking", "hang_up"}
 
     def __init__(self) -> None:
