@@ -1,5 +1,11 @@
 # 🦺 HANMIR — 산업용 AI 스마트 안전모
 
+## iPhone / Mac 설치 준비 — 2026-10-25
+
+- **[Mac에서 최신 iPhone 앱 설치하기 — 준비 스크립트·서명·서버 연결·검증 순서](docs/HANMIR_IOS_MAC_HANDOFF_2026-10-25.md)**
+- 최신 Android와 같은 React UI·CSS·통화 소스를 iOS arm64 **v1.8/build27**로 컴파일했습니다. [서명 전 IPA](releases/HanmirSafety-ios-v1.8-build27-unsigned.ipa)는 별도 Apple 서명이 필요합니다.
+- Mac에서 `bash frontend/scripts/prepare-ios-mac.sh` 실행 → Xcode에서 본인 Team/아이폰 선택 → Run. 최초 권한·서버 주소 설정은 필요합니다. **iPhone 실기기 설치·전체 기능 검증은 아직 하지 않았습니다.**
+
 ## 최신 Android 앱·전체 화면 점검 — 2026-10-25
 
 - [최신 Android APK build26](releases/HanmirSafety-p4-mobile-v1.8-build26.apk) · 관리자/근로자 다크 UI 및 아이콘 통일, 실기기 설치 확인.

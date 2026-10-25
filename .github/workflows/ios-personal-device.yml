@@ -22,11 +22,7 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
       - name: Build shared production UI and sync iOS
-        working-directory: frontend
-        run: |
-          npm ci
-          npm run build
-          npx cap sync ios
+        run: bash frontend/scripts/prepare-ios-mac.sh --no-open
       - name: Compile arm64 device app without a signing identity
         run: |
           set -o pipefail
