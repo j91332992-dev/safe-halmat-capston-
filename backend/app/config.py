@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     uwb_jump_confirm_samples: int = Field(default=3, ge=2, le=20)
     uwb_jump_confirm_seconds: float = Field(default=0.30, gt=0, le=5)
     uwb_jump_reset_gap_seconds: float = Field(default=1.0, gt=0, le=30)
+    uwb_location_failure_notice_seconds: float = Field(default=600.0, ge=1, allow_inf_nan=False)
     uwb_survey_device_token: str | None = None
     uwb_survey_site_id: str = "site-001"
     uwb_quality_gap_warn_db: float = Field(default=6, ge=0, allow_inf_nan=False)

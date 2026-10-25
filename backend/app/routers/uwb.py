@@ -12,6 +12,7 @@ from ..config import settings
 from ..models.entities import Anchor, Device, Location, SiteLayout, WorkerState, Zone
 from ..schemas.api import UwbDistancesIn
 from ..services.event_service import create_event, event_to_dict
+from ..services.location_failure_notice_service import create_location_failure_notice
 from ..services import zone_warning_service
 from ..services.evacuation_service import calculate_route, current_incident
 from ..services.location_filter_service import filter_location, reset_location_filter, location_motion_status
@@ -31,7 +32,6 @@ from .auth import require_site
 
 router = APIRouter(prefix="/api", tags=["uwb"])
 _distance_processing_lock = asyncio.Lock()
-_failure_notices: dict[tuple[str, str, str], float] = {}
 
 
 def touch_uwb_device(db, payload):
@@ -145,14 +145,9 @@ def _process_distances(payload: UwbDistancesIn, db: Session):
                            position_check=check, position_status=worker_to_dict(worker)["position_status"],
                            final_position={"x": worker.x, "y": worker.y})
         saved = record_observation(observation)
-        # Preserve each failed cycle in JSONL; bound identical UI events.
-        notice_key = (payload.site_id, payload.worker_id, str(exc))
-        notice_now = time.monotonic()
-        if notice_now - _failure_notices.get(notice_key, float('-inf')) >= 5:
-            create_event(db, "LOCATION_FAILED", str(exc), "warning", payload.worker_id, payload.device_id)
-            if len(_failure_notices) >= 1000:
-                _failure_notices.pop(min(_failure_notices, key=_failure_notices.get))
-            _failure_notices[notice_key] = notice_now
+        # Raw failures stay in JSONL; web/app notifications are limited per worker.
+        create_location_failure_notice(db, str(exc), payload.worker_id,
+                                       payload.device_id, payload.site_id)
         db.commit()
         return JSONResponse(status_code=422, content={"detail": str(exc),
             "location": {"x": worker.x, "y": worker.y, "confidence": worker.confidence, "changed": False},
