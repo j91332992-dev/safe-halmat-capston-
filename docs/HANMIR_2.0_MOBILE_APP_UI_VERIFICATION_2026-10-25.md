@@ -124,3 +124,17 @@
 - TypeScript/Vite 빌드 및 Capacitor 동기화 성공. 소스 커밋 `c26743c`.
 
 최종 build20 소스 `34c193e`의 [CI 40172008493](https://github.com/j91332992-dev/safe-halmat-capston-/actions/runs/40172008493)가 성공했다. [build20 APK](../releases/HanmirSafety-p4-mobile-v1.8-build20.apk)를 준비했으나, 설치 시 Galaxy USB가 사라져 `device not found`로 중단됐다. 따라서 build20 실기기 설치/검증은 휴대폰 USB 재연결 후 진행해야 한다. build19 실기기 확인 결과와 혼동하지 않는다.
+
+
+### build20 USB 재연결 후 설치 검증 완료
+
+사용자 재연결 후 Galaxy S24+ ADB install -r가 Success로 완료됐고, 기기의 versionCode=20/versionName=1.8을 확인했다. 근로자 및 관리자 계정으로 각각 로그인하여 직접 확인했다.
+
+- 근로자 하단 6개, 관리자 하단 5개 모두 SVG 폭 28px / stroke-width 2.2px.
+- 관리자 상단 종/설정은 폭 24px / stroke-width 2.2px.
+- 양쪽 하단 메뉴의 공통 font-family가 동일하며, 비선택 600 / 선택 700. 관리자 메뉴 라벨 크기 11px 확인.
+- 양쪽 모두 viewport 384px / 문서 폭 384px로 가로 넘침 없음.
+- ‘내 작업’은 원형 시계이며, 알림은 종 모양으로 표시됨을 캡처 확인.
+- 새 로컬 캡처: `10-worker-build20.png`, `11-admin-build20.png` (`C:/dev/hanmir-runtime/mobile-20261025/`). 개인/현장 화면이므로 원본은 GitHub에 올리지 않았다.
+
+위의 설치 대기 기록은 당시 실패 이력이며, 현재 build20 설치/아이콘·글꼴 실기기 확인은 완료 상태다. 이번 후속 검증은 UI만 확인했으며 센서 성능 검증으로 확대 해석하지 않는다.
