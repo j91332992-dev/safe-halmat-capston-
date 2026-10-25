@@ -1,0 +1,128 @@
+{
+  "samples": [
+    {
+      "time": "2026-10-25T12:19:47.883598+00:00",
+      "perf_time": 178154.14,
+      "received_frames": 32599,
+      "analysis_completed": 29085,
+      "detail_completed": 8316,
+      "inference_ms": 47.4,
+      "detail_ms": 95.0,
+      "live": {
+        "device_id": "helmet-001-av",
+        "received": true,
+        "frame_id": 685,
+        "age_ms": 0
+      },
+      "firmware": "2.0.0-p4-cal2-call1-zone1-camretry1-20261025",
+      "camera": "capturing",
+      "diag": {
+        "stage": "capturing",
+        "last_failure_stage": "dequeue",
+        "last_error": "ESP_FAIL",
+        "last_errno": 116,
+        "init_attempts": 2,
+        "failures": 4,
+        "recoveries": 1,
+        "stream_recoveries": 3,
+        "frames": 653,
+        "frame_age_ms": 281,
+        "retry_ms": 0,
+        "stack_min": 5504
+      },
+      "memory": {
+        "heap_free": 239559,
+        "heap_min": 174056,
+        "heap_largest": 131072,
+        "psram_free": 30561380,
+        "rssi": -58
+      },
+      "uwb_online": true
+    },
+    {
+      "time": "2026-10-25T12:19:57.944169+00:00",
+      "perf_time": 178164.203,
+      "received_frames": 32708,
+      "analysis_completed": 29181,
+      "detail_completed": 8352,
+      "inference_ms": 58.4,
+      "detail_ms": 110.4,
+      "live": {
+        "device_id": "helmet-001-av",
+        "received": true,
+        "frame_id": 793,
+        "age_ms": 47
+      },
+      "firmware": "2.0.0-p4-cal2-call1-zone1-camretry1-20261025",
+      "camera": "capturing",
+      "diag": {
+        "stage": "capturing",
+        "last_failure_stage": "dequeue",
+        "last_error": "ESP_FAIL",
+        "last_errno": 116,
+        "init_attempts": 2,
+        "failures": 4,
+        "recoveries": 1,
+        "stream_recoveries": 3,
+        "frames": 772,
+        "frame_age_ms": 37,
+        "retry_ms": 0,
+        "stack_min": 5504
+      },
+      "memory": {
+        "heap_free": 235143,
+        "heap_min": 174056,
+        "heap_largest": 131072,
+        "psram_free": 30370512,
+        "rssi": -66
+      },
+      "uwb_online": true
+    },
+    {
+      "time": "2026-10-25T12:20:07.996603+00:00",
+      "perf_time": 178174.25,
+      "received_frames": 32826,
+      "analysis_completed": 29285,
+      "detail_completed": 8387,
+      "inference_ms": 43.8,
+      "detail_ms": 72.5,
+      "live": {
+        "device_id": "helmet-001-av",
+        "received": true,
+        "frame_id": 911,
+        "age_ms": 15
+      },
+      "firmware": "2.0.0-p4-cal2-call1-zone1-camretry1-20261025",
+      "camera": "capturing",
+      "diag": {
+        "stage": "capturing",
+        "last_failure_stage": "dequeue",
+        "last_error": "ESP_FAIL",
+        "last_errno": 116,
+        "init_attempts": 2,
+        "failures": 4,
+        "recoveries": 1,
+        "stream_recoveries": 3,
+        "frames": 880,
+        "frame_age_ms": 53,
+        "retry_ms": 0,
+        "stack_min": 5504
+      },
+      "memory": {
+        "heap_free": 239579,
+        "heap_min": 171952,
+        "heap_largest": 131072,
+        "psram_free": 30605216,
+        "rssi": -60
+      },
+      "uwb_online": true
+    }
+  ],
+  "interval_seconds": 20.10999999998603,
+  "rates_fps": {
+    "received": 11.28791645948074,
+    "yolo": 9.945300845357481,
+    "detail": 3.530581800101906
+  },
+  "no_firmware_change_after_cable_swap": true
+}

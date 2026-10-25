@@ -51,10 +51,10 @@
   "p4_online_samples": 17,
   "uwb_online_samples": 17,
   "observed_failure": "OV5647 pid_h SCCB read failed at address 0x36; capture device open errno=2",
-  "sensor_failure_recovered": false,
+  "sensor_failure_recovered": true,
   "brightness_quality_inference_settings_changed": false,
   "live_audio_call_quality_retested": false,
-  "remaining": "Check camera power/FPC/sensor response. Recovered video FPS and runtime-stream recovery success path not yet verifiable with no sensor response.",
+  "remaining": "Long-duration and voice/call combined-load regression remain; no further firmware uploaded after cable replacement.",
   "after_complete_power_cycle": {
     "sample_time_utc": "2026-10-25T12:14:33.015724+00:00",
     "p4_online": true,
@@ -77,5 +77,7 @@
     "speaker": "initialized",
     "heading_at": "2026-10-25T12:14:32.981724Z",
     "uwb_online": true
-  }
+  },
+  "final_state": "capturing after user replaced FPC cable; same camretry1 firmware",
+  "final_evidence": "camera-new-cable-recovered.json"
 }
