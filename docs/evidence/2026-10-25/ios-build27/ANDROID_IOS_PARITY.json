@@ -1,0 +1,16 @@
+{
+  "ios_build_run": "https://github.com/j91332992-dev/safe-halmat-capston-/actions/runs/40176515717",
+  "build_source_commit": "6de61189a4f1961b74c6e0338f0183d5ad2f9cf5",
+  "ios_version": "1.8",
+  "ios_build": 27,
+  "ios_sha256": "0f5cdef1b741061cc02f41be8157224676c62719be62f4ce047ea8acaea19cbf",
+  "android_reference_apk": "HanmirSafety-p4-mobile-v1.8-build26.apk",
+  "android_sha256": "6934baf4c294426ed466ab25d626973d76e404ff4fca56d4f43994a1b913541a",
+  "web_assets_compared": 15,
+  "web_assets_identical": 15,
+  "embedded_provisioning_profile": false,
+  "device_architecture": "arm64 (verified by CI lipo)",
+  "mac_prepare_script": "passed on macos-26 runner",
+  "iphone_installation_tested": false,
+  "iphone_audio_camera_map_tested": false
+}

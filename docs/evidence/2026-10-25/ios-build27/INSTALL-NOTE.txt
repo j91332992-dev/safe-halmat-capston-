@@ -1,0 +1,3 @@
+Unsigned iPhone device app built from the current shared Android/iOS UI.
+Requires your own Apple account signing before installation; this is not a TestFlight/App Store release.
+Do not reuse the expired build10 provisioning profile.

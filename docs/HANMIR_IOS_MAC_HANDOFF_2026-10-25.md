@@ -8,6 +8,7 @@
 
 - iPhone 실기기용 arm64 **v1.8 / build27** 컴파일 성공. [최초 성공한 GitHub Actions 실행](https://github.com/j91332992-dev/safe-halmat-capston-/actions/runs/40175631911).
 - 컴파일된 앱의 웹 파일 **15개**가 같은 실행에서 만든 production 웹 빌드와 SHA-256으로 일치했다. 이는 번들 내용 검증이며 아이폰에서 모든 기능이 동작했다는 뜻은 아니다.
+- 저장소의 Android build26 APK 내부 `assets/public/`와 iOS 번들을 직접 비교해도 **15/15개가 동일**했다. 운영체제별 실행 차이는 아래 실기기 시험에서 확인한다.
 - 기존 `armv7` 필수 장치 설정을 `arm64`로 수정했다. 최소 iOS 버전은 15.0이다.
 - 예전 제작자의 Apple Team 고정값을 제거하고 Xcode 자동 서명 설정을 유지했다. Mac에서 실제 설치할 계정의 Team을 한 번 선택해야 한다.
 - iOS 네이티브 바탕색을 공통 다크 UI의 RGB(12,14,18)로 맞췄다. Debug에서 WKWebView 검사도 가능하도록 했다.

@@ -1,0 +1,33 @@
+{
+  "source_commit": "6de61189a4f1961b74c6e0338f0183d5ad2f9cf5",
+  "bundle_id": "com.hanmir.safesmarthelmet",
+  "version": "1.8",
+  "build": "27",
+  "minimum_os": "15.0",
+  "signing": "unsigned-requires-personal-signing",
+  "web_parity": "exact-sha256-match",
+  "web_file_count": 15,
+  "required_permission_descriptions": [
+    "NSMicrophoneUsageDescription",
+    "NSCameraUsageDescription",
+    "NSLocalNetworkUsageDescription"
+  ],
+  "web_sha256": {
+    "assets/index-CZjTVL3R.js": "2db133bc01fb314d3918d506eb6b6ca0d024de705d31ad1b65c075525b67084f",
+    "assets/index-dV_46M_T.css": "665573a65832d4ee252727427e14b10f521d2a2b13299eb50799aa1b1c142cf2",
+    "assets/web-Cz1V1iY4.js": "719336e169e50adbc2b6eaeb02092165087537a01454ce8eedb7c789c8fb1558",
+    "assets/web-D8My0DRz.js": "c0bc8c265de267a99987b6fea47781087ed5bc9ad67d6438a75a220ff0ca07a5",
+    "assets/web-Dnmtm0mS.js": "8d5b72653fc5364a050efa0b84fa5872ad98e83f930556bca03cb8690a9daa5b",
+    "hanmir-call-network.js": "a499c3750fc3690cbc2245e16a83d21b3b1c0c9e29335a8db1e48628cab077ee",
+    "hanmir-call-worklet.js": "a3c0dbe6e0679e49b1145ae7c02196ccd902cc8d9ed211a90f6d226023d2e30b",
+    "icons/icon-180.png": "2f80eb61c37486c0695928718267ba1fbd4d8dc02a9e581590393ec34d65dbc7",
+    "icons/icon-192.png": "95d284bd43662a0fee1a5a0b40e85b5ba98f5d842d5420fd3e7891167a8462e8",
+    "icons/icon-192.svg": "36c1bb2e3de1692ca7990a64d249f471a020c5ca316e0f56f013fafa5d72eddb",
+    "icons/icon-512.png": "b07f5fc205a9bd45ea0018ebe0d8e78d4f105a2e52f691c77c0d1bf5d80340d2",
+    "icons/icon-512.svg": "2ef3a55fbe36b13d1cc1fe062359a00827c8370d0ff0acf433158b82a293b879",
+    "index.html": "08c24c8c1cb0fa921b8f29c309cbbd8cd0fe7f6c651bfb9bb126b07a0f6ee51d",
+    "manifest.webmanifest": "97177704bb05b7e00e1f1a1ef71a7bacbeb832d055f243a311e6a71b90b60893",
+    "sw.js": "68c68e430bcfa141dd98eeca142395af6c7f9c0e5d94035b26b175b1128d3da4"
+  },
+  "physical_iphone_tested": false
+}
